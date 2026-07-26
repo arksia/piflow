@@ -56,6 +56,7 @@ function sessionState(m: Managed) {
     model: modelInfo(m.session),
     thinkingLevel: m.session.thinkingLevel,
     thinkingLevels: m.session.getAvailableThinkingLevels(),
+    context: m.session.getContextUsage() ?? null,
     messages: m.session.messages,
   };
 }
