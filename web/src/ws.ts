@@ -45,6 +45,7 @@ export const store = reactive({
   cwd: "",
   sessions: [] as SessionInfoLite[],
   models: [] as ModelInfo[],
+  usage: {} as Record<string, any>,
   activeKey: null as string | null,
   draft: "",
   views: {} as Record<string, SessionView>,
@@ -109,6 +110,10 @@ function route(msg: any) {
 
     case "models":
       store.models = msg.models;
+      break;
+
+    case "usage":
+      if (msg.provider) store.usage[msg.provider] = msg;
       break;
 
     case "state": {
@@ -262,6 +267,10 @@ export function setModel(key: string, provider: string, modelId: string) {
 
 export function setThinking(key: string, level: string) {
   send({ type: "set_thinking", key, level });
+}
+
+export function requestUsage(key: string) {
+  send({ type: "get_usage", key });
 }
 
 export function initWs() {
