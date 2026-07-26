@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { store } from "./ws";
-import SessionList from "./components/SessionList.vue";
-import ChatView from "./components/ChatView.vue";
+import ChatView from './components/ChatView.vue'
+import SessionList from './components/SessionList.vue'
+import { store } from './ws'
 </script>
 
 <template>
@@ -40,7 +40,7 @@ import ChatView from "./components/ChatView.vue";
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .sidebar {
     position: fixed;
     z-index: 20;
@@ -49,9 +49,11 @@ import ChatView from "./components/ChatView.vue";
     transform: translateX(-100%);
     transition: transform 0.25s var(--ease);
   }
+
   .sidebar.open {
     transform: translateX(0);
   }
+
   .scrim {
     display: block;
     position: fixed;

@@ -1,55 +1,60 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { ToolState } from "../ws";
+import type { ToolState } from '../ws'
+import { computed, ref } from 'vue'
 
 const props = defineProps<{
-  call: { id: string; name: string; arguments?: Record<string, any> };
-  state?: ToolState;
-}>();
+  call: { id: string, name: string, arguments?: Record<string, unknown> }
+  state?: ToolState
+}>()
 
-const open = ref(false);
+const open = ref(false)
 
 const summary = computed(() => {
-  const a = props.call.arguments ?? {};
-  const s = a.command ?? a.path ?? a.pattern ?? a.query ?? a.url ?? "";
-  const str = String(s);
-  return str.length > 72 ? str.slice(0, 72) + "…" : str;
-});
+  const a = props.call.arguments ?? {}
+  const s = a.command ?? a.path ?? a.pattern ?? a.query ?? a.url ?? ''
+  const str = String(s)
+  return str.length > 72 ? `${str.slice(0, 72)}…` : str
+})
 
 const diff = computed(() => {
-  const d = props.state?.result?.details;
-  const text = (d?.diff ?? d?.patch) as string | undefined;
-  if (!text) return null;
-  return text.split("\n").map((line) => ({
+  const d = props.state?.result?.details
+  const text = (d?.diff ?? d?.patch) as string | undefined
+  if (!text)
+    return null
+  return text.split('\n').map(line => ({
     line,
-    cls: line.startsWith("+") && !line.startsWith("+++")
-      ? "add"
-      : line.startsWith("-") && !line.startsWith("---")
-        ? "del"
-        : line.startsWith("@@")
-          ? "hunk"
-          : "",
-  }));
-});
+    cls: line.startsWith('+') && !line.startsWith('+++')
+      ? 'add'
+      : line.startsWith('-') && !line.startsWith('---')
+        ? 'del'
+        : line.startsWith('@@')
+          ? 'hunk'
+          : '',
+  }))
+})
 
 const output = computed(() => {
-  const st = props.state;
-  const src = st?.partial ?? st?.result;
+  const st = props.state
+  const src = st?.partial ?? st?.result
   const text = (src?.content ?? [])
-    .map((c) => c.text ?? "")
-    .join("")
-    .trimEnd();
-  if (!text) return "";
-  const lines = text.split("\n");
-  return lines.length > 60 ? lines.slice(0, 60).join("\n") + `\n… 共 ${lines.length} 行` : text;
-});
+    .map(c => c.text ?? '')
+    .join('')
+    .trimEnd()
+  if (!text)
+    return ''
+  const lines = text.split('\n')
+  return lines.length > 60 ? `${lines.slice(0, 60).join('\n')}\n… 共 ${lines.length} 行` : text
+})
 
 const status = computed(() => {
-  if (props.state?.running) return "running";
-  if (props.state?.isError) return "error";
-  if (props.state?.result) return "done";
-  return "pending";
-});
+  if (props.state?.running)
+    return 'running'
+  if (props.state?.isError)
+    return 'error'
+  if (props.state?.result)
+    return 'done'
+  return 'pending'
+})
 </script>
 
 <template>
@@ -64,10 +69,14 @@ const status = computed(() => {
 
     <div v-if="open" class="body">
       <div v-if="diff" class="diff">
-        <div v-for="(l, i) in diff" :key="i" class="dline" :class="l.cls">{{ l.line }}</div>
+        <div v-for="(l, i) in diff" :key="i" class="dline" :class="l.cls">
+          {{ l.line }}
+        </div>
       </div>
       <pre v-else-if="output" class="out">{{ output }}</pre>
-      <div v-else class="none">无输出</div>
+      <div v-else class="none">
+        无输出
+      </div>
     </div>
   </div>
 </template>
@@ -98,6 +107,7 @@ const status = computed(() => {
   transition: transform 0.2s var(--ease);
   color: var(--c-faint);
 }
+
 .chev.open {
   transform: rotate(90deg);
 }
