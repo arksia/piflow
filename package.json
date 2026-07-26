@@ -1,0 +1,10 @@
+{
+  "name": "piflow",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm --filter piflow-web run build",
+    "start": "pnpm --filter piflow-server run start"
+  }
+}
