@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
@@ -9,6 +10,7 @@ import {
   SessionManager,
   createAgentSession,
 } from "@earendil-works/pi-coding-agent";
+import { getUsage } from "./usage/index.js";
 
 const PORT = Number(process.env.PORT ?? 3141);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -180,6 +182,21 @@ async function handle(ws: WebSocket, msg: ClientMessage) {
       if (!managed || !msg.level) return;
       managed.session.setThinkingLevel(msg.level as never);
       broadcast({ type: "state", state: sessionState(managed) });
+      break;
+    }
+
+    case "get_usage": {
+      const managed = msg.key ? pool.get(msg.key) : undefined;
+      const provider = managed?.session.model?.provider ?? msg.provider;
+      if (!provider) break;
+      const report = await getUsage(provider);
+      send(ws, {
+        type: "usage",
+        provider,
+        supported: !!report,
+        plan: report?.plan,
+        windows: report?.windows ?? [],
+      });
       break;
     }
 

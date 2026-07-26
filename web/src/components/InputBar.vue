@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { store, sendPrompt, abort, setModel, setThinking, type SessionView } from "../ws";
+import { store, sendPrompt, abort, setModel, setThinking, requestUsage, type SessionView } from "../ws";
 
 const props = defineProps<{ view: SessionView | null }>();
 
@@ -21,6 +21,28 @@ const modelGroups = computed(() => {
 function pickModel(provider: string, modelId: string) {
   if (props.view) setModel(props.view.key, provider, modelId);
   modelOpen.value = false;
+}
+
+const usage = computed(() => {
+  const p = props.view?.model?.provider;
+  const u = p ? store.usage[p] : null;
+  return u?.supported ? u : null;
+});
+
+function toggleModels() {
+  modelOpen.value = !modelOpen.value;
+  if (modelOpen.value && props.view) requestUsage(props.view.key);
+}
+
+function fmtWindow(w: any) {
+  const reset = w.resetTime ? new Date(w.resetTime) : null;
+  const when = reset
+    ? w.minutes
+      ? reset.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+      : reset.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
+    : "";
+  const label = w.minutes ? `${Math.round(w.minutes / 60)}h 窗口` : "周期额度";
+  return `${label} · 剩 ${w.remaining}% · ${when} 重置`;
 }
 
 function cycleThinking() {
@@ -98,7 +120,7 @@ function onAbort() {
             </button>
           </div>
           <div class="right">
-            <button v-if="view?.model" class="model recede" @click="modelOpen = !modelOpen">
+            <button v-if="view?.model" class="model recede" @click="toggleModels">
               {{ view.model.name }}
             </button>
             <button
@@ -132,6 +154,9 @@ function onAbort() {
               >
                 {{ m.name }}
               </button>
+            </div>
+            <div v-if="usage" class="usage">
+              <div v-for="(w, i) in usage.windows" :key="i">{{ fmtWindow(w) }}</div>
             </div>
           </div>
         </template>
@@ -304,6 +329,15 @@ textarea::placeholder {
 .pitem.current {
   opacity: 1;
   color: var(--c-ink);
+}
+
+.usage {
+  margin-top: 6px;
+  padding: 8px 8px 4px;
+  border-top: 1px solid var(--c-line);
+  color: var(--c-faint);
+  font-size: 0.72rem;
+  line-height: 1.7;
 }
 
 .btn {
