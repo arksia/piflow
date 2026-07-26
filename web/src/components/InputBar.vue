@@ -29,6 +29,32 @@ const usage = computed(() => {
   return u?.supported ? u : null;
 });
 
+// 最紧张的那个窗口决定显示值
+const quota = computed(() => {
+  const ws = usage.value?.windows;
+  if (!ws?.length) return null;
+  return Math.min(...ws.map((w: any) => w.remaining));
+});
+
+const quotaTitle = computed(
+  () => usage.value?.windows.map(fmtWindow).join("\n") ?? "",
+);
+
+// 刷新时机：打开页面 / 切换模型 / agent 跑完一轮
+watch(
+  () => [props.view?.key, props.view?.model?.id],
+  () => {
+    if (props.view) requestUsage(props.view.key);
+  },
+  { immediate: true },
+);
+watch(
+  () => props.view?.isStreaming,
+  (s, prev) => {
+    if (prev && !s && props.view) requestUsage(props.view.key);
+  },
+);
+
 function toggleModels() {
   modelOpen.value = !modelOpen.value;
   if (modelOpen.value && props.view) requestUsage(props.view.key);
@@ -120,6 +146,12 @@ function onAbort() {
             </button>
           </div>
           <div class="right">
+            <span
+              v-if="quota != null"
+              class="quota"
+              :class="{ low: quota < 20 }"
+              :title="quotaTitle"
+            >{{ quota }}%</span>
             <button v-if="view?.model" class="model recede" @click="toggleModels">
               {{ view.model.name }}
             </button>
@@ -267,6 +299,16 @@ textarea::placeholder {
 
 .think:hover {
   color: var(--c-muted);
+}
+
+.quota {
+  color: var(--c-faint);
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+}
+
+.quota.low {
+  color: var(--c-signal);
 }
 
 .model {
