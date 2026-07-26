@@ -1,10 +1,23 @@
 {
   "name": "piflow",
-  "private": true,
   "type": "module",
+  "private": true,
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm --filter piflow-web run build",
-    "start": "pnpm --filter piflow-server run start"
+    "start": "pnpm --filter piflow-server run start",
+    "lint": "eslint . --max-warnings 0 && stylelint 'web/src/**/*.{css,vue}' --max-warnings 0",
+    "lint:fix": "eslint . --fix && stylelint 'web/src/**/*.{css,vue}' --fix",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "check": "pnpm lint && pnpm typecheck && pnpm build"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.2.0",
+    "@types/markdown-it": "^14.1.2",
+    "eslint": "^10.8.0",
+    "stylelint": "^17.14.1",
+    "stylelint-config-recommended-vue": "^1.6.1",
+    "stylelint-config-standard": "^40.0.0",
+    "vue-tsc": "^3.3.8"
   }
 }

@@ -1,48 +1,52 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import type { ToolState } from "../ws";
-import MarkdownView from "./MarkdownView.vue";
-import ToolCallCard from "./ToolCallCard.vue";
+import type { ChatMessage, TextBlock, ToolState } from '../ws'
+import { computed } from 'vue'
+import MarkdownView from './MarkdownView.vue'
+import ToolCallCard from './ToolCallCard.vue'
 
 const props = defineProps<{
-  message: any;
-  toolResults: Record<string, ToolState>;
-  live?: boolean;
-}>();
+  message: ChatMessage
+  toolResults: Record<string, ToolState>
+  live?: boolean
+}>()
 
-const role = computed(() => props.message.role);
+const role = computed(() => props.message.role)
 
 const text = computed(() => {
-  const c = props.message.content;
-  return typeof c === "string" ? c : "";
-});
+  const c = props.message.content
+  return typeof c === 'string' ? c : ''
+})
 
 const userText = computed(() => {
-  const c = props.message.content;
-  if (typeof c === "string") return c;
+  const c = props.message.content
+  if (typeof c === 'string')
+    return c
   if (Array.isArray(c)) {
     return c
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join(" ");
+      .filter((block): block is TextBlock => block.type === 'text')
+      .map(block => block.text)
+      .join(' ')
   }
-  return "";
-});
+  return ''
+})
 
 const blocks = computed(() =>
   Array.isArray(props.message.content) ? props.message.content : [],
-);
+)
 
 function time(ts?: number) {
-  if (!ts) return "";
-  return new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  if (!ts)
+    return ''
+  return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 </script>
 
 <template>
   <!-- user -->
   <div v-if="role === 'user'" class="msg user" :data-user="userText">
-    <div class="u-marker">›</div>
+    <div class="u-marker">
+      ›
+    </div>
     <div class="u-body">
       <span v-if="typeof message.content === 'string'" class="u-text">{{ text }}</span>
       <template v-else>
@@ -61,7 +65,9 @@ function time(ts?: number) {
       <MarkdownView v-if="b.type === 'text'" :text="b.text" />
       <details v-else-if="b.type === 'thinking'" class="thinking recede">
         <summary>思考过程</summary>
-        <div class="t-body">{{ b.thinking }}</div>
+        <div class="t-body">
+          {{ b.thinking }}
+        </div>
       </details>
       <ToolCallCard
         v-else-if="b.type === 'toolCall'"
@@ -76,7 +82,7 @@ function time(ts?: number) {
   <div v-else-if="role === 'bashExecution'" class="msg">
     <ToolCallCard
       :call="{ name: 'bash', arguments: { command: message.command }, id: `bash-${message.timestamp}` }"
-      :state="{ result: { content: [{ type: 'text', text: message.output }] }, isError: message.exitCode !== 0 }"
+      :state="{ result: { content: [{ type: 'text', text: message.output ?? '' }] }, isError: message.exitCode !== 0 }"
     />
   </div>
 

@@ -1,127 +1,140 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
-import { store, sendPrompt, abort, setModel, setThinking, requestUsage, type SessionView } from "../ws";
+import type { SessionView, UsageWindow } from '../ws'
+import { computed, nextTick, ref, watch } from 'vue'
+import { abort, requestUsage, sendPrompt, setModel, setThinking, store } from '../ws'
 
-const props = defineProps<{ view: SessionView | null }>();
+const props = defineProps<{ view: SessionView | null }>()
 
-const text = ref("");
-const area = ref<HTMLTextAreaElement>();
-const modelOpen = ref(false);
+const text = ref('')
+const area = ref<HTMLTextAreaElement>()
+const modelOpen = ref(false)
 
 const modelGroups = computed(() => {
-  const byProvider = new Map<string, typeof store.models>();
+  const byProvider = new Map<string, typeof store.models>()
   for (const m of store.models) {
-    const list = byProvider.get(m.provider) ?? [];
-    list.push(m);
-    byProvider.set(m.provider, list);
+    const list = byProvider.get(m.provider) ?? []
+    list.push(m)
+    byProvider.set(m.provider, list)
   }
-  return [...byProvider.entries()];
-});
+  return [...byProvider.entries()]
+})
 
 function pickModel(provider: string, modelId: string) {
-  if (props.view) setModel(props.view.key, provider, modelId);
-  modelOpen.value = false;
+  if (props.view)
+    setModel(props.view.key, provider, modelId)
+  modelOpen.value = false
 }
 
 const usage = computed(() => {
-  const p = props.view?.model?.provider;
-  const u = p ? store.usage[p] : null;
-  return u?.supported ? u : null;
-});
+  const p = props.view?.model?.provider
+  const u = p ? store.usage[p] : null
+  return u?.supported ? u : null
+})
 
 // 最紧张的那个窗口决定显示值
 const quota = computed(() => {
-  const ws = usage.value?.windows;
-  if (!ws?.length) return null;
-  return Math.min(...ws.map((w: any) => w.remaining));
-});
+  const ws = usage.value?.windows
+  if (!ws?.length)
+    return null
+  return Math.min(...ws.map(w => w.remaining))
+})
 
 const quotaTitle = computed(
-  () => usage.value?.windows.map(fmtWindow).join("\n") ?? "",
-);
+  () => usage.value?.windows.map(fmtWindow).join('\n') ?? '',
+)
 
 // 上下文用量 → 发送键环形进度
-const ctxPct = computed(() => Math.round(props.view?.context?.percent ?? 0));
+const ctxPct = computed(() => Math.round(props.view?.context?.percent ?? 0))
 const ctxTitle = computed(() => {
-  const c = props.view?.context;
-  if (!c) return "";
-  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
-  return `上下文已用 ${ctxPct.value}%（${k(c.tokens)} / ${k(c.contextWindow)}）`;
-});
+  const c = props.view?.context
+  if (!c)
+    return ''
+  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`)
+  return `上下文已用 ${ctxPct.value}%（${k(c.tokens)} / ${k(c.contextWindow)}）`
+})
 
 // 刷新时机：打开页面 / 切换模型 / agent 跑完一轮
 watch(
   () => [props.view?.key, props.view?.model?.id],
   () => {
-    if (props.view) requestUsage(props.view.key);
+    if (props.view)
+      requestUsage(props.view.key)
   },
   { immediate: true },
-);
+)
 watch(
   () => props.view?.isStreaming,
   (s, prev) => {
-    if (prev && !s && props.view) requestUsage(props.view.key);
+    if (prev && !s && props.view)
+      requestUsage(props.view.key)
   },
-);
+)
 
 function toggleModels() {
-  modelOpen.value = !modelOpen.value;
-  if (modelOpen.value && props.view) requestUsage(props.view.key);
+  modelOpen.value = !modelOpen.value
+  if (modelOpen.value && props.view)
+    requestUsage(props.view.key)
 }
 
-function fmtWindow(w: any) {
-  const reset = w.resetTime ? new Date(w.resetTime) : null;
+function fmtWindow(w: UsageWindow) {
+  const reset = w.resetTime ? new Date(w.resetTime) : null
   const when = reset
     ? w.minutes
-      ? reset.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
-      : reset.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
-    : "";
-  const label = w.minutes ? `${Math.round(w.minutes / 60)}h 窗口` : "周期额度";
-  return `${label} · 剩 ${w.remaining}% · ${when} 重置`;
+      ? reset.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+      : reset.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+    : ''
+  const label = w.minutes ? `${Math.round(w.minutes / 60)}h 窗口` : '周期额度'
+  return `${label} · 剩 ${w.remaining}% · ${when} 重置`
 }
 
 function cycleThinking() {
-  const v = props.view;
-  if (!v) return;
+  const v = props.view
+  if (!v)
+    return
   const levels = v.thinkingLevels.length
     ? v.thinkingLevels
-    : ["off", "low", "medium", "high"];
-  const cur = levels.indexOf(v.thinkingLevel ?? "");
-  setThinking(v.key, levels[(cur + 1) % levels.length]);
+    : ['off', 'low', 'medium', 'high']
+  const cur = levels.indexOf(v.thinkingLevel ?? '')
+  const next = levels[(cur + 1) % levels.length]
+  if (next)
+    setThinking(v.key, next)
 }
 
 // hero 预设写入草稿
 watch(
   () => store.draft,
   async (d) => {
-    if (!d) return;
-    text.value = d;
-    store.draft = "";
-    await nextTick();
-    area.value?.focus();
+    if (!d)
+      return
+    text.value = d
+    store.draft = ''
+    await nextTick()
+    area.value?.focus()
   },
-);
+)
 
-const canSend = () => text.value.trim().length > 0;
+const canSend = () => text.value.trim().length > 0
 
 async function submit() {
-  if (!canSend()) return;
-  const t = text.value.trim();
-  text.value = "";
-  await nextTick();
-  area.value?.focus();
-  await sendPrompt(t);
+  if (!canSend())
+    return
+  const t = text.value.trim()
+  text.value = ''
+  await nextTick()
+  area.value?.focus()
+  await sendPrompt(t)
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-    e.preventDefault();
-    submit();
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault()
+    submit()
   }
 }
 
 function onAbort() {
-  if (props.view) abort(props.view.key);
+  if (props.view)
+    abort(props.view.key)
 }
 </script>
 
@@ -170,7 +183,9 @@ function onAbort() {
               :style="{ '--p': ctxPct }"
               :title="`中断 · ${ctxTitle}`"
               @click="onAbort"
-            ><span class="core">■</span></button>
+            >
+              <span class="core">■</span>
+            </button>
             <button
               v-else
               class="btn ring send"
@@ -179,7 +194,9 @@ function onAbort() {
               :title="ctxTitle || '发送'"
               :disabled="!canSend()"
               @click="submit"
-            ><span class="core">↑</span></button>
+            >
+              <span class="core">↑</span>
+            </button>
           </div>
         </div>
 
@@ -187,7 +204,9 @@ function onAbort() {
           <div class="scrim" @click="modelOpen = false" />
           <div class="popover">
             <div v-for="[provider, items] in modelGroups" :key="provider" class="pgroup">
-              <div class="pname">{{ provider }}</div>
+              <div class="pname">
+                {{ provider }}
+              </div>
               <button
                 v-for="m in items"
                 :key="m.id"
@@ -199,7 +218,9 @@ function onAbort() {
               </button>
             </div>
             <div v-if="usage" class="usage">
-              <div v-for="(w, i) in usage.windows" :key="i">{{ fmtWindow(w) }}</div>
+              <div v-for="(w, i) in usage.windows" :key="i">
+                {{ fmtWindow(w) }}
+              </div>
             </div>
           </div>
         </template>
@@ -422,19 +443,19 @@ textarea::placeholder {
   transition: color 0.2s var(--ease);
 }
 
-.btn.send.ready .core {
-  color: var(--c-mid);
+.btn.stop .core {
+  color: var(--c-signal);
 }
 
-.btn.send.ready:hover .core {
-  color: var(--c-ink);
+.btn.send.ready .core {
+  color: var(--c-mid);
 }
 
 .btn.send:disabled {
   cursor: default;
 }
 
-.btn.stop .core {
-  color: var(--c-signal);
+.btn.send.ready:hover .core {
+  color: var(--c-ink);
 }
 </style>

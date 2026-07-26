@@ -1,137 +1,154 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
-import { store } from "../ws";
-import MessageItem from "./MessageItem.vue";
-import InputBar from "./InputBar.vue";
+import type { SessionView } from '../ws'
+import { computed, nextTick, ref, watch } from 'vue'
+import { store } from '../ws'
+import InputBar from './InputBar.vue'
+import MessageItem from './MessageItem.vue'
 
-const view = computed(() => (store.activeKey ? store.views[store.activeKey] : null));
-const scroller = ref<HTMLElement>();
+const view = computed<SessionView | null>(() => (
+  store.activeKey ? (store.views[store.activeKey] ?? null) : null
+))
+const scroller = ref<HTMLElement>()
 
 // 滚动位置：每个会话独立记忆，首次进入默认到底部
-const SCROLL_KEY = "piflow.scroll";
-let scrollMap: Record<string, number> = {};
+const SCROLL_KEY = 'piflow.scroll'
+let scrollMap: Record<string, number> = {}
 try {
-  scrollMap = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? "{}");
-} catch {
+  scrollMap = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? '{}')
+}
+catch {
   // ponytail: corrupted storage → start fresh
 }
-let pendingInitial = false;
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingInitial = false
+let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 function persist(key: string, top: number) {
-  scrollMap[key] = top;
-  localStorage.setItem(SCROLL_KEY, JSON.stringify(scrollMap));
+  scrollMap[key] = top
+  localStorage.setItem(SCROLL_KEY, JSON.stringify(scrollMap))
 }
 
 function applyInitial() {
-  const el = scroller.value;
-  const key = store.activeKey;
+  const el = scroller.value
+  const key = store.activeKey
   if (!el || !key) {
-    pendingInitial = false;
-    return;
+    pendingInitial = false
+    return
   }
   // 内容尚未渲染完成时等待下一次 tick
-  const v = view.value;
-  if (v && v.messages.length > 0 && el.scrollHeight === 0) return;
-  const saved = scrollMap[key];
-  el.scrollTop = saved != null ? saved : el.scrollHeight;
-  pendingInitial = false;
+  const v = view.value
+  if (v && v.messages.length > 0 && el.scrollHeight === 0)
+    return
+  const saved = scrollMap[key]
+  el.scrollTop = saved ?? el.scrollHeight
+  pendingInitial = false
 }
 
 function onScroll() {
-  const el = scroller.value;
-  const key = store.activeKey;
-  if (!el || !key) return;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => persist(key, el.scrollTop), 200);
-  scheduleTitle();
+  const el = scroller.value
+  const key = store.activeKey
+  if (!el || !key)
+    return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(persist, 200, key, el.scrollTop)
+  scheduleTitle()
 }
 
 // 顶栏跟随：视口内最近的一条用户消息
-const liveTitle = ref("");
-let titleRaf = 0;
+const liveTitle = ref('')
+let titleRaf = 0
 
 function scheduleTitle() {
-  if (titleRaf) return;
+  if (titleRaf)
+    return
   titleRaf = requestAnimationFrame(() => {
-    titleRaf = 0;
-    updateTitle();
-  });
+    titleRaf = 0
+    updateTitle()
+  })
 }
 
 function updateTitle() {
-  const el = scroller.value;
-  if (!el) return;
-  const items = el.querySelectorAll<HTMLElement>("[data-user]");
-  const threshold = el.scrollTop + 56;
-  let current = "";
+  const el = scroller.value
+  if (!el)
+    return
+  const items = el.querySelectorAll<HTMLElement>('[data-user]')
+  const threshold = el.scrollTop + 56
+  let current = ''
   for (const node of items) {
-    if (node.offsetTop <= threshold) current = node.dataset.user ?? "";
-    else break;
+    if (node.offsetTop <= threshold)
+      current = node.dataset.user ?? ''
+    else break
   }
-  liveTitle.value = current;
+  liveTitle.value = current
 }
 
 watch(
   () => store.activeKey,
   async (_new, oldKey) => {
     // 切换前立即落盘旧会话位置
-    if (oldKey && scroller.value) persist(oldKey, scroller.value.scrollTop);
-    liveTitle.value = "";
-    pendingInitial = true;
-    await nextTick();
-    applyInitial();
-    updateTitle();
+    if (oldKey && scroller.value)
+      persist(oldKey, scroller.value.scrollTop)
+    liveTitle.value = ''
+    pendingInitial = true
+    await nextTick()
+    applyInitial()
+    updateTitle()
   },
-);
+)
 
 const title = computed(() => {
-  const key = store.activeKey;
-  if (!key) return "piflow";
-  const s = store.sessions.find((s) => s.path === key);
-  return s ? s.name || s.firstMessage || "会话" : "新会话";
-});
+  const key = store.activeKey
+  if (!key)
+    return 'piflow'
+  const s = store.sessions.find(s => s.path === key)
+  return s ? s.name || s.firstMessage || '会话' : '新会话'
+})
 
-const presets = ["探索这个代码库", "回顾我的改动", "修一个 bug", "做个功能规划"];
+const presets = ['探索这个代码库', '回顾我的改动', '修一个 bug', '做个功能规划']
 
 // 聊天列宽：860 / 1180 / 1440 三档可调
-const WIDTHS = [860, 1180, 1440];
-const widthIdx = ref(Math.min(Number(localStorage.getItem("piflow.chatWidth") ?? 1), 2));
-const chatW = computed(() => WIDTHS[widthIdx.value]);
+const WIDTHS = [860, 1180, 1440]
+const widthIdx = ref(Math.min(Number(localStorage.getItem('piflow.chatWidth') ?? 1), 2))
+const chatW = computed(() => WIDTHS[widthIdx.value])
 function cycleWidth() {
-  widthIdx.value = (widthIdx.value + 1) % WIDTHS.length;
-  localStorage.setItem("piflow.chatWidth", String(widthIdx.value));
+  widthIdx.value = (widthIdx.value + 1) % WIDTHS.length
+  localStorage.setItem('piflow.chatWidth', String(widthIdx.value))
 }
 
 function usePreset(p: string) {
-  store.draft = p;
+  store.draft = p
 }
 
-const isEmpty = computed(() => !view.value || view.value.messages.length === 0);
+const isEmpty = computed(() => !view.value || view.value.messages.length === 0)
 
 watch(
   () => view.value?.tick,
   async () => {
-    await nextTick();
+    await nextTick()
     if (pendingInitial) {
-      applyInitial();
-      return;
+      applyInitial()
+      return
     }
-    const el = scroller.value;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
-    updateTitle();
+    const el = scroller.value
+    if (!el)
+      return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160
+    if (nearBottom)
+      el.scrollTop = el.scrollHeight
+    updateTitle()
   },
-);
+)
 </script>
 
 <template>
-  <div class="chat" :style="{ '--chat-w': chatW + 'px' }">
+  <div class="chat" :style="{ '--chat-w': `${chatW}px` }">
     <header class="bar">
-      <button class="menu recede" @click="store.sidebarOpen = !store.sidebarOpen">☰</button>
+      <button class="menu recede" @click="store.sidebarOpen = !store.sidebarOpen">
+        ☰
+      </button>
       <span class="title">{{ liveTitle || title }}</span>
-      <button class="width recede" title="切换聊天宽度" @click="cycleWidth">⇔</button>
+      <button class="width recede" title="切换聊天宽度" @click="cycleWidth">
+        ⇔
+      </button>
       <span class="status" :class="{ on: view?.isStreaming }" />
     </header>
 
@@ -144,7 +161,9 @@ watch(
             {{ p }}
           </button>
         </div>
-        <p v-if="!view" class="dim">也可以从左侧选择一个历史会话继续</p>
+        <p v-if="!view" class="dim">
+          也可以从左侧选择一个历史会话继续
+        </p>
       </div>
 
       <!-- 消息流 -->
@@ -164,8 +183,12 @@ watch(
         <div v-if="view!.isStreaming && !view!.live" class="pending">
           <span class="dot" />
         </div>
-        <div v-if="view!.isCompacting" class="note">正在压缩上下文…</div>
-        <div v-if="view!.error" class="error">{{ view!.error }}</div>
+        <div v-if="view!.isCompacting" class="note">
+          正在压缩上下文…
+        </div>
+        <div v-if="view!.error" class="error">
+          {{ view!.error }}
+        </div>
       </div>
     </div>
 
@@ -319,7 +342,7 @@ watch(
   padding: 8px 0;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .menu { display: block; }
   .width { display: none; }
   .col { width: calc(100% - 32px); }

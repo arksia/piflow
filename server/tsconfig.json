@@ -3,11 +3,12 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["node"],
     "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
-    "types": ["node"]
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
   "include": ["src"]
 }
