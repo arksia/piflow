@@ -41,13 +41,27 @@ function label(s: SessionInfoLite) {
 }
 
 async function pick(s: SessionInfoLite) {
-  await openSession(s.path, s.cwd)
-  store.sidebarOpen = false
+  if (!store.connected)
+    return
+  try {
+    await openSession(s.path)
+    store.sidebarOpen = false
+  }
+  catch (error) {
+    console.error('[piflow]', error)
+  }
 }
 
 async function create() {
-  await newSession()
-  store.sidebarOpen = false
+  if (!store.connected)
+    return
+  try {
+    await newSession()
+    store.sidebarOpen = false
+  }
+  catch (error) {
+    console.error('[piflow]', error)
+  }
 }
 </script>
 
@@ -55,7 +69,7 @@ async function create() {
   <div class="list">
     <div class="top">
       <span class="brand">piflow</span>
-      <button class="new recede" title="新会话" @click="create">
+      <button class="new recede" title="新会话" :disabled="!store.connected" @click="create">
         + 新会话
       </button>
     </div>
@@ -69,6 +83,7 @@ async function create() {
         :key="s.path"
         class="item recede"
         :class="{ active: store.activeKey === s.path }"
+        :disabled="!store.connected"
         @click="pick(s)"
       >
         <span class="label">{{ label(s) }}</span>

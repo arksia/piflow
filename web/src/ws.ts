@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { RequestTracker } from './request-tracker'
 
 export interface SessionInfoLite {
   path: string
@@ -153,13 +154,31 @@ type ServerMessage
     | { type: 'sessions', sessions: SessionInfoLite[] }
     | { type: 'models', models: ModelInfo[] }
     | UsageReport
-    | { type: 'state', state: SessionState, reply?: boolean }
+    | { type: 'state', state: SessionState, requestId?: string }
     | { type: 'event', session: string, event: AgentEvent }
-    | { type: 'error', error: string, session?: string }
+    | { type: 'error', error: string, session?: string, requestId?: string }
 
-const stateResolvers: Array<(state: SessionState) => void> = []
+const sessionRequests = new RequestTracker<SessionState>()
 
-function connect() {
+async function connect() {
+  try {
+    const url = new URL(location.href)
+    const token = url.searchParams.get('token')
+    const authUrl = token ? `/auth?token=${encodeURIComponent(token)}` : '/auth'
+    const response = await fetch(authUrl, { cache: 'no-store' })
+    if (!response.ok)
+      throw new Error(`authentication failed: ${response.status}`)
+    if (token) {
+      url.searchParams.delete('token')
+      history.replaceState(null, '', url)
+    }
+  }
+  catch (error) {
+    console.error('[piflow]', error)
+    setTimeout(connect, 1500)
+    return
+  }
+
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   ws = new WebSocket(`${proto}://${location.host}/ws`)
 
@@ -171,6 +190,7 @@ function connect() {
   ws.onclose = () => {
     store.connected = false
     ws = null
+    sessionRequests.rejectAll(new Error('connection closed'))
     setTimeout(connect, 1500)
   }
   ws.onmessage = (e) => {
@@ -179,8 +199,11 @@ function connect() {
   }
 }
 
-function send(msg: Record<string, unknown>) {
-  ws?.send(JSON.stringify(msg))
+function send(msg: Record<string, unknown>): boolean {
+  if (ws?.readyState !== WebSocket.OPEN)
+    return false
+  ws.send(JSON.stringify(msg))
+  return true
 }
 
 function route(msg: ServerMessage) {
@@ -222,12 +245,8 @@ function route(msg: ServerMessage) {
       // ponytail: single-user local tool; full message sync via state broadcast
       view.toolResults = results
       view.tick++
-      // resolve pending open/new (only direct replies, not broadcasts)
-      if (msg.reply) {
-        const r = stateResolvers.shift()
-        if (r)
-          r(s)
-      }
+      if (msg.requestId)
+        sessionRequests.resolve(msg.requestId, s)
       break
     }
 
@@ -236,6 +255,8 @@ function route(msg: ServerMessage) {
       break
 
     case 'error': {
+      if (msg.requestId)
+        sessionRequests.reject(msg.requestId, new Error(msg.error))
       if (msg.session)
         ensureView(msg.session).error = msg.error
       console.error('[piflow]', msg.error)
@@ -326,37 +347,38 @@ export function requestSessions() {
   send({ type: 'list_sessions' })
 }
 
-export function openSession(path: string, cwd?: string): Promise<SessionState> {
-  return new Promise((resolve) => {
-    stateResolvers.push((state) => {
-      store.activeKey = state.key
-      resolve(state)
-    })
-    send({ type: 'open', path, cwd })
+function requestSession(message: { type: 'open', path: string } | { type: 'new' }): Promise<SessionState> {
+  const requestId = crypto.randomUUID()
+  const response = sessionRequests.wait(requestId)
+  if (!send({ ...message, requestId }))
+    sessionRequests.reject(requestId, new Error('not connected'))
+  return response.then((state) => {
+    store.activeKey = state.key
+    return state
   })
 }
 
-export function newSession(cwd?: string): Promise<SessionState> {
-  return new Promise((resolve) => {
-    stateResolvers.push((state) => {
-      store.activeKey = state.key
-      resolve(state)
-    })
-    send({ type: 'new', cwd })
-  })
+export function openSession(path: string): Promise<SessionState> {
+  return requestSession({ type: 'open', path })
 }
 
-export async function sendPrompt(text: string) {
+export function newSession(): Promise<SessionState> {
+  return requestSession({ type: 'new' })
+}
+
+export async function sendPrompt(text: string): Promise<void> {
+  if (!store.connected)
+    throw new Error('not connected')
   if (!store.activeKey)
     await newSession()
   const key = store.activeKey
   if (!key)
     return
+  if (!send({ type: 'prompt', key, text }))
+    throw new Error('not connected')
   const view = ensureView(key)
-  // optimistic echo
   view.messages.push({ role: 'user', content: text, timestamp: Date.now() })
   view.tick++
-  send({ type: 'prompt', key, text })
 }
 
 export function abort(key: string) {
@@ -376,5 +398,5 @@ export function requestUsage(key: string) {
 }
 
 export function initWs() {
-  connect()
+  void connect()
 }

@@ -25,8 +25,8 @@ interface KimiUsageResponse {
   }
 }
 
-// Kimi For Coding 订阅：https://api.kimi.com/coding/v1/usages
-// 结构：5h 窗口(limits[]) + 周期总额度(usage)，limit 为百分比
+// Kimi For Coding subscription: https://api.kimi.com/coding/v1/usages
+// Shape: rolling windows in limits[] plus the billing-period total in usage.
 export const kimiCoding: UsageAdapter = {
   providers: ['kimi-coding'],
 

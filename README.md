@@ -2,44 +2,46 @@
 
 Stay in your flow. Let pi do the work.
 
-pi coding agent 的安静浏览器界面——纯黑底、灰阶文字，唯一的紫色信号只在 agent 工作时亮起。
+piflow is a browser interface for the pi coding agent. It reads and writes the same local sessions as the terminal client.
 
-## 特性（MVP）
+## Features
 
-- **多会话管理**：浏览/新建/切换会话，直接读写 `~/.pi/agent/sessions/`，与终端 `pi -c` 完全互通
-- **流式聊天**：markdown + Shiki 高亮，思考块折叠
-- **工具卡片**：调用默认退隐半透，`edit` 渲染 diff 视图，执行中紫色信号呼吸
-- **steer 语义**：agent 工作中发消息自动作为 steering 插队传达
-- **中断**：一键 abort
+- **Multiple sessions**: browse, create, and switch sessions backed directly by `~/.pi/agent/sessions/`. Pick up the same work later with `pi -c` in your terminal.
+- **Streaming chat**: Markdown rendering, Shiki syntax highlighting, and collapsible thinking blocks.
+- **Tool cards**: inspect tool calls, output, errors, and file diffs.
+- **Steering**: send another message while the agent is running and it joins the turn as steering input.
+- **Abort**: stop the active agent turn from the browser.
 
-## 开发
+## Development
 
 ```bash
 pnpm install
-pnpm dev        # server :3141 + vite dev :3142 (HMR)
+pnpm dev
 ```
 
-打开 http://localhost:3142
+Open [http://localhost:3142](http://localhost:3142). The Node server runs on port `3141`; Vite runs on `3142` with HMR.
 
-## 生产
+## Production
 
 ```bash
-pnpm build      # 构建 web → web/dist
-pnpm start      # server 同时托管静态文件，访问 http://127.0.0.1:3141
+pnpm build
+pnpm start
 ```
 
-局域网访问：`HOST=0.0.0.0 pnpm start`（⚠️ 无认证，仅限可信网络）
+The server runs the compiled JavaScript, serves `web/dist`, and listens at [http://127.0.0.1:3141](http://127.0.0.1:3141).
 
-## 架构
+### LAN Access
 
+Loopback access needs no setup. Binding to another interface requires an explicit token with at least 24 URL-safe characters:
+
+```bash
+PIFLOW_TOKEN=replace-this-with-a-long-random-token HOST=0.0.0.0 pnpm start
 ```
-浏览器 (Vue 3) ──WebSocket──► server (Node) ──SDK 同进程──► pi agent
+
+On first access, open:
+
+```text
+http://your-host:3141/?token=replace-this-with-a-long-random-token
 ```
 
-- `server/`：薄转发层。会话池管理多个 `AgentSession`，事件流广播给所有客户端
-- `web/`：Vue 3 + Vite。markdown-it + Shiki(slack-dark)
-- 设计语言来自 [arksia.me](https://github.com/arksia/arksia.me)：扁平、无阴影、退隐式交互、紫色仅作"系统工作中"信号
-
-## 路线图
-
-- 二期：远程访问（Tailscale + 认证）、PWA、会话树可视化（fork/branch）
+piflow stores the token in an HttpOnly cookie and removes it from the address bar after authentication. Prefer Tailscale or another trusted private network because plain HTTP does not encrypt traffic.
