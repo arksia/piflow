@@ -40,6 +40,15 @@ const quotaTitle = computed(
   () => usage.value?.windows.map(fmtWindow).join("\n") ?? "",
 );
 
+// 上下文用量 → 发送键环形进度
+const ctxPct = computed(() => Math.round(props.view?.context?.percent ?? 0));
+const ctxTitle = computed(() => {
+  const c = props.view?.context;
+  if (!c) return "";
+  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
+  return `上下文已用 ${ctxPct.value}%（${k(c.tokens)} / ${k(c.contextWindow)}）`;
+});
+
 // 刷新时机：打开页面 / 切换模型 / agent 跑完一轮
 watch(
   () => [props.view?.key, props.view?.model?.id],
@@ -157,18 +166,20 @@ function onAbort() {
             </button>
             <button
               v-if="view?.isStreaming"
-              class="btn stop"
-              title="中断"
+              class="btn ring stop"
+              :style="{ '--p': ctxPct }"
+              :title="`中断 · ${ctxTitle}`"
               @click="onAbort"
-            >■</button>
+            ><span class="core">■</span></button>
             <button
               v-else
-              class="btn send"
+              class="btn ring send"
               :class="{ ready: canSend() }"
-              title="发送"
+              :style="{ '--p': ctxPct }"
+              :title="ctxTitle || '发送'"
               :disabled="!canSend()"
               @click="submit"
-            >↑</button>
+            ><span class="core">↑</span></button>
           </div>
         </div>
 
@@ -308,7 +319,7 @@ textarea::placeholder {
 }
 
 .quota.low {
-  color: var(--c-signal);
+  color: #f85149;
 }
 
 .model {
@@ -386,35 +397,44 @@ textarea::placeholder {
   flex-shrink: 0;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
   display: grid;
   place-items: center;
   font-size: 0.85rem;
-  border: 1px solid var(--c-line);
-  color: var(--c-faint);
+  border: none;
   transition: all 0.2s var(--ease);
 }
 
-.btn.send.ready {
-  color: var(--c-mid);
-  border-color: var(--c-faint);
+/* 环形：紫色弧长 = 上下文已用占比 */
+.btn.ring {
+  border-radius: 50%;
+  background: conic-gradient(var(--c-signal) calc(var(--p, 0) * 1%), #ffffff14 0);
+  padding: 2px;
 }
 
-.btn.send.ready:hover {
+.btn.ring .core {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--c-raise);
+  display: grid;
+  place-items: center;
+  color: var(--c-faint);
+  transition: color 0.2s var(--ease);
+}
+
+.btn.send.ready .core {
+  color: var(--c-mid);
+}
+
+.btn.send.ready:hover .core {
   color: var(--c-ink);
-  border-color: var(--c-muted);
 }
 
 .btn.send:disabled {
   cursor: default;
 }
 
-.btn.stop {
+.btn.stop .core {
   color: var(--c-signal);
-  border-color: #a160fc55;
-}
-
-.btn.stop:hover {
-  border-color: var(--c-signal);
 }
 </style>

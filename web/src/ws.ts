@@ -34,6 +34,7 @@ export interface SessionView {
   model: ModelInfo | null;
   thinkingLevel: string | null;
   thinkingLevels: string[];
+  context: { tokens: number; contextWindow: number; percent: number } | null;
   toolResults: Record<string, ToolState>;
   queue: { steering: readonly string[]; followUp: readonly string[] };
   error: string | null;
@@ -62,6 +63,7 @@ function ensureView(key: string): SessionView {
     model: null,
     thinkingLevel: null,
     thinkingLevels: [],
+    context: null,
     toolResults: {},
     queue: { steering: [], followUp: [] },
     error: null,
@@ -124,6 +126,7 @@ function route(msg: any) {
       view.model = s.model;
       view.thinkingLevel = s.thinkingLevel ?? null;
       view.thinkingLevels = s.thinkingLevels ?? [];
+      view.context = s.context ?? null;
       view.error = null;
       // rebuild tool results from history
       const results: Record<string, ToolState> = {};
