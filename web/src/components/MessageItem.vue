@@ -17,6 +17,18 @@ const text = computed(() => {
   return typeof c === "string" ? c : "";
 });
 
+const userText = computed(() => {
+  const c = props.message.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    return c
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join(" ");
+  }
+  return "";
+});
+
 const blocks = computed(() =>
   Array.isArray(props.message.content) ? props.message.content : [],
 );
@@ -29,7 +41,7 @@ function time(ts?: number) {
 
 <template>
   <!-- user -->
-  <div v-if="role === 'user'" class="msg user">
+  <div v-if="role === 'user'" class="msg user" :data-user="userText">
     <div class="u-marker">›</div>
     <div class="u-body">
       <span v-if="typeof message.content === 'string'" class="u-text">{{ text }}</span>
