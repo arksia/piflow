@@ -17,7 +17,6 @@ const ROOT_CWD = process.cwd();
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const WEB_DIST = resolve(__dirname, "../../web/dist");
 
-const authStorage = undefined; // SDK defaults read ~/.pi/agent (auth.json, models.json)
 const modelRuntime = await ModelRuntime.create();
 
 type AgentSession = Awaited<ReturnType<typeof createAgentSession>>["session"];
@@ -59,8 +58,8 @@ function sessionState(m: Managed) {
   };
 }
 
-async function openSession(opts: { path?: string; cwd?: string }): Promise<Managed> {
-  const key = opts.path ?? `new:${opts.cwd ?? ROOT_CWD}`;
+async function openSession(opts: { path?: string; cwd?: string; fresh?: boolean }): Promise<Managed> {
+  const key = opts.path ?? (opts.fresh ? `new:${crypto.randomUUID()}` : `new:${opts.cwd ?? ROOT_CWD}`);
   const existing = pool.get(key);
   if (existing) return existing;
 
@@ -121,13 +120,13 @@ async function handle(ws: WebSocket, msg: ClientMessage) {
 
     case "open": {
       const managed = await openSession({ path: msg.path, cwd: msg.cwd });
-      send(ws, { type: "state", state: sessionState(managed) });
+      send(ws, { type: "state", reply: true, state: sessionState(managed) });
       break;
     }
 
     case "new": {
-      const managed = await openSession({ cwd: msg.cwd });
-      send(ws, { type: "state", state: sessionState(managed) });
+      const managed = await openSession({ cwd: msg.cwd, fresh: true });
+      send(ws, { type: "state", reply: true, state: sessionState(managed) });
       break;
     }
 

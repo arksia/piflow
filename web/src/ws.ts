@@ -127,11 +127,14 @@ function route(msg: any) {
           results[m.toolCallId] = { result: { content: m.content, details: m.details }, isError: m.isError };
         }
       }
+      // ponytail: single-user local tool; full message sync via state broadcast
       view.toolResults = results;
       view.tick++;
-      // resolve pending open/new
-      const r = stateResolvers.shift();
-      if (r) r(s);
+      // resolve pending open/new (only direct replies, not broadcasts)
+      if (msg.reply) {
+        const r = stateResolvers.shift();
+        if (r) r(s);
+      }
       break;
     }
 

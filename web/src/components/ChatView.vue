@@ -9,9 +9,12 @@ const scroller = ref<HTMLElement>();
 
 // 滚动位置：每个会话独立记忆，首次进入默认到底部
 const SCROLL_KEY = "piflow.scroll";
-const scrollMap: Record<string, number> = JSON.parse(
-  localStorage.getItem(SCROLL_KEY) ?? "{}",
-);
+let scrollMap: Record<string, number> = {};
+try {
+  scrollMap = JSON.parse(localStorage.getItem(SCROLL_KEY) ?? "{}");
+} catch {
+  // ponytail: corrupted storage → start fresh
+}
 let pendingInitial = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
