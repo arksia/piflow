@@ -12,6 +12,8 @@ export default antfu({
   rules: {
     'antfu/no-top-level-await': 'off',
     'no-console': ['error', { allow: ['info', 'warn', 'error'] }],
+    'test/no-import-node-test': 'off',
+    'test/prefer-vitest': 'off',
     'ts/no-explicit-any': 'error',
   },
 })

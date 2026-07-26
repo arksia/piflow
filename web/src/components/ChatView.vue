@@ -10,7 +10,7 @@ const view = computed<SessionView | null>(() => (
 ))
 const scroller = ref<HTMLElement>()
 
-// 滚动位置：每个会话独立记忆，首次进入默认到底部
+// Remember each session's scroll position; new sessions start at the bottom.
 const SCROLL_KEY = 'piflow.scroll'
 let scrollMap: Record<string, number> = {}
 try {
@@ -34,7 +34,7 @@ function applyInitial() {
     pendingInitial = false
     return
   }
-  // 内容尚未渲染完成时等待下一次 tick
+  // Wait another tick when message content has not rendered yet.
   const v = view.value
   if (v && v.messages.length > 0 && el.scrollHeight === 0)
     return
@@ -53,7 +53,7 @@ function onScroll() {
   scheduleTitle()
 }
 
-// 顶栏跟随：视口内最近的一条用户消息
+// Keep the header synced with the latest visible user message.
 const liveTitle = ref('')
 let titleRaf = 0
 
@@ -84,7 +84,7 @@ function updateTitle() {
 watch(
   () => store.activeKey,
   async (_new, oldKey) => {
-    // 切换前立即落盘旧会话位置
+    // Persist the previous session's position before switching.
     if (oldKey && scroller.value)
       persist(oldKey, scroller.value.scrollTop)
     liveTitle.value = ''
@@ -105,7 +105,7 @@ const title = computed(() => {
 
 const presets = ['探索这个代码库', '回顾我的改动', '修一个 bug', '做个功能规划']
 
-// 聊天列宽：860 / 1180 / 1440 三档可调
+// Cycle the chat column through three comfortable reading widths.
 const WIDTHS = [860, 1180, 1440]
 const widthIdx = ref(Math.min(Number(localStorage.getItem('piflow.chatWidth') ?? 1), 2))
 const chatW = computed(() => WIDTHS[widthIdx.value])
@@ -153,7 +153,7 @@ watch(
     </header>
 
     <div ref="scroller" class="scroll" :class="{ centered: isEmpty }" @scroll.passive="onScroll">
-      <!-- hero：空会话 -->
+      <!-- Empty-session hero -->
       <div v-if="isEmpty" class="hero">
         <h1>今天做点什么？</h1>
         <div class="presets">
@@ -166,7 +166,7 @@ watch(
         </p>
       </div>
 
-      <!-- 消息流 -->
+      <!-- Message stream -->
       <div v-else class="col">
         <MessageItem
           v-for="(m, i) in view!.messages"

@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
-    "build": "pnpm --filter piflow-web run build",
+    "build": "pnpm -r run build",
     "start": "pnpm --filter piflow-server run start",
     "lint": "eslint . --max-warnings 0 && stylelint 'web/src/**/*.{css,vue}' --max-warnings 0",
     "lint:fix": "eslint . --fix && stylelint 'web/src/**/*.{css,vue}' --fix",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "check": "pnpm lint && pnpm typecheck && pnpm build"
+    "test": "pnpm --filter piflow-server run test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.2.0",

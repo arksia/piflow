@@ -1,5 +1,5 @@
 export interface UsageWindow {
-  /** 窗口长度（分钟），0 = 周期总额度（如每周） */
+  /** Window length in minutes. Zero represents a billing-period total. */
   minutes: number
   limit: number
   used: number

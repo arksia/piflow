@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 3142,
     proxy: {
+      '/auth': { target: 'http://127.0.0.1:3141' },
       '/ws': { target: 'ws://127.0.0.1:3141', ws: true },
     },
   },

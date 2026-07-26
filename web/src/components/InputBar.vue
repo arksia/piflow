@@ -31,7 +31,7 @@ const usage = computed(() => {
   return u?.supported ? u : null
 })
 
-// 最紧张的那个窗口决定显示值
+// Display the quota from the most constrained window.
 const quota = computed(() => {
   const ws = usage.value?.windows
   if (!ws?.length)
@@ -43,7 +43,7 @@ const quotaTitle = computed(
   () => usage.value?.windows.map(fmtWindow).join('\n') ?? '',
 )
 
-// 上下文用量 → 发送键环形进度
+// Show context usage as the ring around the send button.
 const ctxPct = computed(() => Math.round(props.view?.context?.percent ?? 0))
 const ctxTitle = computed(() => {
   const c = props.view?.context
@@ -53,7 +53,7 @@ const ctxTitle = computed(() => {
   return `上下文已用 ${ctxPct.value}%（${k(c.tokens)} / ${k(c.contextWindow)}）`
 })
 
-// 刷新时机：打开页面 / 切换模型 / agent 跑完一轮
+// Refresh on page load, model changes, and completed agent turns.
 watch(
   () => [props.view?.key, props.view?.model?.id],
   () => {
@@ -100,7 +100,7 @@ function cycleThinking() {
     setThinking(v.key, next)
 }
 
-// hero 预设写入草稿
+// Move a hero preset into the composer draft.
 watch(
   () => store.draft,
   async (d) => {
@@ -113,16 +113,21 @@ watch(
   },
 )
 
-const canSend = () => text.value.trim().length > 0
+const canSend = () => store.connected && text.value.trim().length > 0
 
 async function submit() {
   if (!canSend())
     return
   const t = text.value.trim()
-  text.value = ''
-  await nextTick()
-  area.value?.focus()
-  await sendPrompt(t)
+  try {
+    await sendPrompt(t)
+    text.value = ''
+    await nextTick()
+    area.value?.focus()
+  }
+  catch (error) {
+    console.error('[piflow]', error)
+  }
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -425,7 +430,7 @@ textarea::placeholder {
   transition: all 0.2s var(--ease);
 }
 
-/* 环形：紫色弧长 = 上下文已用占比 */
+/* The purple arc represents the percentage of context used. */
 .btn.ring {
   border-radius: 50%;
   background: conic-gradient(var(--c-signal) calc(var(--p, 0) * 1%), #ffffff14 0);

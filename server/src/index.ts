@@ -1,3 +1,4 @@
+import type { ClientMessage } from './protocol.js'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -10,11 +11,28 @@ import {
   SessionManager,
 } from '@earendil-works/pi-coding-agent'
 import { WebSocket, WebSocketServer } from 'ws'
+import {
+  AUTH_COOKIE,
+
+  hasAuthCookie,
+  isAllowedOrigin,
+  isLoopbackHost,
+  isValidAccessToken,
+  parseClientMessage,
+} from './protocol.js'
 import { getUsage } from './usage/index.js'
 
 const PORT = Number(process.env.PORT ?? 3141)
 const HOST = process.env.HOST ?? '127.0.0.1'
 const ROOT_CWD = process.cwd()
+const IS_LOOPBACK = isLoopbackHost(HOST)
+const configuredToken = process.env.PIFLOW_TOKEN
+if (!IS_LOOPBACK && !configuredToken)
+  throw new Error('PIFLOW_TOKEN is required when HOST is not a loopback address')
+if (configuredToken && !isValidAccessToken(configuredToken))
+  throw new Error('PIFLOW_TOKEN must contain at least 24 URL-safe characters')
+const AUTH_TOKEN = configuredToken ?? crypto.randomUUID()
+const AUTH_HEADER = `${AUTH_COOKIE}=${AUTH_TOKEN}; HttpOnly; SameSite=Strict; Path=/`
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const WEB_DIST = resolve(__dirname, '../../web/dist')
@@ -106,17 +124,6 @@ async function listSessions() {
     .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
 }
 
-interface ClientMessage {
-  type: string
-  key?: string
-  path?: string
-  cwd?: string
-  text?: string
-  provider?: string
-  modelId?: string
-  level?: string
-}
-
 async function handle(ws: WebSocket, msg: ClientMessage) {
   switch (msg.type) {
     case 'list_sessions': {
@@ -125,14 +132,19 @@ async function handle(ws: WebSocket, msg: ClientMessage) {
     }
 
     case 'open': {
-      const managed = await openSession({ path: msg.path, cwd: msg.cwd })
-      send(ws, { type: 'state', reply: true, state: sessionState(managed) })
+      const known = (await SessionManager.listAll()).find(session => session.path === msg.path)
+      if (!known) {
+        send(ws, { type: 'error', requestId: msg.requestId, error: 'session not found' })
+        return
+      }
+      const managed = await openSession({ path: known.path, cwd: known.cwd })
+      send(ws, { type: 'state', requestId: msg.requestId, state: sessionState(managed) })
       break
     }
 
     case 'new': {
-      const managed = await openSession({ cwd: msg.cwd, fresh: true })
-      send(ws, { type: 'state', reply: true, state: sessionState(managed) })
+      const managed = await openSession({ cwd: ROOT_CWD, fresh: true })
+      send(ws, { type: 'state', requestId: msg.requestId, state: sessionState(managed) })
       break
     }
 
@@ -232,7 +244,23 @@ const MIME: Record<string, string> = {
 }
 
 const httpServer = createServer(async (req, res) => {
-  const url = (req.url ?? '/').split('?')[0] ?? '/'
+  const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+  const url = requestUrl.pathname
+  if (url === '/auth') {
+    const suppliedToken = requestUrl.searchParams.get('token')
+    const authenticated = IS_LOOPBACK
+      || suppliedToken === AUTH_TOKEN
+      || hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
+    if (!authenticated) {
+      res.writeHead(401, { 'cache-control': 'no-store' }).end()
+      return
+    }
+    res.writeHead(204, {
+      'cache-control': 'no-store',
+      'set-cookie': AUTH_HEADER,
+    }).end()
+    return
+  }
   let file = normalize(join(WEB_DIST, url))
   if (!file.startsWith(WEB_DIST)) {
     res.writeHead(403).end()
@@ -242,7 +270,10 @@ const httpServer = createServer(async (req, res) => {
     file = join(WEB_DIST, 'index.html')
   try {
     const body = await readFile(file)
-    res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' })
+    res.writeHead(200, {
+      'content-type': MIME[extname(file)] ?? 'application/octet-stream',
+      'x-content-type-options': 'nosniff',
+    })
     res.end(body)
   }
   catch {
@@ -250,23 +281,34 @@ const httpServer = createServer(async (req, res) => {
   }
 })
 
-const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+const verifyClient: WebSocket.VerifyClientCallbackSync = ({ origin, req }) =>
+  isAllowedOrigin(origin, req.headers.host)
+  && hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
+
+const wss = new WebSocketServer({
+  server: httpServer,
+  path: '/ws',
+  maxPayload: 1024 * 1024,
+  verifyClient,
+})
 
 wss.on('connection', (ws) => {
   clients.add(ws)
   send(ws, { type: 'hello', cwd: ROOT_CWD })
 
   ws.on('message', (raw) => {
-    let msg: ClientMessage
-    try {
-      msg = JSON.parse(String(raw))
-    }
-    catch {
-      send(ws, { type: 'error', error: 'invalid JSON' })
+    const msg = parseClientMessage(String(raw))
+    if (!msg) {
+      send(ws, { type: 'error', error: 'invalid message' })
       return
     }
     handle(ws, msg).catch((err: unknown) => {
-      send(ws, { type: 'error', error: String(err), for: msg.type })
+      send(ws, {
+        type: 'error',
+        error: String(err),
+        for: msg.type,
+        requestId: 'requestId' in msg ? msg.requestId : undefined,
+      })
     })
   })
 

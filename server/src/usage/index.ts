@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { kimiCoding } from './kimi-coding.js'
 
-// 新 provider 的用量支持 = 在这里多注册一个适配器
+// Add an adapter here to support usage reporting for another provider.
 const adapters: UsageAdapter[] = [kimiCoding]
 
 const cache = new Map<string, { at: number, data: UsageReport | null }>()
