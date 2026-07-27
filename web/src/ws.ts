@@ -129,6 +129,7 @@ let ws: WebSocket | null = null
 
 interface SessionState {
   key: string
+  sessionFile?: string | null
   messages: ChatMessage[]
   isStreaming: boolean
   model: ModelInfo | null
@@ -159,6 +160,25 @@ type ServerMessage
     | { type: 'error', error: string, session?: string, requestId?: string }
 
 const sessionRequests = new RequestTracker<SessionState>()
+
+// ---------- last opened session ----------
+
+const ACTIVE_KEY = 'piflow.active'
+let restored = false
+
+function saveActive(s: SessionState) {
+  if (s.sessionFile)
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ path: s.sessionFile }))
+}
+
+function readSavedActive(): { path: string } | null {
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? 'null')
+  }
+  catch {
+    return null
+  }
+}
 
 async function connect() {
   try {
@@ -212,9 +232,17 @@ function route(msg: ServerMessage) {
       store.cwd = msg.cwd
       break
 
-    case 'sessions':
+    case 'sessions': {
       store.sessions = msg.sessions
+      // 刷新后恢复上次打开的会话（仅限仍存在的历史会话）
+      if (!restored && !store.activeKey) {
+        restored = true
+        const saved = readSavedActive()
+        if (saved?.path && msg.sessions.some(s => s.path === saved.path))
+          openSession(saved.path).catch(() => {})
+      }
       break
+    }
 
     case 'models':
       store.models = msg.models
@@ -245,6 +273,9 @@ function route(msg: ServerMessage) {
       // ponytail: single-user local tool; full message sync via state broadcast
       view.toolResults = results
       view.tick++
+      // 新会话落盘成文件后，更新“上次打开”记录
+      if (s.key === store.activeKey)
+        saveActive(s)
       if (msg.requestId)
         sessionRequests.resolve(msg.requestId, s)
       break
@@ -356,6 +387,7 @@ function requestSession(message: { type: 'open', path: string } | { type: 'new' 
     sessionRequests.reject(requestId, new Error('not connected'))
   return response.then((state) => {
     store.activeKey = state.key
+    saveActive(state)
     return state
   })
 }
