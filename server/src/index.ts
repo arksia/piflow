@@ -1,6 +1,6 @@
 import type { ClientMessage } from './protocol.js'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join, normalize, resolve } from 'node:path'
 import process from 'node:process'
@@ -41,12 +41,31 @@ const modelRuntime = await ModelRuntime.create()
 
 type AgentSession = Awaited<ReturnType<typeof createAgentSession>>['session']
 
+// ---------- external change sync ----------
+// TUI / 其他进程写会话文件时，轮询 mtime 并重读活跃分支广播
+// ponytail: 2s stat 轮询，本地单用户足够；上量再换 fs.watch
+
+function readActiveMessages(file: string): unknown[] | null {
+  try {
+    const sm = SessionManager.open(file)
+    return sm
+      .getBranch()
+      .filter(e => e.type === 'message')
+      .map(e => (e as { message: unknown }).message)
+  }
+  catch {
+    return null
+  }
+}
+
 interface Managed {
   key: string
   session: AgentSession
 }
 
 const pool = new Map<string, Managed>()
+const mtimes = new Map<string, number>()
+const SYNC_INTERVAL = 2000
 const clients = new Set<WebSocket>()
 
 function send(ws: WebSocket, msg: unknown) {
@@ -60,6 +79,29 @@ function broadcast(msg: unknown) {
     if (ws.readyState === WebSocket.OPEN)
       ws.send(data)
   }
+}
+
+function startSync() {
+  setInterval(async () => {
+    for (const m of pool.values()) {
+      const file = m.session.sessionFile
+      if (!file)
+        continue
+      try {
+        const st = await stat(file)
+        const prev = mtimes.get(m.key)
+        mtimes.set(m.key, st.mtimeMs)
+        if (prev === undefined || st.mtimeMs === prev || m.session.isStreaming)
+          continue
+        const messages = readActiveMessages(file)
+        if (messages)
+          broadcast({ type: 'state', state: { ...sessionState(m), messages } })
+      }
+      catch {
+        // 文件被删等：忽略
+      }
+    }
+  }, SYNC_INTERVAL)
 }
 
 function modelInfo(session: AgentSession) {
@@ -317,6 +359,8 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => clients.delete(ws))
 })
+
+startSync()
 
 httpServer.listen(PORT, HOST, () => {
   console.info(`piflow · http://${HOST}:${PORT}`)
