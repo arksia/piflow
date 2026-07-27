@@ -234,7 +234,7 @@ function route(msg: ServerMessage) {
 
     case 'sessions': {
       store.sessions = msg.sessions
-      // 刷新后恢复上次打开的会话（仅限仍存在的历史会话）
+      // restore the last opened session after refresh (only if it still exists)
       if (!restored && !store.activeKey) {
         restored = true
         const saved = readSavedActive()
@@ -273,7 +273,7 @@ function route(msg: ServerMessage) {
       // ponytail: single-user local tool; full message sync via state broadcast
       view.toolResults = results
       view.tick++
-      // 新会话落盘成文件后，更新“上次打开”记录
+      // once a new session is persisted to disk, update the last-opened record
       if (s.key === store.activeKey)
         saveActive(s)
       if (msg.requestId)
