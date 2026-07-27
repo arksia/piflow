@@ -42,8 +42,9 @@ const modelRuntime = await ModelRuntime.create()
 type AgentSession = Awaited<ReturnType<typeof createAgentSession>>['session']
 
 // ---------- external change sync ----------
-// TUI / 其他进程写会话文件时，轮询 mtime 并重读活跃分支广播
-// ponytail: 2s stat 轮询，本地单用户足够；上量再换 fs.watch
+// When another process (TUI) appends to a session file, poll mtime
+// and broadcast the re-read active branch.
+// ponytail: 2s stat polling, fine for local single-user; fs.watch if it ever matters
 
 function readActiveMessages(file: string): unknown[] | null {
   try {
@@ -98,7 +99,7 @@ function startSync() {
           broadcast({ type: 'state', state: { ...sessionState(m), messages } })
       }
       catch {
-        // 文件被删等：忽略
+        // file deleted etc: ignore
       }
     }
   }, SYNC_INTERVAL)
