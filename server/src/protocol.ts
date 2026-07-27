@@ -12,7 +12,7 @@ export type ClientMessage
     | { type: 'prompt', key: string, text: string }
     | { type: 'set_model', key: string, provider: string, modelId: string }
     | { type: 'set_thinking', key: string, level: string }
-    | { type: 'get_usage', key?: string, provider?: string }
+    | { type: 'get_usage', key?: string, provider?: string, fresh?: boolean }
     | { type: 'abort', key: string }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,10 +49,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return hasStrings(value, ['key', 'provider', 'modelId']) ? value as ClientMessage : null
     case 'set_thinking':
       return hasStrings(value, ['key', 'level']) ? value as ClientMessage : null
-    case 'get_usage':
-      return typeof value.key === 'string' || typeof value.provider === 'string'
-        ? value as ClientMessage
-        : null
+    case 'get_usage': {
+      const hasTarget = typeof value.key === 'string' || typeof value.provider === 'string'
+      if (!hasTarget || (value.fresh !== undefined && typeof value.fresh !== 'boolean'))
+        return null
+      return value as ClientMessage
+    }
     case 'abort':
       return hasStrings(value, ['key']) ? value as ClientMessage : null
     default:

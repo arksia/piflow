@@ -45,6 +45,7 @@ const quotaTitle = computed(
 
 // Show context usage as the ring around the send button.
 const ctxPct = computed(() => Math.round(props.view?.context?.percent ?? 0))
+const ctxLevel = computed(() => ctxPct.value >= 85 ? 'danger' : ctxPct.value >= 70 ? 'warning' : 'normal')
 const ctxTitle = computed(() => {
   const c = props.view?.context
   if (!c)
@@ -66,7 +67,7 @@ watch(
   () => props.view?.isStreaming,
   (s, prev) => {
     if (prev && !s && props.view)
-      requestUsage(props.view.key)
+      requestUsage(props.view.key, true)
   },
 )
 
@@ -185,6 +186,7 @@ function onAbort() {
             <button
               v-if="view?.isStreaming"
               class="btn ring stop"
+              :class="ctxLevel"
               :style="{ '--p': ctxPct }"
               :title="`中断 · ${ctxTitle}`"
               @click="onAbort"
@@ -194,7 +196,7 @@ function onAbort() {
             <button
               v-else
               class="btn ring send"
-              :class="{ ready: canSend() }"
+              :class="[ctxLevel, { ready: canSend() }]"
               :style="{ '--p': ctxPct }"
               :title="ctxTitle || '发送'"
               :disabled="!canSend()"
@@ -235,6 +237,12 @@ function onAbort() {
 </template>
 
 <style scoped>
+@property --p {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
 .bar {
   padding: 8px 20px calc(14px + env(safe-area-inset-bottom));
 }
@@ -430,11 +438,21 @@ textarea::placeholder {
   transition: all 0.2s var(--ease);
 }
 
-/* The purple arc represents the percentage of context used. */
 .btn.ring {
+  --ring-color: var(--c-faint);
+
   border-radius: 50%;
-  background: conic-gradient(var(--c-signal) calc(var(--p, 0) * 1%), #ffffff14 0);
+  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), #ffffff14 0);
   padding: 2px;
+  transition: --p 0.45s var(--ease);
+}
+
+.btn.ring.warning {
+  --ring-color: #d29922;
+}
+
+.btn.ring.danger {
+  --ring-color: #f85149;
 }
 
 .btn.ring .core {
@@ -462,5 +480,11 @@ textarea::placeholder {
 
 .btn.send.ready:hover .core {
   color: var(--c-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.ring {
+    transition: none;
+  }
 }
 </style>
