@@ -155,7 +155,7 @@ type ServerMessage
     | { type: 'models', models: ModelInfo[] }
     | UsageReport
     | { type: 'state', state: SessionState, requestId?: string }
-    | { type: 'event', session: string, event: AgentEvent }
+    | { type: 'event', session: string, event: AgentEvent, context?: SessionView['context'] }
     | { type: 'error', error: string, session?: string, requestId?: string }
 
 const sessionRequests = new RequestTracker<SessionState>()
@@ -251,6 +251,8 @@ function route(msg: ServerMessage) {
     }
 
     case 'event':
+      if (msg.context !== undefined)
+        ensureView(msg.session).context = msg.context
       handleEvent(msg.session, msg.event)
       break
 
@@ -393,8 +395,8 @@ export function setThinking(key: string, level: string) {
   send({ type: 'set_thinking', key, level })
 }
 
-export function requestUsage(key: string) {
-  send({ type: 'get_usage', key })
+export function requestUsage(key: string, fresh = false) {
+  send({ type: 'get_usage', key, fresh })
 }
 
 export function initWs() {

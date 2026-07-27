@@ -20,9 +20,9 @@ async function readCredential(provider: string): Promise<Credential | null> {
   return { key: c.key ?? c.apiKey, access: c.access ?? c.token }
 }
 
-export async function getUsage(provider: string): Promise<UsageReport | null> {
+export async function getUsage(provider: string, fresh = false): Promise<UsageReport | null> {
   const cached = cache.get(provider)
-  if (cached && Date.now() - cached.at < TTL)
+  if (!fresh && cached && Date.now() - cached.at < TTL)
     return cached.data
 
   const adapter = adapters.find(a => a.providers.includes(provider))

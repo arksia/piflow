@@ -102,7 +102,10 @@ async function openSession(opts: { path?: string, cwd?: string, fresh?: boolean 
   pool.set(key, managed)
 
   session.subscribe((event) => {
-    broadcast({ type: 'event', session: key, event })
+    const context = ['message_end', 'compaction_end', 'agent_settled'].includes(event.type)
+      ? session.getContextUsage() ?? null
+      : undefined
+    broadcast({ type: 'event', session: key, event, context })
   })
 
   return managed
@@ -212,7 +215,7 @@ async function handle(ws: WebSocket, msg: ClientMessage) {
       const provider = managed?.session.model?.provider ?? msg.provider
       if (!provider)
         break
-      const report = await getUsage(provider)
+      const report = await getUsage(provider, msg.fresh)
       send(ws, {
         type: 'usage',
         provider,

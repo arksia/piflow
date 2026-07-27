@@ -23,6 +23,14 @@ describe('parseClientMessage', () => {
       { type: 'open', requestId: 'req-1', path: '/tmp/session' },
     )
   })
+
+  it('only accepts a boolean cache bypass for usage refreshes', () => {
+    assert.deepEqual(
+      parseClientMessage('{"type":"get_usage","key":"session","fresh":true}'),
+      { type: 'get_usage', key: 'session', fresh: true },
+    )
+    assert.equal(parseClientMessage('{"type":"get_usage","key":"session","fresh":"yes"}'), null)
+  })
 })
 
 describe('webSocket handshake', () => {
