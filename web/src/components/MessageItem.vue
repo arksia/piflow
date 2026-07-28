@@ -75,6 +75,9 @@ function time(ts?: number) {
         :state="toolResults[b.id]"
       />
     </template>
+    <div v-if="message.stopReason === 'error'" class="msg-error">
+      {{ message.errorMessage || '请求失败' }}
+    </div>
     <span v-if="live" class="caret" />
   </div>
 
@@ -151,6 +154,19 @@ function time(ts?: number) {
 .thinking summary {
   cursor: pointer;
   user-select: none;
+}
+
+.msg-error {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-left: 2px solid #f8514966;
+  background: #f851490d;
+  border-radius: 0 6px 6px 0;
+  color: #ffa198;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .t-body {

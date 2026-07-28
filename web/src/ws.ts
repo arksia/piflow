@@ -45,6 +45,8 @@ export interface ChatMessage {
   role: string
   content?: string | MessageBlock[]
   timestamp?: number
+  stopReason?: string
+  errorMessage?: string
   command?: string
   output?: string
   exitCode?: number
