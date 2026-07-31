@@ -1,0 +1,146 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.menu {
+  display: none;
+  color: var(--c-muted);
+  font-size: 1.1rem;
+}
+
+.title {
+  flex: 1;
+  color: var(--c-mid);
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.width {
+  color: var(--c-muted);
+  font-size: 0.9rem;
+}
+
+.status {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-faint);
+  opacity: 0.4;
+  transition: all 0.3s var(--ease);
+}
+
+.status.on {
+  background: var(--c-signal);
+  opacity: 1;
+  animation: pulse 1.6s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+.scroll {
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.scroll.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.column {
+  width: min(calc(100% - 48px), var(--chat-w));
+  margin: 0 auto;
+  padding: 24px 0 16px;
+  transition: width 0.25s var(--ease);
+}
+
+.hero {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.hero h1 {
+  margin: 0 0 24px;
+  color: var(--c-mid);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.pill {
+  padding: 6px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+  color: var(--c-muted);
+  font-size: 0.85rem;
+  transition: border-color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+.pill:hover {
+  border-color: var(--c-faint);
+}
+
+.dim {
+  margin-top: 24px;
+  color: var(--c-faint);
+  font-size: 0.82rem;
+}
+
+.pending {
+  padding: 8px 0;
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-signal);
+  animation: pulse 1.2s var(--ease) infinite;
+}
+
+.note {
+  color: var(--c-muted);
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+.error {
+  color: #ffa198;
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+@media (width <= 768px) {
+  .menu { display: block; }
+  .width { display: none; }
+  .column { width: calc(100% - 32px); }
+}

@@ -1,0 +1,84 @@
+.message {
+  margin-bottom: 20px;
+}
+
+.user {
+  display: flex;
+  gap: 10px;
+}
+
+.user-marker {
+  color: var(--c-signal);
+  font-weight: 700;
+  opacity: 0.9;
+  user-select: none;
+}
+
+.user-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-text {
+  color: var(--c-ink);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.user-image {
+  color: var(--c-muted);
+  font-size: 0.85rem;
+}
+
+.time {
+  display: inline-block;
+  margin-left: 10px;
+  color: var(--c-faint);
+  font-size: 0.72rem;
+}
+
+.assistant.live .caret {
+  display: inline-block;
+  width: 8px;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--c-signal);
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.thinking {
+  margin: 8px 0;
+  font-size: 0.85rem;
+  color: var(--c-muted);
+}
+
+.thinking summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.message-error {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-left: 2px solid #f8514966;
+  background: #f851490d;
+  border-radius: 0 6px 6px 0;
+  color: #ffa198;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.thinking-body {
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--c-line);
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}

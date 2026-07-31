@@ -1,4 +1,3 @@
-import { reactive } from 'vue'
 import { RequestTracker } from './request-tracker'
 
 export interface SessionInfoLite {
@@ -95,17 +94,50 @@ export interface SessionView {
   tick: number
 }
 
-export const store = reactive({
+export interface StoreState {
+  connected: boolean
+  cwd: string
+  sessions: SessionInfoLite[]
+  models: ModelInfo[]
+  usage: Record<string, UsageReport>
+  activeKey: string | null
+  views: Record<string, SessionView>
+  sidebarOpen: boolean
+}
+
+const listeners = new Set<() => void>()
+let version = 0
+
+export const store: StoreState = {
   connected: false,
   cwd: '',
-  sessions: [] as SessionInfoLite[],
-  models: [] as ModelInfo[],
-  usage: {} as Record<string, UsageReport>,
-  activeKey: null as string | null,
-  draft: '',
-  views: {} as Record<string, SessionView>,
+  sessions: [],
+  models: [],
+  usage: {},
+  activeKey: null,
+  views: {},
   sidebarOpen: false,
-})
+}
+
+function notify() {
+  version++
+  for (const listener of listeners)
+    listener()
+}
+
+export function subscribeStore(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+export function getStoreVersion(): number {
+  return version
+}
+
+export function setSidebarOpen(open: boolean) {
+  store.sidebarOpen = open
+  notify()
+}
 
 function ensureView(key: string): SessionView {
   return (store.views[key] ??= {
@@ -232,10 +264,12 @@ function route(msg: ServerMessage) {
   switch (msg.type) {
     case 'hello':
       store.cwd = msg.cwd
+      notify()
       break
 
     case 'sessions': {
       store.sessions = msg.sessions
+      notify()
       // restore the last opened session after refresh (only if it still exists)
       if (!restored && !store.activeKey) {
         restored = true
@@ -248,11 +282,13 @@ function route(msg: ServerMessage) {
 
     case 'models':
       store.models = msg.models
+      notify()
       break
 
     case 'usage':
       if (msg.provider)
         store.usage[msg.provider] = msg
+      notify()
       break
 
     case 'state': {
@@ -280,6 +316,7 @@ function route(msg: ServerMessage) {
         saveActive(s)
       if (msg.requestId)
         sessionRequests.resolve(msg.requestId, s)
+      notify()
       break
     }
 
@@ -295,6 +332,7 @@ function route(msg: ServerMessage) {
       if (msg.session)
         ensureView(msg.session).error = msg.error
       console.error('[piflow]', msg.error)
+      notify()
       break
     }
   }
@@ -374,6 +412,7 @@ function handleEvent(key: string, ev: AgentEvent) {
       view.queue = { steering: ev.steering ?? [], followUp: ev.followUp ?? [] }
       break
   }
+  notify()
 }
 
 // ---------- public API ----------
@@ -390,6 +429,7 @@ function requestSession(message: { type: 'open', path: string } | { type: 'new' 
   return response.then((state) => {
     store.activeKey = state.key
     saveActive(state)
+    notify()
     return state
   })
 }
@@ -415,6 +455,7 @@ export async function sendPrompt(text: string): Promise<void> {
   const view = ensureView(key)
   view.messages.push({ role: 'user', content: text, timestamp: Date.now() })
   view.tick++
+  notify()
 }
 
 export function abort(key: string) {

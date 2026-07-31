@@ -1,8 +1,9 @@
-import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [vue()],
+  css: {
+    modules: { localsConvention: 'camelCaseOnly' },
+  },
   server: {
     port: 3142,
     proxy: {
