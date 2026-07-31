@@ -1,22 +1,3 @@
-<script setup lang="ts">
-import ChatView from './components/ChatView.vue'
-import SessionList from './components/SessionList.vue'
-import { store } from './ws'
-</script>
-
-<template>
-  <div class="shell">
-    <aside class="sidebar" :class="{ open: store.sidebarOpen }">
-      <SessionList />
-    </aside>
-    <div v-if="store.sidebarOpen" class="scrim" @click="store.sidebarOpen = false" />
-    <main class="main">
-      <ChatView />
-    </main>
-  </div>
-</template>
-
-<style scoped>
 .shell {
   display: flex;
   height: 100%;
@@ -63,4 +44,3 @@ import { store } from './ws'
     backdrop-filter: blur(5px);
   }
 }
-</style>

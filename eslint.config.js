@@ -7,7 +7,7 @@ export default antfu({
   ],
   stylistic: true,
   typescript: true,
-  vue: true,
+  react: true,
 }, {
   rules: {
     'antfu/no-top-level-await': 'off',
