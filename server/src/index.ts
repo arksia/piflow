@@ -1,8 +1,8 @@
-import type { ClientMessage } from './protocol.js'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import { extname, join, normalize, resolve } from 'node:path'
+import { dirname, extname, join, normalize, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import {
@@ -10,21 +10,17 @@ import {
   ModelRuntime,
   SessionManager,
 } from '@earendil-works/pi-coding-agent'
-import { WebSocket, WebSocketServer } from 'ws'
 import {
   AUTH_COOKIE,
-
   hasAuthCookie,
-  isAllowedOrigin,
   isLoopbackHost,
   isValidAccessToken,
-  parseClientMessage,
 } from './protocol.js'
 import { getUsage } from './usage/index.js'
 
 const PORT = Number(process.env.PORT ?? 3141)
 const HOST = process.env.HOST ?? '127.0.0.1'
-const ROOT_CWD = process.cwd()
+const ROOT_CWD = resolve(process.env.INIT_CWD ?? process.cwd())
 const IS_LOOPBACK = isLoopbackHost(HOST)
 const configuredToken = process.env.PIFLOW_TOKEN
 if (!IS_LOOPBACK && !configuredToken)
@@ -47,19 +43,18 @@ interface Managed {
 }
 
 const pool = new Map<string, Managed>()
-const clients = new Set<WebSocket>()
 
-function send(ws: WebSocket, msg: unknown) {
-  if (ws.readyState === WebSocket.OPEN)
-    ws.send(JSON.stringify(msg))
+// ---------- SSE client registry ----------
+
+const sseClients = new Set<ServerResponse>()
+
+function sseWrite(res: ServerResponse, msg: unknown) {
+  res.write(`data: ${JSON.stringify(msg)}\n\n`)
 }
 
 function broadcast(msg: unknown) {
-  const data = JSON.stringify(msg)
-  for (const ws of clients) {
-    if (ws.readyState === WebSocket.OPEN)
-      ws.send(data)
-  }
+  for (const res of sseClients)
+    sseWrite(res, msg)
 }
 
 function modelInfo(session: AgentSession) {
@@ -127,114 +122,181 @@ async function listSessions() {
     .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
 }
 
-async function handle(ws: WebSocket, msg: ClientMessage) {
-  switch (msg.type) {
-    case 'list_sessions': {
-      send(ws, { type: 'sessions', sessions: await listSessions() })
-      break
-    }
-
-    case 'open': {
-      const known = (await SessionManager.listAll()).find(session => session.path === msg.path)
-      if (!known) {
-        send(ws, { type: 'error', requestId: msg.requestId, error: 'session not found' })
-        return
-      }
-      const managed = await openSession({ path: known.path, cwd: known.cwd })
-      send(ws, { type: 'state', requestId: msg.requestId, state: sessionState(managed) })
-      break
-    }
-
-    case 'new': {
-      const managed = await openSession({ cwd: ROOT_CWD, fresh: true })
-      send(ws, { type: 'state', requestId: msg.requestId, state: sessionState(managed) })
-      break
-    }
-
-    case 'prompt': {
-      if (!msg.key || typeof msg.text !== 'string')
-        return
-      const managed = pool.get(msg.key)
-      if (!managed) {
-        send(ws, { type: 'error', error: `session not open: ${msg.key}` })
-        return
-      }
-      const { session } = managed
-      // Enter while streaming = steer (delivered after current turn)
-      await session.prompt(msg.text, {
-        streamingBehavior: session.isStreaming ? 'steer' : undefined,
-      }).catch((err: unknown) => {
-        broadcast({ type: 'error', session: msg.key, error: String(err) })
-      })
-      // refresh state (messages, streaming flag)
-      broadcast({ type: 'state', state: sessionState(managed) })
-      broadcast({ type: 'sessions', sessions: await listSessions() })
-      break
-    }
-
-    case 'list_models': {
-      const models = (await modelRuntime.getAvailable()).map(m => ({
-        id: m.id,
-        name: m.name,
-        provider: m.provider,
-      }))
-      send(ws, { type: 'models', models })
-      break
-    }
-
-    case 'set_model': {
-      const managed = msg.key ? pool.get(msg.key) : undefined
-      if (!managed)
-        return
-      const model = modelRuntime
-        .getAvailableSnapshot()
-        .find(m => m.provider === msg.provider && m.id === msg.modelId)
-      if (!model) {
-        send(ws, { type: 'error', error: `model not found: ${msg.provider}/${msg.modelId}` })
-        return
-      }
-      await managed.session.setModel(model)
-      broadcast({ type: 'state', state: sessionState(managed) })
-      break
-    }
-
-    case 'set_thinking': {
-      const managed = msg.key ? pool.get(msg.key) : undefined
-      if (!managed || !msg.level)
-        return
-      const level = managed.session.getAvailableThinkingLevels().find(level => level === msg.level)
-      if (!level)
-        return
-      managed.session.setThinkingLevel(level)
-      broadcast({ type: 'state', state: sessionState(managed) })
-      break
-    }
-
-    case 'get_usage': {
-      const managed = msg.key ? pool.get(msg.key) : undefined
-      const provider = managed?.session.model?.provider ?? msg.provider
-      if (!provider)
-        break
-      const report = await getUsage(provider, msg.fresh)
-      send(ws, {
-        type: 'usage',
-        provider,
-        supported: !!report,
-        plan: report?.plan,
-        windows: report?.windows ?? [],
-      })
-      break
-    }
-
-    case 'abort': {
-      const managed = msg.key ? pool.get(msg.key) : undefined
-      await managed?.session.abort()
-      break
-    }
+async function listDirectories(path: string) {
+  const directory = await realpath(resolve(path))
+  const info = await stat(directory)
+  if (!info.isDirectory())
+    throw new Error('path is not a directory')
+  const entries = await readdir(directory, { withFileTypes: true })
+  const directories = entries
+    .filter(entry => entry.isDirectory())
+    .map(entry => ({ name: entry.name, path: join(directory, entry.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const parent = dirname(directory)
+  return {
+    path: directory,
+    parent: parent === directory ? null : parent,
+    directories,
   }
 }
 
-// ---------- HTTP + static ----------
+// ---------- HTTP helpers ----------
+
+function json(res: ServerResponse, status: number, data: unknown) {
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+  })
+  res.end(JSON.stringify(data))
+}
+
+async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  let body = ''
+  for await (const chunk of req) {
+    body += chunk
+    if (body.length > 1_000_000)
+      throw new Error('request body too large')
+  }
+  return body ? JSON.parse(body) : {}
+}
+
+// ---------- API routes ----------
+
+async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const path = url.pathname
+  const method = req.method ?? 'GET'
+
+  if (method === 'GET' && path === '/api/events') {
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache, no-transform',
+      'connection': 'keep-alive',
+      'x-accel-buffering': 'no',
+    })
+    res.flushHeaders()
+    sseClients.add(res)
+    sseWrite(res, { type: 'hello', cwd: ROOT_CWD })
+    const heartbeat = setInterval(() => res.write(': hb\n\n'), 25_000)
+    req.on('close', () => {
+      clearInterval(heartbeat)
+      sseClients.delete(res)
+    })
+    return
+  }
+
+  if (method === 'GET' && path === '/api/hello')
+    return json(res, 200, { cwd: ROOT_CWD })
+
+  if (method === 'GET' && path === '/api/sessions')
+    return json(res, 200, { sessions: await listSessions() })
+
+  if (method === 'GET' && path === '/api/models') {
+    const models = (await modelRuntime.getAvailable()).map(m => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+    }))
+    return json(res, 200, { models })
+  }
+
+  if (method === 'GET' && path === '/api/directories')
+    return json(res, 200, { listing: await listDirectories(url.searchParams.get('path') ?? ROOT_CWD) })
+
+  if (method === 'GET' && path === '/api/usage') {
+    const key = url.searchParams.get('key')
+    const managed = key ? pool.get(key) : undefined
+    const provider = managed?.session.model?.provider ?? url.searchParams.get('provider')
+    if (!provider)
+      return json(res, 200, { provider: null, supported: false, windows: [] })
+    const fresh = url.searchParams.get('fresh') === '1'
+    const report = await getUsage(provider, fresh)
+    return json(res, 200, {
+      provider,
+      supported: !!report,
+      plan: report?.plan,
+      windows: report?.windows ?? [],
+    })
+  }
+
+  if (method === 'POST' && path === '/api/sessions/open') {
+    const body = await readBody(req)
+    if (typeof body.path !== 'string')
+      return json(res, 400, { error: 'path required' })
+    const known = (await SessionManager.listAll()).find(session => session.path === body.path)
+    if (!known)
+      return json(res, 404, { error: 'session not found' })
+    const managed = await openSession({ path: known.path, cwd: known.cwd })
+    return json(res, 200, { state: sessionState(managed) })
+  }
+
+  if (method === 'POST' && path === '/api/sessions/new') {
+    const body = await readBody(req)
+    const cwd = typeof body.cwd === 'string' ? (await listDirectories(body.cwd)).path : ROOT_CWD
+    const managed = await openSession({ cwd, fresh: true })
+    return json(res, 200, { state: sessionState(managed) })
+  }
+
+  const action = path.match(/^\/api\/sessions\/([^/]+)\/(prompt|abort|model|thinking)$/)
+  if (method === 'POST' && action) {
+    const key = decodeURIComponent(action[1]!)
+    const managed = pool.get(key)
+    if (!managed)
+      return json(res, 404, { error: `session not open: ${key}` })
+    const body = await readBody(req)
+
+    switch (action[2]) {
+      case 'prompt': {
+        if (typeof body.text !== 'string' || !body.text.trim())
+          return json(res, 400, { error: 'text required' })
+        // respond immediately; progress arrives over SSE
+        json(res, 202, { ok: true })
+        const { session } = managed
+        void (async () => {
+          // Enter while streaming = steer (delivered after current turn)
+          try {
+            await session.prompt(body.text as string, {
+              streamingBehavior: session.isStreaming ? 'steer' : undefined,
+            })
+          }
+          catch (err) {
+            broadcast({ type: 'error', session: key, error: String(err) })
+          }
+          broadcast({ type: 'state', state: sessionState(managed) })
+          broadcast({ type: 'sessions', sessions: await listSessions() })
+        })()
+        return
+      }
+
+      case 'abort':
+        await managed.session.abort()
+        return json(res, 200, { ok: true })
+
+      case 'model': {
+        const model = modelRuntime
+          .getAvailableSnapshot()
+          .find(m => m.provider === body.provider && m.id === body.modelId)
+        if (!model)
+          return json(res, 404, { error: `model not found: ${String(body.provider)}/${String(body.modelId)}` })
+        await managed.session.setModel(model)
+        broadcast({ type: 'state', state: sessionState(managed) })
+        return json(res, 200, { ok: true })
+      }
+
+      case 'thinking': {
+        const level = managed.session.getAvailableThinkingLevels().find(level => level === body.level)
+        if (!level)
+          return json(res, 400, { error: 'unknown thinking level' })
+        managed.session.setThinkingLevel(level)
+        broadcast({ type: 'state', state: sessionState(managed) })
+        return json(res, 200, { ok: true })
+      }
+    }
+  }
+
+  json(res, 404, { error: 'not found' })
+}
+
+// ---------- static ----------
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -246,30 +308,13 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
 }
 
-const httpServer = createServer(async (req, res) => {
-  const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-  const url = requestUrl.pathname
-  if (url === '/auth') {
-    const suppliedToken = requestUrl.searchParams.get('token')
-    const authenticated = IS_LOOPBACK
-      || suppliedToken === AUTH_TOKEN
-      || hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
-    if (!authenticated) {
-      res.writeHead(401, { 'cache-control': 'no-store' }).end()
-      return
-    }
-    res.writeHead(204, {
-      'cache-control': 'no-store',
-      'set-cookie': AUTH_HEADER,
-    }).end()
-    return
-  }
-  let file = normalize(join(WEB_DIST, url))
+async function serveStatic(res: ServerResponse, path: string) {
+  let file = normalize(join(WEB_DIST, path))
   if (!file.startsWith(WEB_DIST)) {
     res.writeHead(403).end()
     return
   }
-  if (url === '/' || !existsSync(file))
+  if (path === '/' || !existsSync(file))
     file = join(WEB_DIST, 'index.html')
   try {
     const body = await readFile(file)
@@ -282,40 +327,50 @@ const httpServer = createServer(async (req, res) => {
   catch {
     res.writeHead(404).end()
   }
-})
+}
 
-const verifyClient: WebSocket.VerifyClientCallbackSync = ({ origin, req }) =>
-  isAllowedOrigin(origin, req.headers.host)
-  && hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
+// ---------- server ----------
 
-const wss = new WebSocketServer({
-  server: httpServer,
-  path: '/ws',
-  maxPayload: 1024 * 1024,
-  verifyClient,
-})
+const httpServer = createServer((req, res) => {
+  void (async () => {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    const path = url.pathname
 
-wss.on('connection', (ws) => {
-  clients.add(ws)
-  send(ws, { type: 'hello', cwd: ROOT_CWD })
-
-  ws.on('message', (raw) => {
-    const msg = parseClientMessage(String(raw))
-    if (!msg) {
-      send(ws, { type: 'error', error: 'invalid message' })
+    if (path === '/auth') {
+      const suppliedToken = url.searchParams.get('token')
+      const authenticated = IS_LOOPBACK
+        || suppliedToken === AUTH_TOKEN
+        || hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
+      if (!authenticated) {
+        res.writeHead(401, { 'cache-control': 'no-store' }).end()
+        return
+      }
+      res.writeHead(204, {
+        'cache-control': 'no-store',
+        'set-cookie': AUTH_HEADER,
+      }).end()
       return
     }
-    handle(ws, msg).catch((err: unknown) => {
-      send(ws, {
-        type: 'error',
-        error: String(err),
-        for: msg.type,
-        requestId: 'requestId' in msg ? msg.requestId : undefined,
-      })
-    })
-  })
 
-  ws.on('close', () => clients.delete(ws))
+    if (path.startsWith('/api/')) {
+      if (!IS_LOOPBACK && !hasAuthCookie(req.headers.cookie, AUTH_TOKEN)) {
+        json(res, 401, { error: 'unauthorized' })
+        return
+      }
+      try {
+        await handleApi(req, res, url)
+      }
+      catch (err) {
+        if (res.headersSent)
+          res.end()
+        else
+          json(res, 500, { error: String(err) })
+      }
+      return
+    }
+
+    await serveStatic(res, path)
+  })()
 })
 
 httpServer.listen(PORT, HOST, () => {

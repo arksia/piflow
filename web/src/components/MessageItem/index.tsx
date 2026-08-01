@@ -1,4 +1,5 @@
-import type { ChatMessage, MessageBlock, TextBlock, ToolState } from '../../ws'
+import type { ChatMessage, MessageBlock, TextBlock, ToolState } from '../../client'
+import { memo } from 'react'
 import MarkdownView from '../MarkdownView'
 import ToolCallCard from '../ToolCallCard'
 import styles from './styles.module.css'
@@ -18,7 +19,7 @@ function time(timestamp?: number) {
   return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-export default function MessageItem({ message, toolResults, live = false }: Props) {
+function MessageItem({ message, toolResults, live = false }: Props) {
   const content = message.content
   const blocks = Array.isArray(content) ? content : []
   const userText = typeof content === 'string'
@@ -56,7 +57,7 @@ export default function MessageItem({ message, toolResults, live = false }: Prop
             return <MarkdownView key={blockKey(block)} text={block.text} />
           if (block.type === 'thinking') {
             return (
-              <details key={blockKey(block)} className={`${styles.thinking} recede`}>
+              <details key={blockKey(block)} className={styles.thinking}>
                 <summary>思考过程</summary>
                 <div className={styles.thinkingBody}>{block.thinking}</div>
               </details>
@@ -90,6 +91,21 @@ export default function MessageItem({ message, toolResults, live = false }: Prop
 
   return null
 }
+
+export default memo(MessageItem, (prev, next) => {
+  if (prev.message !== next.message || prev.live !== next.live)
+    return false
+  if (prev.toolResults === next.toolResults)
+    return true
+  // toolResults is mutated in place per tool id; only re-render when a
+  // state this message actually displays has been replaced
+  const blocks = Array.isArray(next.message.content) ? next.message.content : []
+  for (const block of blocks) {
+    if (block.type === 'toolCall' && prev.toolResults[block.id] !== next.toolResults[block.id])
+      return false
+  }
+  return true
+})
 
 function blockKey(block: MessageBlock) {
   if (block.type === 'toolCall')

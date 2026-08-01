@@ -3,43 +3,11 @@ import { describe, it } from 'node:test'
 import {
   AUTH_COOKIE,
   hasAuthCookie,
-  isAllowedOrigin,
   isLoopbackHost,
   isValidAccessToken,
-  parseClientMessage,
 } from './protocol.js'
 
-describe('parseClientMessage', () => {
-  it('rejects malformed and structurally invalid messages', () => {
-    assert.equal(parseClientMessage('{'), null)
-    assert.equal(parseClientMessage('null'), null)
-    assert.equal(parseClientMessage('{"type":"open","path":"/tmp/session"}'), null)
-    assert.equal(parseClientMessage('{"type":"unknown"}'), null)
-  })
-
-  it('keeps the request id used to correlate replies', () => {
-    assert.deepEqual(
-      parseClientMessage('{"type":"open","requestId":"req-1","path":"/tmp/session"}'),
-      { type: 'open', requestId: 'req-1', path: '/tmp/session' },
-    )
-  })
-
-  it('only accepts a boolean cache bypass for usage refreshes', () => {
-    assert.deepEqual(
-      parseClientMessage('{"type":"get_usage","key":"session","fresh":true}'),
-      { type: 'get_usage', key: 'session', fresh: true },
-    )
-    assert.equal(parseClientMessage('{"type":"get_usage","key":"session","fresh":"yes"}'), null)
-  })
-})
-
-describe('webSocket handshake', () => {
-  it('only accepts the current HTTP origin', () => {
-    assert.equal(isAllowedOrigin('http://127.0.0.1:3141', '127.0.0.1:3141'), true)
-    assert.equal(isAllowedOrigin('https://example.com', '127.0.0.1:3141'), false)
-    assert.equal(isAllowedOrigin(undefined, '127.0.0.1:3141'), false)
-  })
-
+describe('http auth', () => {
   it('requires the exact authentication cookie', () => {
     assert.equal(hasAuthCookie(`other=x; ${AUTH_COOKIE}=secret`, 'secret'), true)
     assert.equal(hasAuthCookie(`${AUTH_COOKIE}=wrong`, 'secret'), false)

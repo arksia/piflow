@@ -1,6 +1,8 @@
-import type { SessionInfoLite } from '../../ws'
+import type { SessionInfoLite } from '../../client'
+import { useState } from 'react'
+import { newSessionIn, openSession, setSidebarOpen } from '../../client'
 import { useStore } from '../../use-store'
-import { newSession, openSession, setSidebarOpen } from '../../ws'
+import NewSessionDialog from '../NewSessionDialog'
 import styles from './styles.module.css'
 
 function shorten(path: string) {
@@ -28,6 +30,8 @@ function label(session: SessionInfoLite) {
 
 export default function SessionList() {
   const store = useStore()
+  const [newSessionOpen, setNewSessionOpen] = useState(false)
+  const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
   const byCwd = new Map<string, SessionInfoLite[]>()
   for (const session of store.sessions) {
     const sessions = byCwd.get(session.cwd) ?? []
@@ -47,53 +51,82 @@ export default function SessionList() {
     }
   }
 
-  async function create() {
-    if (!store.connected)
+  async function createIn(cwd: string) {
+    if (!store.connected || creatingCwd)
       return
+    setCreatingCwd(cwd)
     try {
-      await newSession()
+      await newSessionIn(cwd)
       setSidebarOpen(false)
     }
     catch (error) {
       console.error('[piflow]', error)
     }
+    finally {
+      setCreatingCwd(null)
+    }
   }
 
   return (
-    <div className={styles.list}>
-      <div className={styles.top}>
-        <span className={styles.brand}>piflow</span>
-        <button className={`${styles.newSession} recede`} title="新会话" disabled={!store.connected} onClick={create}>
-          + 新会话
-        </button>
-      </div>
-
-      {[...byCwd.entries()].map(([cwd, sessions]) => (
-        <div key={cwd} className={styles.group}>
-          <div className={styles.cwd}>{shorten(cwd)}</div>
-          {sessions.map(session => (
-            <button
-              key={session.path}
-              className={`${styles.item} ${store.activeKey === session.path ? styles.active : ''} recede`}
-              disabled={!store.connected}
-              onClick={() => pick(session)}
-            >
-              <span className={styles.label}>{label(session)}</span>
-              <span className={styles.meta}>
-                {relativeTime(session.modified)}
-                {' '}
-                ·
-                {' '}
-                {session.messageCount}
-                {' '}
-                条
-              </span>
-            </button>
-          ))}
+    <>
+      <div className={styles.list}>
+        <div className={styles.top}>
+          <span className={styles.brand}>piflow</span>
+          <button className={styles.newSession} title="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
+            + 新会话
+          </button>
         </div>
-      ))}
 
-      {!store.connected ? <div className={styles.offline}>连接中…</div> : null}
-    </div>
+        {[...byCwd.entries()].map(([cwd, sessions]) => (
+          <div key={cwd} className={styles.group}>
+            <div className={styles.cwdRow}>
+              <div className={styles.cwd} title={cwd}>{shorten(cwd)}</div>
+              <button
+                className={styles.projectNew}
+                title={`在 ${shorten(cwd)} 中新建会话`}
+                aria-label={`在 ${shorten(cwd)} 中新建会话`}
+                disabled={!store.connected || creatingCwd !== null}
+                onClick={() => void createIn(cwd)}
+              >
+                {creatingCwd === cwd ? '…' : '+'}
+              </button>
+            </div>
+            {sessions.map(session => (
+              <button
+                key={session.path}
+                className={`${styles.item} ${store.activeKey === session.path ? styles.active : ''}`}
+                disabled={!store.connected}
+                onClick={() => pick(session)}
+              >
+                <span className={styles.label}>{label(session)}</span>
+                <span className={styles.meta}>
+                  {relativeTime(session.modified)}
+                  {' '}
+                  ·
+                  {' '}
+                  {session.messageCount}
+                  {' '}
+                  条
+                </span>
+              </button>
+            ))}
+          </div>
+        ))}
+
+        {!store.connected ? <div className={styles.offline}>连接中…</div> : null}
+      </div>
+      {newSessionOpen
+        ? (
+            <NewSessionDialog
+              initialPath={store.cwd}
+              onClose={() => setNewSessionOpen(false)}
+              onCreated={() => {
+                setNewSessionOpen(false)
+                setSidebarOpen(false)
+              }}
+            />
+          )
+        : null}
+    </>
   )
 }

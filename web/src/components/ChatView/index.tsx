@@ -1,8 +1,8 @@
 import type { CSSProperties, UIEvent } from 'react'
-import type { ChatMessage } from '../../ws'
+import type { ChatMessage } from '../../client'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { setSidebarOpen } from '../../client'
 import { useStore } from '../../use-store'
-import { setSidebarOpen } from '../../ws'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
 import styles from './styles.module.css'
@@ -99,6 +99,13 @@ export default function ChatView() {
 
   const isEmpty = !view || view.messages.length === 0
   const chatStyle = { '--chat-w': `${WIDTHS[widthIndex] ?? WIDTHS[1]}px` } as CSSProperties
+  const statusText = !store.connected
+    ? '连接中…'
+    : view?.isCompacting
+      ? '压缩上下文'
+      : view?.isStreaming
+        ? '生成中'
+        : ''
 
   function applyPreset(preset: string) {
     setComposerText(preset)
@@ -116,10 +123,10 @@ export default function ChatView() {
   return (
     <div className={styles.chat} style={chatStyle}>
       <header className={styles.bar}>
-        <button className={`${styles.menu} recede`} onClick={() => setSidebarOpen(!store.sidebarOpen)}>☰</button>
+        <button className={styles.menu} title="会话列表" aria-label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>☰</button>
         <span ref={titleRef} className={styles.title}>{title}</span>
-        <button className={`${styles.width} recede`} title="切换聊天宽度" onClick={cycleWidth}>⇔</button>
-        <span className={`${styles.status} ${view?.isStreaming ? styles.on : ''}`} />
+        <button className={styles.width} title="切换聊天宽度" aria-label="切换聊天宽度" onClick={cycleWidth}>⇔</button>
+        <span className={`${styles.status} ${statusText ? styles.on : ''}`}>{statusText}</span>
       </header>
 
       <div ref={scrollerRef} className={`${styles.scroll} ${isEmpty ? styles.centered : ''}`} onScroll={onScroll}>
@@ -129,7 +136,7 @@ export default function ChatView() {
                 <h1>今天做点什么？</h1>
                 <div className={styles.presets}>
                   {PRESETS.map(preset => (
-                    <button key={preset} className={`${styles.pill} recede`} onClick={() => applyPreset(preset)}>{preset}</button>
+                    <button key={preset} className={styles.pill} onClick={() => applyPreset(preset)}>{preset}</button>
                   ))}
                 </div>
                 {!view ? <p className={styles.dim}>也可以从左侧选择一个历史会话继续</p> : null}
@@ -145,7 +152,14 @@ export default function ChatView() {
                   />
                 ))}
                 {view.live ? <MessageItem message={view.live} toolResults={view.toolResults} live /> : null}
-                {view.isStreaming && !view.live ? <div className={styles.pending}><span className={styles.dot} /></div> : null}
+                {view.isStreaming && !view.live
+                  ? (
+                      <div className={styles.pending}>
+                        <span className={styles.dot} />
+                        正在生成…
+                      </div>
+                    )
+                  : null}
                 {view.isCompacting ? <div className={styles.note}>正在压缩上下文…</div> : null}
                 {view.error ? <div className={styles.error}>{view.error}</div> : null}
               </div>

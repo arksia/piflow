@@ -16,6 +16,11 @@
   display: none;
   color: var(--c-muted);
   font-size: 1.1rem;
+  transition: color 0.15s var(--ease);
+}
+
+.menu:hover {
+  color: var(--c-ink);
 }
 
 .title {
@@ -31,22 +36,22 @@
 .width {
   color: var(--c-muted);
   font-size: 0.9rem;
+  transition: color 0.15s var(--ease);
+}
+
+.width:hover {
+  color: var(--c-ink);
 }
 
 .status {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--c-faint);
-  opacity: 0.4;
-  transition: all 0.3s var(--ease);
+  color: var(--c-faint);
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .status.on {
-  background: var(--c-signal);
-  opacity: 1;
-  animation: pulse 1.6s var(--ease) infinite;
+  color: var(--c-signal);
 }
 
 @keyframes pulse {
@@ -69,7 +74,6 @@
   width: min(calc(100% - 48px), var(--chat-w));
   margin: 0 auto;
   padding: 24px 0 16px;
-  transition: width 0.25s var(--ease);
 }
 
 .hero {
@@ -101,11 +105,12 @@
   border-radius: 999px;
   color: var(--c-muted);
   font-size: 0.85rem;
-  transition: border-color 0.2s var(--ease), opacity 0.2s var(--ease);
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
 }
 
 .pill:hover {
   border-color: var(--c-faint);
+  color: var(--c-ink);
 }
 
 .dim {
@@ -115,7 +120,12 @@
 }
 
 .pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 0;
+  color: var(--c-muted);
+  font-size: 0.85rem;
 }
 
 .dot {
@@ -137,6 +147,12 @@
   color: #ffa198;
   font-size: 0.85rem;
   padding: 8px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
 }
 
 @media (width <= 768px) {

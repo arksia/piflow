@@ -50,6 +50,12 @@
   50% { opacity: 0; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .assistant.live .caret {
+    animation: none;
+  }
+}
+
 .thinking {
   margin: 8px 0;
   font-size: 0.85rem;

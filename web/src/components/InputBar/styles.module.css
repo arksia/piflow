@@ -11,7 +11,6 @@
 .column {
   width: min(calc(100% - 48px), calc(var(--chat-w, 1180px) - 60px));
   margin: 0 auto;
-  transition: width 0.25s var(--ease);
 }
 
 .queue {
@@ -124,6 +123,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.15s var(--ease);
+}
+
+.model:hover {
+  color: var(--c-ink);
 }
 
 .scrim {
@@ -165,17 +169,15 @@
   border-radius: 5px;
   color: var(--c-muted);
   font-size: 0.82rem;
-  opacity: 0.7;
-  transition: opacity 0.15s var(--ease);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
 }
 
 .provider-item:hover {
-  opacity: 1;
+  color: var(--c-ink);
   background: #ffffff08;
 }
 
 .provider-item.current {
-  opacity: 1;
   color: var(--c-ink);
 }
 
@@ -246,5 +248,9 @@
 @media (prefers-reduced-motion: reduce) {
   .ring {
     transition: none;
+  }
+
+  .dot {
+    animation: none;
   }
 }
