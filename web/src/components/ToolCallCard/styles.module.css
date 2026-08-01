@@ -34,6 +34,10 @@
   flex-shrink: 0;
 }
 
+.head:hover .name {
+  color: var(--c-ink);
+}
+
 .summary {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -115,4 +119,26 @@
 .none {
   color: var(--c-faint);
   font-size: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  padding: 6px 2px 0;
+}
+
+.action {
+  color: var(--c-faint);
+  font-size: 0.75rem;
+  transition: color 0.15s var(--ease);
+}
+
+.action:hover {
+  color: var(--c-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal {
+    animation: none;
+  }
 }

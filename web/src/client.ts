@@ -1,5 +1,3 @@
-import { RequestTracker } from './request-tracker'
-
 export interface SessionInfoLite {
   path: string
   id: string
@@ -9,6 +7,17 @@ export interface SessionInfoLite {
   modified: string
   messageCount: number
   firstMessage: string
+}
+
+export interface DirectoryEntry {
+  name: string
+  path: string
+}
+
+export interface DirectoryListing {
+  path: string
+  parent: string | null
+  directories: DirectoryEntry[]
 }
 
 export interface ModelInfo {
@@ -63,8 +72,7 @@ export interface UsageWindow {
 }
 
 export interface UsageReport {
-  type: 'usage'
-  provider: string
+  provider: string | null
   supported: boolean
   plan?: string
   windows: UsageWindow[]
@@ -107,6 +115,19 @@ export interface StoreState {
 
 const listeners = new Set<() => void>()
 let version = 0
+let flushTimer: ReturnType<typeof setTimeout> | undefined
+
+function notify() {
+  version++
+  // token-level events can fire 100+/s; coalesce renders to ~25fps
+  if (flushTimer)
+    return
+  flushTimer = setTimeout(() => {
+    flushTimer = undefined
+    for (const listener of listeners)
+      listener()
+  }, 40)
+}
 
 export const store: StoreState = {
   connected: false,
@@ -117,12 +138,6 @@ export const store: StoreState = {
   activeKey: null,
   views: {},
   sidebarOpen: false,
-}
-
-function notify() {
-  version++
-  for (const listener of listeners)
-    listener()
 }
 
 export function subscribeStore(listener: () => void): () => void {
@@ -157,9 +172,7 @@ function ensureView(key: string): SessionView {
   })
 }
 
-// ---------- ws connection ----------
-
-let ws: WebSocket | null = null
+// ---------- protocol types ----------
 
 interface SessionState {
   key: string
@@ -188,12 +201,9 @@ type ServerMessage
   = | { type: 'hello', cwd: string }
     | { type: 'sessions', sessions: SessionInfoLite[] }
     | { type: 'models', models: ModelInfo[] }
-    | UsageReport
-    | { type: 'state', state: SessionState, requestId?: string }
+    | { type: 'state', state: SessionState }
     | { type: 'event', session: string, event: AgentEvent, context?: SessionView['context'] }
-    | { type: 'error', error: string, session?: string, requestId?: string }
-
-const sessionRequests = new RequestTracker<SessionState>()
+    | { type: 'error', error: string, session?: string }
 
 // ---------- last opened session ----------
 
@@ -214,128 +224,68 @@ function readSavedActive(): { path: string } | null {
   }
 }
 
-async function connect() {
-  try {
-    const url = new URL(location.href)
-    const token = url.searchParams.get('token')
-    const authUrl = token ? `/auth?token=${encodeURIComponent(token)}` : '/auth'
-    const response = await fetch(authUrl, { cache: 'no-store' })
-    if (!response.ok)
-      throw new Error(`authentication failed: ${response.status}`)
-    if (token) {
-      url.searchParams.delete('token')
-      history.replaceState(null, '', url)
-    }
-  }
-  catch (error) {
-    console.error('[piflow]', error)
-    setTimeout(connect, 1500)
-    return
-  }
+// ---------- http api ----------
 
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  ws = new WebSocket(`${proto}://${location.host}/ws`)
+async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(path, options)
+  const data: unknown = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const message = (data as { error?: unknown }).error
+    throw new Error(typeof message === 'string' ? message : `request failed: ${response.status}`)
+  }
+  return data as T
+}
 
-  ws.onopen = () => {
-    store.connected = true
-    send({ type: 'list_sessions' })
-    send({ type: 'list_models' })
-  }
-  ws.onclose = () => {
-    store.connected = false
-    ws = null
-    sessionRequests.rejectAll(new Error('connection closed'))
-    setTimeout(connect, 1500)
-  }
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(String(e.data)) as ServerMessage
-    route(msg)
+function post<T>(path: string, body?: unknown): Promise<T> {
+  return api<T>(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  })
+}
+
+function sessionUrl(key: string, action: string) {
+  return `/api/sessions/${encodeURIComponent(key)}/${action}`
+}
+
+// ---------- state application ----------
+
+function applySessions(sessions: SessionInfoLite[]) {
+  store.sessions = sessions
+  notify()
+  // restore the last opened session after refresh (only if it still exists)
+  if (!restored && !store.activeKey) {
+    restored = true
+    const saved = readSavedActive()
+    if (saved?.path && sessions.some(s => s.path === saved.path))
+      openSession(saved.path).catch(() => {})
   }
 }
 
-function send(msg: Record<string, unknown>): boolean {
-  if (ws?.readyState !== WebSocket.OPEN)
-    return false
-  ws.send(JSON.stringify(msg))
-  return true
-}
-
-function route(msg: ServerMessage) {
-  switch (msg.type) {
-    case 'hello':
-      store.cwd = msg.cwd
-      notify()
-      break
-
-    case 'sessions': {
-      store.sessions = msg.sessions
-      notify()
-      // restore the last opened session after refresh (only if it still exists)
-      if (!restored && !store.activeKey) {
-        restored = true
-        const saved = readSavedActive()
-        if (saved?.path && msg.sessions.some(s => s.path === saved.path))
-          openSession(saved.path).catch(() => {})
-      }
-      break
-    }
-
-    case 'models':
-      store.models = msg.models
-      notify()
-      break
-
-    case 'usage':
-      if (msg.provider)
-        store.usage[msg.provider] = msg
-      notify()
-      break
-
-    case 'state': {
-      const s = msg.state
-      const view = ensureView(s.key)
-      view.messages = s.messages
-      view.isStreaming = s.isStreaming
-      view.model = s.model
-      view.thinkingLevel = s.thinkingLevel ?? null
-      view.thinkingLevels = s.thinkingLevels ?? []
-      view.context = s.context ?? null
-      view.error = null
-      // rebuild tool results from history
-      const results: Record<string, ToolState> = {}
-      for (const m of s.messages) {
-        if (m.role === 'toolResult' && m.toolCallId && Array.isArray(m.content)) {
-          results[m.toolCallId] = { result: { content: m.content, details: m.details }, isError: m.isError }
-        }
-      }
-      // ponytail: single-user local tool; full message sync via state broadcast
-      view.toolResults = results
-      view.tick++
-      // once a new session is persisted to disk, update the last-opened record
-      if (s.key === store.activeKey)
-        saveActive(s)
-      if (msg.requestId)
-        sessionRequests.resolve(msg.requestId, s)
-      notify()
-      break
-    }
-
-    case 'event':
-      if (msg.context !== undefined)
-        ensureView(msg.session).context = msg.context
-      handleEvent(msg.session, msg.event)
-      break
-
-    case 'error': {
-      if (msg.requestId)
-        sessionRequests.reject(msg.requestId, new Error(msg.error))
-      if (msg.session)
-        ensureView(msg.session).error = msg.error
-      console.error('[piflow]', msg.error)
-      notify()
-      break
+function applyState(s: SessionState) {
+  const view = ensureView(s.key)
+  view.messages = s.messages
+  // state is authoritative; streaming events rebuild live from here
+  view.live = null
+  view.isStreaming = s.isStreaming
+  view.model = s.model
+  view.thinkingLevel = s.thinkingLevel ?? null
+  view.thinkingLevels = s.thinkingLevels ?? []
+  view.context = s.context ?? null
+  view.error = null
+  // rebuild tool results from history
+  const results: Record<string, ToolState> = {}
+  for (const m of s.messages) {
+    if (m.role === 'toolResult' && m.toolCallId && Array.isArray(m.content)) {
+      results[m.toolCallId] = { result: { content: m.content, details: m.details }, isError: m.isError }
     }
   }
+  view.toolResults = results
+  view.tick++
+  // once a new session is persisted to disk, update the last-opened record
+  if (s.key === store.activeKey)
+    saveActive(s)
+  notify()
 }
 
 function sameMessage(a: ChatMessage | undefined, b: ChatMessage) {
@@ -415,31 +365,128 @@ function handleEvent(key: string, ev: AgentEvent) {
   notify()
 }
 
-// ---------- public API ----------
+function route(msg: ServerMessage) {
+  switch (msg.type) {
+    case 'hello':
+      store.cwd = msg.cwd
+      notify()
+      break
 
-export function requestSessions() {
-  send({ type: 'list_sessions' })
+    case 'sessions':
+      applySessions(msg.sessions)
+      break
+
+    case 'models':
+      store.models = msg.models
+      notify()
+      break
+
+    case 'state':
+      applyState(msg.state)
+      break
+
+    case 'event':
+      if (msg.context !== undefined)
+        ensureView(msg.session).context = msg.context
+      handleEvent(msg.session, msg.event)
+      break
+
+    case 'error': {
+      if (msg.session)
+        ensureView(msg.session).error = msg.error
+      console.error('[piflow]', msg.error)
+      notify()
+      break
+    }
+  }
 }
 
-function requestSession(message: { type: 'open', path: string } | { type: 'new' }): Promise<SessionState> {
-  const requestId = crypto.randomUUID()
-  const response = sessionRequests.wait(requestId)
-  if (!send({ ...message, requestId }))
-    sessionRequests.reject(requestId, new Error('not connected'))
-  return response.then((state) => {
-    store.activeKey = state.key
-    saveActive(state)
+// ---------- sse connection ----------
+
+async function connect() {
+  try {
+    const url = new URL(location.href)
+    const token = url.searchParams.get('token')
+    const authUrl = token ? `/auth?token=${encodeURIComponent(token)}` : '/auth'
+    const response = await fetch(authUrl, { cache: 'no-store' })
+    if (!response.ok)
+      throw new Error(`authentication failed: ${response.status}`)
+    if (token) {
+      url.searchParams.delete('token')
+      history.replaceState(null, '', url)
+    }
+  }
+  catch (error) {
+    console.error('[piflow]', error)
+    setTimeout(connect, 1500)
+    return
+  }
+
+  const source = new EventSource('/api/events')
+
+  source.onopen = () => {
+    store.connected = true
     notify()
-    return state
-  })
+    void resync()
+  }
+
+  source.onmessage = (e) => {
+    route(JSON.parse(String(e.data)) as ServerMessage)
+  }
+
+  // EventSource reconnects automatically
+  source.onerror = () => {
+    if (store.connected) {
+      store.connected = false
+      notify()
+    }
+  }
+}
+
+async function resync() {
+  try {
+    const [sessions, models] = await Promise.all([
+      api<{ sessions: SessionInfoLite[] }>('/api/sessions'),
+      api<{ models: ModelInfo[] }>('/api/models'),
+    ])
+    store.models = models.models
+    applySessions(sessions.sessions)
+    // refresh authoritative state for the active session after (re)connect
+    const key = store.activeKey
+    if (key && !key.startsWith('new:'))
+      await openSession(key)
+  }
+  catch (error) {
+    console.error('[piflow]', error)
+  }
+}
+
+// ---------- public API ----------
+
+async function requestSession(path: string, body: unknown): Promise<SessionState> {
+  const { state } = await post<{ state: SessionState }>(path, body)
+  applyState(state)
+  store.activeKey = state.key
+  saveActive(state)
+  notify()
+  return state
 }
 
 export function openSession(path: string): Promise<SessionState> {
-  return requestSession({ type: 'open', path })
+  return requestSession('/api/sessions/open', { path })
 }
 
 export function newSession(): Promise<SessionState> {
-  return requestSession({ type: 'new' })
+  return requestSession('/api/sessions/new', store.cwd ? { cwd: store.cwd } : {})
+}
+
+export function newSessionIn(cwd: string): Promise<SessionState> {
+  return requestSession('/api/sessions/new', { cwd })
+}
+
+export async function requestDirectories(path: string): Promise<DirectoryListing> {
+  const { listing } = await api<{ listing: DirectoryListing }>(`/api/directories?path=${encodeURIComponent(path)}`)
+  return listing
 }
 
 export async function sendPrompt(text: string): Promise<void> {
@@ -450,8 +497,7 @@ export async function sendPrompt(text: string): Promise<void> {
   const key = store.activeKey
   if (!key)
     return
-  if (!send({ type: 'prompt', key, text }))
-    throw new Error('not connected')
+  await post(sessionUrl(key, 'prompt'), { text })
   const view = ensureView(key)
   view.messages.push({ role: 'user', content: text, timestamp: Date.now() })
   view.tick++
@@ -459,21 +505,27 @@ export async function sendPrompt(text: string): Promise<void> {
 }
 
 export function abort(key: string) {
-  send({ type: 'abort', key })
+  void post(sessionUrl(key, 'abort')).catch((error: unknown) => console.error('[piflow]', error))
 }
 
 export function setModel(key: string, provider: string, modelId: string) {
-  send({ type: 'set_model', key, provider, modelId })
+  void post(sessionUrl(key, 'model'), { provider, modelId }).catch((error: unknown) => console.error('[piflow]', error))
 }
 
 export function setThinking(key: string, level: string) {
-  send({ type: 'set_thinking', key, level })
+  void post(sessionUrl(key, 'thinking'), { level }).catch((error: unknown) => console.error('[piflow]', error))
 }
 
 export function requestUsage(key: string, fresh = false) {
-  send({ type: 'get_usage', key, fresh })
+  void api<UsageReport>(`/api/usage?key=${encodeURIComponent(key)}${fresh ? '&fresh=1' : ''}`)
+    .then((report) => {
+      if (report.provider)
+        store.usage[report.provider] = report
+      notify()
+    })
+    .catch((error: unknown) => console.error('[piflow]', error))
 }
 
-export function initWs() {
+export function initClient() {
   void connect()
 }

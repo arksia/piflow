@@ -1,8 +1,8 @@
 import type { CSSProperties, KeyboardEvent } from 'react'
-import type { SessionView, UsageWindow } from '../../ws'
+import type { SessionView, UsageWindow } from '../../client'
 import { useEffect, useRef, useState } from 'react'
+import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../client'
 import { useStore } from '../../use-store'
-import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../ws'
 import styles from './styles.module.css'
 
 interface Props {
@@ -27,6 +27,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
   const areaRef = useRef<HTMLTextAreaElement>(null)
+  const modelButtonRef = useRef<HTMLButtonElement>(null)
   const previousStreamingRef = useRef(view?.isStreaming)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
@@ -67,6 +68,19 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
     if (focusVersion)
       requestAnimationFrame(() => areaRef.current?.focus())
   }, [focusVersion])
+
+  useEffect(() => {
+    if (!modelOpen)
+      return
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setModelOpen(false)
+        modelButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [modelOpen])
 
   function pickModel(selectedProvider: string, modelId: string) {
     if (view)
@@ -140,15 +154,15 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                 ? (
                     <span className={styles.steer}>
                       <span className={styles.dot} />
-                      steer · 发送将插队传达
+                      回复中 · 发送将插队传达
                     </span>
                   )
                 : view?.thinkingLevels.length
                   ? (
-                      <button className={`${styles.thinking} recede`} title="切换思考强度" onClick={cycleThinking}>
-                        thinking ·
+                      <button className={styles.thinking} title="切换思考强度" aria-label={`切换思考强度，当前${thinkingLabel(view.thinkingLevel)}`} onClick={cycleThinking}>
+                        思考强度 ·
                         {' '}
-                        {view.thinkingLevel}
+                        {thinkingLabel(view.thinkingLevel)}
                       </button>
                     )
                   : null}
@@ -163,14 +177,25 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                   )
                 : null}
               {view?.model
-                ? <button className={`${styles.model} recede`} onClick={toggleModels}>{view.model.name}</button>
+                ? (
+                    <button
+                      ref={modelButtonRef}
+                      className={styles.model}
+                      aria-haspopup="dialog"
+                      aria-expanded={modelOpen}
+                      onClick={toggleModels}
+                    >
+                      {view.model.name}
+                    </button>
+                  )
                 : null}
               {view?.isStreaming
                 ? (
                     <button
                       className={`${styles.button} ${styles.ring} ${styles.stop} ${contextLevel}`}
                       style={ringStyle}
-                      title={`中断 · ${contextTitle}`}
+                      title={`中断回复 · ${contextTitle}`}
+                      aria-label="中断回复"
                       onClick={() => abort(view.key)}
                     >
                       <span className={styles.core}>■</span>
@@ -181,6 +206,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                       className={`${styles.button} ${styles.ring} ${styles.send} ${contextLevel} ${canSend ? styles.ready : ''}`}
                       style={ringStyle}
                       title={contextTitle || '发送'}
+                      aria-label="发送"
                       disabled={!canSend}
                       onClick={() => void submit()}
                     >
@@ -193,8 +219,8 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
           {modelOpen
             ? (
                 <>
-                  <div className={styles.scrim} onClick={() => setModelOpen(false)} />
-                  <div className={styles.popover}>
+                  <div className={styles.scrim} aria-hidden onClick={() => setModelOpen(false)} />
+                  <div className={styles.popover} role="dialog" aria-label="选择模型">
                     {[...modelGroups.entries()].map(([groupProvider, models]) => (
                       <div key={groupProvider} className={styles.providerGroup}>
                         <div className={styles.providerName}>{groupProvider}</div>
@@ -232,4 +258,17 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
 
 function formatTokens(value: number) {
   return value >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`
+}
+
+const THINKING_LABELS: Record<string, string> = {
+  off: '关闭',
+  minimal: '极简',
+  low: '低',
+  medium: '中',
+  high: '高',
+  xhigh: '极高',
+}
+
+function thinkingLabel(level?: string | null) {
+  return THINKING_LABELS[level ?? ''] ?? level ?? '自动'
 }

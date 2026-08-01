@@ -48,16 +48,6 @@ body {
   background: #a160fc33;
 }
 
-/* recede by default, respond on hover */
-.recede {
-  opacity: 0.6;
-  transition: opacity 0.2s var(--ease);
-}
-
-.recede:hover {
-  opacity: 1;
-}
-
 button {
   font-family: inherit;
   color: inherit;
@@ -65,6 +55,19 @@ button {
   border: none;
   padding: 0;
   cursor: pointer;
+}
+
+/* explicit, per-component hover styles — no blanket fading */
+button:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 1.5px solid var(--c-signal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:disabled {
+  cursor: default;
 }
 
 /* ---------- markdown ---------- */

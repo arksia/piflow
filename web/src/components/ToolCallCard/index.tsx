@@ -1,4 +1,4 @@
-import type { ToolState } from '../../ws'
+import type { ToolState } from '../../client'
 import { useState } from 'react'
 import styles from './styles.module.css'
 
@@ -9,6 +9,7 @@ interface Props {
 
 export default function ToolCallCard({ call, state }: Props) {
   const [open, setOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const args = call.arguments ?? {}
   const value = args.command ?? args.path ?? args.pattern ?? args.query ?? args.url ?? ''
   const rawSummary = String(value)
@@ -38,16 +39,21 @@ export default function ToolCallCard({ call, state }: Props) {
   const source = state?.partial ?? state?.result
   const rawOutput = (source?.content ?? []).map(content => content.text ?? '').join('').trimEnd()
   const lines = rawOutput.split('\n')
-  const output = lines.length > 60 ? `${lines.slice(0, 60).join('\n')}\n… 共 ${lines.length} 行` : rawOutput
+  const truncated = lines.length > 60 && !expanded
+  const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput
   const status = state?.running ? 'running' : state?.isError ? 'error' : state?.result ? 'done' : 'pending'
 
+  function copyOutput() {
+    void navigator.clipboard.writeText(rawOutput)
+  }
+
   return (
-    <div className={`${styles.tool} ${styles[status]} recede`}>
-      <button className={styles.head} onClick={() => setOpen(value => !value)}>
+    <div className={`${styles.tool} ${styles[status]}`}>
+      <button className={styles.head} aria-expanded={open} onClick={() => setOpen(value => !value)}>
         <span className={`${styles.chevron} ${open ? styles.open : ''}`}>›</span>
         <span className={styles.name}>{call.name}</span>
-        <span className={styles.summary}>{summary}</span>
-        {status === 'running' ? <span className={styles.signal} /> : null}
+        <span className={styles.summary} title={rawSummary}>{summary}</span>
+        {status === 'running' ? <span className={styles.signal} title="运行中" /> : null}
         {status === 'error' ? <span className={styles.error}>失败</span> : null}
       </button>
 
@@ -65,7 +71,21 @@ export default function ToolCallCard({ call, state }: Props) {
                     </div>
                   )
                 : output
-                  ? <pre className={styles.output}>{output}</pre>
+                  ? (
+                      <>
+                        <pre className={styles.output}>{output}</pre>
+                        <div className={styles.actions}>
+                          {lines.length > 60
+                            ? (
+                                <button className={styles.action} onClick={() => setExpanded(value => !value)}>
+                                  {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
+                                </button>
+                              )
+                            : null}
+                          <button className={styles.action} onClick={copyOutput}>复制</button>
+                        </div>
+                      </>
+                    )
                   : <div className={styles.none}>无输出</div>}
             </div>
           )
