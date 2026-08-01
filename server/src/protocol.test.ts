@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import {
   AUTH_COOKIE,
   hasAuthCookie,
+  isAllowedOrigin,
   isLoopbackHost,
   isValidAccessToken,
 } from './protocol.js'
@@ -18,6 +19,12 @@ describe('http auth', () => {
     assert.equal(isLoopbackHost('127.0.0.1'), true)
     assert.equal(isLoopbackHost('::1'), true)
     assert.equal(isLoopbackHost('0.0.0.0'), false)
+  })
+
+  it('only accepts exact same-origin browser requests', () => {
+    assert.equal(isAllowedOrigin('http://127.0.0.1:3141', '127.0.0.1:3141'), true)
+    assert.equal(isAllowedOrigin('https://example.com', '127.0.0.1:3141'), false)
+    assert.equal(isAllowedOrigin(undefined, '127.0.0.1:3141'), false)
   })
 
   it('requires a URL-safe access token with sufficient entropy', () => {

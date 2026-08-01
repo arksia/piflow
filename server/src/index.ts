@@ -13,6 +13,7 @@ import {
 import {
   AUTH_COOKIE,
   hasAuthCookie,
+  isAllowedOrigin,
   isLoopbackHost,
   isValidAccessToken,
 } from './protocol.js'
@@ -158,6 +159,17 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
       throw new Error('request body too large')
   }
   return body ? JSON.parse(body) : {}
+}
+
+function hasTrustedOrigin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin
+  if (origin === undefined)
+    return true
+  return isAllowedOrigin(origin, req.headers.host)
+}
+
+function isAuthenticated(req: IncomingMessage): boolean {
+  return hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
 }
 
 // ---------- API routes ----------
@@ -337,10 +349,14 @@ const httpServer = createServer((req, res) => {
     const path = url.pathname
 
     if (path === '/auth') {
+      if (!hasTrustedOrigin(req)) {
+        res.writeHead(403, { 'cache-control': 'no-store' }).end()
+        return
+      }
       const suppliedToken = url.searchParams.get('token')
       const authenticated = IS_LOOPBACK
         || suppliedToken === AUTH_TOKEN
-        || hasAuthCookie(req.headers.cookie, AUTH_TOKEN)
+        || isAuthenticated(req)
       if (!authenticated) {
         res.writeHead(401, { 'cache-control': 'no-store' }).end()
         return
@@ -353,7 +369,11 @@ const httpServer = createServer((req, res) => {
     }
 
     if (path.startsWith('/api/')) {
-      if (!IS_LOOPBACK && !hasAuthCookie(req.headers.cookie, AUTH_TOKEN)) {
+      if (!hasTrustedOrigin(req)) {
+        json(res, 403, { error: 'forbidden origin' })
+        return
+      }
+      if (!isAuthenticated(req)) {
         json(res, 401, { error: 'unauthorized' })
         return
       }
