@@ -17,7 +17,7 @@ function CodeBlock({ code, language, streaming = false }: Props) {
 
     let cancelled = false
 
-    void import('../../shiki').then(async ({ getHighlightedCodeSnapshot, highlightCodeBlock }) => {
+    void import('../../markdown/shiki').then(async ({ getHighlightedCodeSnapshot, highlightCodeBlock }) => {
       const cached = getHighlightedCodeSnapshot(code, language)
       if (cached) {
         if (!cancelled)

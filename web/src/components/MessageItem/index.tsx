@@ -1,6 +1,7 @@
 import type { ChatMessage, MessageBlock, TextBlock, ToolState } from '../../client'
 import { memo } from 'react'
 import MarkdownView from '../MarkdownView'
+import StreamingMarkdownView from '../StreamingMarkdownView'
 import ToolCallCard from '../ToolCallCard'
 import styles from './styles.module.css'
 
@@ -53,8 +54,11 @@ function MessageItem({ message, toolResults, live = false }: Props) {
     return (
       <div className={`${styles.message} ${styles.assistant} ${live ? styles.live : ''}`}>
         {blocks.map((block) => {
-          if (block.type === 'text')
-            return <MarkdownView key={blockKey(block)} text={block.text} streaming={live} />
+          if (block.type === 'text') {
+            return live
+              ? <StreamingMarkdownView key={blockKey(block)} text={block.text} />
+              : <MarkdownView key={blockKey(block)} text={block.text} />
+          }
           if (block.type === 'thinking') {
             return (
               <details key={blockKey(block)} className={styles.thinking}>
