@@ -1,7 +1,7 @@
 import type { Components } from 'react-markdown'
 import { memo, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from '../../md'
+import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from '../../markdown/md'
 import CodeBlock from '../CodeBlock'
 
 interface Props {
