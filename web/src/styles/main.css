@@ -152,6 +152,16 @@ button:disabled {
   padding: 2px 5px;
 }
 
+.md .md-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-weight: 500;
+  background: var(--c-inline-code);
+  color: var(--c-mid);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
 .md pre {
   background: var(--c-code-bg);
   border-radius: 6px;
@@ -161,10 +171,57 @@ button:disabled {
   line-height: 1.5;
 }
 
+.md-code-shell {
+  margin: 0.8em 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--c-code-bg);
+}
+
+.md-code-block {
+  margin: 0.8em 0;
+  background: var(--c-code-bg);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.md-code-block code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  font-weight: 500;
+  color: var(--c-mid);
+  background: none;
+  padding: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .md pre code {
   background: none;
   padding: 0;
   border-radius: 0;
+}
+
+.md-code-shell pre.shiki {
+  margin: 0;
+  padding: 12px 16px !important;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.md-code-shell pre.shiki code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  font-weight: 500;
+  background: none;
+  padding: 0;
+  white-space: pre;
 }
 
 .md table {

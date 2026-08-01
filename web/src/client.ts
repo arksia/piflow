@@ -115,18 +115,17 @@ export interface StoreState {
 
 const listeners = new Set<() => void>()
 let version = 0
-let flushTimer: ReturnType<typeof setTimeout> | undefined
+let flushFrame = 0
 
 function notify() {
   version++
-  // token-level events can fire 100+/s; coalesce renders to ~25fps
-  if (flushTimer)
+  if (flushFrame)
     return
-  flushTimer = setTimeout(() => {
-    flushTimer = undefined
+  flushFrame = requestAnimationFrame(() => {
+    flushFrame = 0
     for (const listener of listeners)
       listener()
-  }, 40)
+  })
 }
 
 export const store: StoreState = {
