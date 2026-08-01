@@ -54,7 +54,7 @@ function MessageItem({ message, toolResults, live = false }: Props) {
       <div className={`${styles.message} ${styles.assistant} ${live ? styles.live : ''}`}>
         {blocks.map((block) => {
           if (block.type === 'text')
-            return <MarkdownView key={blockKey(block)} text={block.text} />
+            return <MarkdownView key={blockKey(block)} text={block.text} streaming={live} />
           if (block.type === 'thinking') {
             return (
               <details key={blockKey(block)} className={styles.thinking}>

@@ -27,6 +27,7 @@ export default function ChatView() {
   const view = store.activeKey ? (store.views[store.activeKey] ?? null) : null
   const scrollerRef = useRef<HTMLDivElement>(null)
   const scrollMapRef = useRef(readScrollMap())
+  const stickToBottomRef = useRef(true)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const titleFrameRef = useRef(0)
   const previousKeyRef = useRef<string | null>(null)
@@ -58,21 +59,23 @@ export default function ChatView() {
       titleRef.current.textContent = current || title
   }, [title])
 
-  function scheduleTitle() {
+  const scheduleTitle = useCallback(() => {
     if (titleFrameRef.current)
       return
     titleFrameRef.current = requestAnimationFrame(() => {
       titleFrameRef.current = 0
       updateTitle()
     })
-  }
+  }, [updateTitle])
 
   function onScroll(event: UIEvent<HTMLDivElement>) {
     const key = store.activeKey
     if (!key)
       return
+    const element = event.currentTarget
     clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(persist, 200, key, event.currentTarget.scrollTop)
+    saveTimerRef.current = setTimeout(persist, 200, key, element.scrollTop)
+    stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 160
     scheduleTitle()
   }
 
@@ -82,8 +85,10 @@ export default function ChatView() {
     if (oldKey && element)
       persist(oldKey, element.scrollTop)
     previousKeyRef.current = store.activeKey
-    if (element && store.activeKey)
+    if (element && store.activeKey) {
       element.scrollTop = scrollMapRef.current[store.activeKey] ?? element.scrollHeight
+      stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 160
+    }
     updateTitle()
   }, [store.activeKey, updateTitle])
 
@@ -91,11 +96,13 @@ export default function ChatView() {
     const element = scrollerRef.current
     if (!element)
       return
-    const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 160
-    if (nearBottom)
+    if (stickToBottomRef.current)
       element.scrollTop = element.scrollHeight
-    updateTitle()
-  }, [view?.tick, updateTitle])
+  }, [view?.tick])
+
+  useLayoutEffect(() => {
+    scheduleTitle()
+  }, [scheduleTitle, view?.messages.length])
 
   const isEmpty = !view || view.messages.length === 0
   const chatStyle = { '--chat-w': `${WIDTHS[widthIndex] ?? WIDTHS[1]}px` } as CSSProperties
