@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { it } from 'node:test'
-import { getUsage } from './usage/index.js'
+import { getUsage } from './usage/index'
 
 it('bypasses cached provider usage after a completed turn', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'piflow-usage-'))

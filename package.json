@@ -3,12 +3,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
-    "build": "pnpm -r run build",
+    "dev": "pnpm --parallel --filter piflow-web --filter piflow-server run dev",
+    "build": "pnpm --filter @piflow/protocol run build && pnpm --filter piflow-server run build && pnpm --filter piflow-web run build",
     "start": "pnpm --filter piflow-server run start",
     "lint": "eslint . --max-warnings 0 && stylelint 'apps/web/src/**/*.css' --max-warnings 0",
     "lint:fix": "eslint . --fix && stylelint 'apps/web/src/**/*.css' --fix",
-    "typecheck": "pnpm -r --if-present run typecheck",
+    "typecheck": "pnpm --filter @piflow/protocol run typecheck && pnpm --filter piflow-web run typecheck && pnpm --filter piflow-server run typecheck",
     "test": "pnpm --filter piflow-server run test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
