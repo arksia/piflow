@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
-import type { DirectoryListing } from '../../client'
+import type { DirectoryListing } from '../../session/types'
 import { useEffect, useRef, useState } from 'react'
-import { newSessionIn, requestDirectories } from '../../client'
+import { newSessionIn, requestDirectories } from '../../session/actions'
 import styles from './styles.module.css'
 
 interface Props {

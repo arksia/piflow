@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import styles from './App.module.css'
-import { setSidebarOpen } from './client'
 import ChatView from './components/ChatView'
 import SessionList from './components/SessionList'
-import { useStore } from './use-store'
+import { setSidebarOpen } from './session/store'
+import { useStore } from './session/use-store'
 
 export default function App() {
   const store = useStore()

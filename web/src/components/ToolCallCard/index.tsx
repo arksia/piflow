@@ -1,4 +1,4 @@
-import type { ToolState } from '../../client'
+import type { ToolState } from '../../session/types'
 import { useState } from 'react'
 import styles from './styles.module.css'
 
