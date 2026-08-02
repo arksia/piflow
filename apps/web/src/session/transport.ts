@@ -3,6 +3,12 @@ import type {
   ServerMessage,
   SessionsResponse,
 } from '@piflow/protocol'
+import {
+  buildAuthPath,
+  API_EVENTS_PATH as eventsPath,
+  API_MODELS_PATH as modelsPath,
+  API_SESSIONS_PATH as sessionsPath,
+} from '@piflow/protocol'
 import { openSession } from './actions'
 import { api } from './api'
 import { route } from './reducer'
@@ -15,8 +21,8 @@ function restoreSession(path: string) {
 async function resync() {
   try {
     const [sessions, models] = await Promise.all([
-      api<SessionsResponse>('/api/sessions'),
-      api<ModelsResponse>('/api/models'),
+      api<SessionsResponse>(sessionsPath),
+      api<ModelsResponse>(modelsPath),
     ])
     store.models = models.models
     route({ type: 'sessions', sessions: sessions.sessions }, restoreSession)
@@ -33,7 +39,7 @@ async function connect() {
   try {
     const url = new URL(location.href)
     const token = url.searchParams.get('token')
-    const authUrl = token ? `/auth?token=${encodeURIComponent(token)}` : '/auth'
+    const authUrl = buildAuthPath(token ?? undefined)
     const response = await fetch(authUrl, { cache: 'no-store' })
     if (!response.ok)
       throw new Error(`authentication failed: ${response.status}`)
@@ -48,7 +54,7 @@ async function connect() {
     return
   }
 
-  const source = new EventSource('/api/events')
+  const source = new EventSource(eventsPath)
 
   source.onopen = () => {
     store.connected = true

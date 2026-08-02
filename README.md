@@ -28,7 +28,7 @@ pnpm build
 pnpm start
 ```
 
-The server runs the compiled JavaScript, serves `web/dist`, and listens at [http://127.0.0.1:3141](http://127.0.0.1:3141).
+The server runs the compiled JavaScript, serves `apps/web/dist`, and listens at [http://127.0.0.1:3141](http://127.0.0.1:3141).
 
 ### LAN Access
 

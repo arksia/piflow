@@ -1,17 +1,23 @@
 import type {
   AgentEvent,
+  ApiOkResponse,
   ChatMessage,
   DirectoriesResponse,
   DirectoryListing,
   HelloResponse,
   ModelInfo,
   ModelsResponse,
+  NewSessionRequest,
+  OpenSessionRequest,
+  PromptRequest,
   ServerMessage,
   SessionContext,
   SessionInfoLite,
   SessionsResponse,
   SessionState,
   SessionStateResponse,
+  SetModelRequest,
+  SetThinkingRequest,
   UsageReport,
 } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -26,6 +32,18 @@ import {
   ModelRuntime,
   SessionManager,
 } from '@earendil-works/pi-coding-agent'
+import {
+  API_DIRECTORIES_PATH,
+  API_EVENTS_PATH,
+  API_HELLO_PATH,
+  API_MODELS_PATH,
+  API_SESSIONS_NEW_PATH,
+  API_SESSIONS_OPEN_PATH,
+  API_SESSIONS_PATH,
+  API_USAGE_PATH,
+  AUTH_PATH,
+  parseSessionActionPath,
+} from '@piflow/protocol'
 import {
   AUTH_COOKIE,
   hasAuthCookie,
@@ -194,7 +212,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   const path = url.pathname
   const method = req.method ?? 'GET'
 
-  if (method === 'GET' && path === '/api/events') {
+  if (method === 'GET' && path === API_EVENTS_PATH) {
     res.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
@@ -212,13 +230,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     return
   }
 
-  if (method === 'GET' && path === '/api/hello')
+  if (method === 'GET' && path === API_HELLO_PATH)
     return json(res, 200, { cwd: ROOT_CWD } satisfies HelloResponse)
 
-  if (method === 'GET' && path === '/api/sessions')
+  if (method === 'GET' && path === API_SESSIONS_PATH)
     return json(res, 200, { sessions: await listSessions() } satisfies SessionsResponse)
 
-  if (method === 'GET' && path === '/api/models') {
+  if (method === 'GET' && path === API_MODELS_PATH) {
     const models: ModelInfo[] = (await modelRuntime.getAvailable()).map(m => ({
       id: m.id,
       name: m.name,
@@ -227,13 +245,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     return json(res, 200, { models } satisfies ModelsResponse)
   }
 
-  if (method === 'GET' && path === '/api/directories') {
+  if (method === 'GET' && path === API_DIRECTORIES_PATH) {
     return json(res, 200, {
       listing: await listDirectories(url.searchParams.get('path') ?? ROOT_CWD),
     } satisfies DirectoriesResponse)
   }
 
-  if (method === 'GET' && path === '/api/usage') {
+  if (method === 'GET' && path === API_USAGE_PATH) {
     const key = url.searchParams.get('key')
     const managed = key ? pool.get(key) : undefined
     const provider = managed?.session.model?.provider ?? url.searchParams.get('provider')
@@ -249,8 +267,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     } satisfies UsageReport)
   }
 
-  if (method === 'POST' && path === '/api/sessions/open') {
-    const body = await readBody(req)
+  if (method === 'POST' && path === API_SESSIONS_OPEN_PATH) {
+    const body = await readBody(req) as Partial<OpenSessionRequest>
     if (typeof body.path !== 'string')
       return json(res, 400, { error: 'path required' })
     const known = (await SessionManager.listAll()).find(session => session.path === body.path)
@@ -260,32 +278,34 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     return json(res, 200, { state: sessionState(managed) } satisfies SessionStateResponse)
   }
 
-  if (method === 'POST' && path === '/api/sessions/new') {
-    const body = await readBody(req)
+  if (method === 'POST' && path === API_SESSIONS_NEW_PATH) {
+    const body = await readBody(req) as NewSessionRequest
     const cwd = typeof body.cwd === 'string' ? (await listDirectories(body.cwd)).path : ROOT_CWD
     const managed = await openSession({ cwd, fresh: true })
     return json(res, 200, { state: sessionState(managed) } satisfies SessionStateResponse)
   }
 
-  const action = path.match(/^\/api\/sessions\/([^/]+)\/(prompt|abort|model|thinking)$/)
+  const action = parseSessionActionPath(path)
   if (method === 'POST' && action) {
-    const key = decodeURIComponent(action[1]!)
+    const { key } = action
     const managed = pool.get(key)
     if (!managed)
       return json(res, 404, { error: `session not open: ${key}` })
     const body = await readBody(req)
 
-    switch (action[2]) {
+    switch (action.action) {
       case 'prompt': {
-        if (typeof body.text !== 'string' || !body.text.trim())
+        const prompt = body as Partial<PromptRequest>
+        if (typeof prompt.text !== 'string' || !prompt.text.trim())
           return json(res, 400, { error: 'text required' })
+        const promptText = prompt.text
         // respond immediately; progress arrives over SSE
-        json(res, 202, { ok: true })
+        json(res, 202, { ok: true } satisfies ApiOkResponse)
         const { session } = managed
         void (async () => {
           // Enter while streaming = steer (delivered after current turn)
           try {
-            await session.prompt(body.text as string, {
+            await session.prompt(promptText, {
               streamingBehavior: session.isStreaming ? 'steer' : undefined,
             })
           }
@@ -300,26 +320,28 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
 
       case 'abort':
         await managed.session.abort()
-        return json(res, 200, { ok: true })
+        return json(res, 200, { ok: true } satisfies ApiOkResponse)
 
       case 'model': {
+        const modelRequest = body as Partial<SetModelRequest>
         const model = modelRuntime
           .getAvailableSnapshot()
-          .find(m => m.provider === body.provider && m.id === body.modelId)
+          .find(m => m.provider === modelRequest.provider && m.id === modelRequest.modelId)
         if (!model)
-          return json(res, 404, { error: `model not found: ${String(body.provider)}/${String(body.modelId)}` })
+          return json(res, 404, { error: `model not found: ${String(modelRequest.provider)}/${String(modelRequest.modelId)}` })
         await managed.session.setModel(model)
         broadcast({ type: 'state', state: sessionState(managed) })
-        return json(res, 200, { ok: true })
+        return json(res, 200, { ok: true } satisfies ApiOkResponse)
       }
 
       case 'thinking': {
-        const level = managed.session.getAvailableThinkingLevels().find(level => level === body.level)
+        const thinkingRequest = body as Partial<SetThinkingRequest>
+        const level = managed.session.getAvailableThinkingLevels().find(level => level === thinkingRequest.level)
         if (!level)
           return json(res, 400, { error: 'unknown thinking level' })
         managed.session.setThinkingLevel(level)
         broadcast({ type: 'state', state: sessionState(managed) })
-        return json(res, 200, { ok: true })
+        return json(res, 200, { ok: true } satisfies ApiOkResponse)
       }
     }
   }
@@ -367,7 +389,7 @@ const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const path = url.pathname
 
-    if (path === '/auth') {
+    if (path === AUTH_PATH) {
       if (!hasTrustedOrigin(req)) {
         res.writeHead(403, { 'cache-control': 'no-store' }).end()
         return

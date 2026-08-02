@@ -2,9 +2,8 @@ shellEmulator: true
 trustPolicy: no-downgrade
 
 packages:
-  - packages/*
-  - server
-  - web
+  - apps/*
+  - shared/*
 allowBuilds:
   '@google/genai': false
   esbuild: true

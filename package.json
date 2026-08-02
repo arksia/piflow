@@ -6,8 +6,8 @@
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
     "start": "pnpm --filter piflow-server run start",
-    "lint": "eslint . --max-warnings 0 && stylelint 'web/src/**/*.css' --max-warnings 0",
-    "lint:fix": "eslint . --fix && stylelint 'web/src/**/*.css' --fix",
+    "lint": "eslint . --max-warnings 0 && stylelint 'apps/web/src/**/*.css' --max-warnings 0",
+    "lint:fix": "eslint . --fix && stylelint 'apps/web/src/**/*.css' --fix",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm --filter piflow-server run test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
