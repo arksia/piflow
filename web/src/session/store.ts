@@ -1,4 +1,4 @@
-import type { SessionView, StoreState } from './types'
+import type { SessionView, StoreState } from './state'
 
 const listeners = new Set<() => void>()
 let version = 0

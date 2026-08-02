@@ -1,12 +1,17 @@
-import type { SessionState } from './protocol'
-import type { DirectoryListing, UsageReport } from './types'
+import type {
+  DirectoriesResponse,
+  DirectoryListing,
+  SessionState,
+  SessionStateResponse,
+  UsageReport,
+} from '@piflow/protocol'
 import { api, post, sessionUrl } from './api'
 import { saveActiveSessionFile } from './persistence'
 import { applyState } from './reducer'
 import { ensureView, notify, store } from './store'
 
 async function requestSession(path: string, body: unknown): Promise<SessionState> {
-  const { state } = await post<{ state: SessionState }>(path, body)
+  const { state } = await post<SessionStateResponse>(path, body)
   applyState(state)
   store.activeKey = state.key
   saveActiveSessionFile(state.sessionFile)
@@ -27,7 +32,7 @@ export function newSessionIn(cwd: string): Promise<SessionState> {
 }
 
 export async function requestDirectories(path: string): Promise<DirectoryListing> {
-  const { listing } = await api<{ listing: DirectoryListing }>(`/api/directories?path=${encodeURIComponent(path)}`)
+  const { listing } = await api<DirectoriesResponse>(`/api/directories?path=${encodeURIComponent(path)}`)
   return listing
 }
 

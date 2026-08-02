@@ -78,37 +78,70 @@ export interface UsageReport {
   windows: UsageWindow[]
 }
 
-export interface ToolState {
-  running?: boolean
-  args?: unknown
-  partial?: { content?: Array<{ type: string, text?: string }> }
-  result?: { content?: Array<{ type: string, text?: string }>, details?: Record<string, unknown> }
-  isError?: boolean
+export interface SessionContext {
+  tokens: number
+  contextWindow: number
+  percent: number
 }
 
-export interface SessionView {
+export interface ToolContentPart {
+  type: string
+  text?: string
+}
+
+export interface ToolExecutionPayload {
+  content?: ToolContentPart[]
+  details?: Record<string, unknown>
+}
+
+export interface SessionState {
   key: string
+  sessionId?: string
+  sessionFile?: string | null
   messages: ChatMessage[]
-  live: ChatMessage | null
   isStreaming: boolean
-  isCompacting: boolean
   model: ModelInfo | null
-  thinkingLevel: string | null
-  thinkingLevels: string[]
-  context: { tokens: number, contextWindow: number, percent: number } | null
-  toolResults: Record<string, ToolState>
-  queue: { steering: readonly string[], followUp: readonly string[] }
-  error: string | null
-  tick: number
+  thinkingLevel?: string | null
+  thinkingLevels?: string[]
+  context?: SessionContext | null
 }
 
-export interface StoreState {
-  connected: boolean
+export interface AgentEvent {
+  type: string
+  message?: ChatMessage
+  toolCallId?: string
+  args?: unknown
+  partialResult?: ToolExecutionPayload
+  result?: ToolExecutionPayload
+  isError?: boolean
+  steering?: readonly string[]
+  followUp?: readonly string[]
+}
+
+export type ServerMessage
+  = | { type: 'hello', cwd: string }
+    | { type: 'sessions', sessions: SessionInfoLite[] }
+    | { type: 'models', models: ModelInfo[] }
+    | { type: 'state', state: SessionState }
+    | { type: 'event', session: string, event: AgentEvent, context?: SessionContext | null }
+    | { type: 'error', error: string, session?: string }
+
+export interface HelloResponse {
   cwd: string
+}
+
+export interface SessionsResponse {
   sessions: SessionInfoLite[]
+}
+
+export interface ModelsResponse {
   models: ModelInfo[]
-  usage: Record<string, UsageReport>
-  activeKey: string | null
-  views: Record<string, SessionView>
-  sidebarOpen: boolean
+}
+
+export interface DirectoriesResponse {
+  listing: DirectoryListing
+}
+
+export interface SessionStateResponse {
+  state: SessionState
 }

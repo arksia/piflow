@@ -1,4 +1,5 @@
-import type { ChatMessage, MessageBlock, TextBlock, ToolState } from '../../session/types'
+import type { ChatMessage, MessageBlock, TextBlock } from '@piflow/protocol'
+import type { ToolState } from '../../session/state'
 import { memo } from 'react'
 import MarkdownView from '../MarkdownView'
 import StreamingMarkdownView from '../StreamingMarkdownView'
