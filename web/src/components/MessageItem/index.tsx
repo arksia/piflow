@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageBlock, TextBlock, ToolState } from '../../client'
+import type { ChatMessage, MessageBlock, TextBlock, ToolState } from '../../session/types'
 import { memo } from 'react'
 import MarkdownView from '../MarkdownView'
 import StreamingMarkdownView from '../StreamingMarkdownView'

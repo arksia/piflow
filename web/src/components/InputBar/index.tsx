@@ -1,8 +1,8 @@
 import type { CSSProperties, KeyboardEvent } from 'react'
-import type { SessionView, UsageWindow } from '../../client'
+import type { SessionView, UsageWindow } from '../../session/types'
 import { useEffect, useRef, useState } from 'react'
-import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../client'
-import { useStore } from '../../use-store'
+import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
+import { useStore } from '../../session/use-store'
 import styles from './styles.module.css'
 
 interface Props {

@@ -1,7 +1,8 @@
-import type { SessionInfoLite } from '../../client'
+import type { SessionInfoLite } from '../../session/types'
 import { useState } from 'react'
-import { newSessionIn, openSession, setSidebarOpen } from '../../client'
-import { useStore } from '../../use-store'
+import { newSessionIn, openSession } from '../../session/actions'
+import { setSidebarOpen } from '../../session/store'
+import { useStore } from '../../session/use-store'
 import NewSessionDialog from '../NewSessionDialog'
 import styles from './styles.module.css'
 
