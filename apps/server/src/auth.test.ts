@@ -6,7 +6,7 @@ import {
   isAllowedOrigin,
   isLoopbackHost,
   isValidAccessToken,
-} from './protocol.js'
+} from './auth.js'
 
 describe('http auth', () => {
   it('requires the exact authentication cookie', () => {
