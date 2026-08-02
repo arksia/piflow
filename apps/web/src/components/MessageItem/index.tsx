@@ -34,8 +34,7 @@ function MessageItem({ message, toolResults, live = false }: Props) {
   if (message.role === 'user') {
     return (
       <div className={`${styles.message} ${styles.user}`} data-user={userText}>
-        <div className={styles.userMarker}>›</div>
-        <div className={styles.userBody}>
+        <div className={styles.userBubble}>
           {typeof content === 'string'
             ? <span className={styles.userText}>{content}</span>
             : blocks.map((block) => {
@@ -45,8 +44,8 @@ function MessageItem({ message, toolResults, live = false }: Props) {
                   return <span key={blockKey(block)} className={styles.userImage}>[图片]</span>
                 return null
               })}
-          <span className={styles.time}>{time(message.timestamp)}</span>
         </div>
+        <span className={styles.time}>{time(message.timestamp)}</span>
       </div>
     )
   }

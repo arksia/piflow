@@ -4,19 +4,18 @@
 
 .user {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
-.user-marker {
-  color: var(--c-signal);
-  font-weight: 700;
-  opacity: 0.9;
-  user-select: none;
-}
-
-.user-body {
-  flex: 1;
-  min-width: 0;
+.user-bubble {
+  max-width: 78%;
+  padding: 8px 14px;
+  background: #a160fc14;
+  border: 1px solid #a160fc33;
+  border-radius: 14px 14px 4px;
+  line-height: 1.6;
 }
 
 .user-text {
@@ -32,7 +31,7 @@
 
 .time {
   display: inline-block;
-  margin-left: 10px;
+  margin-right: 4px;
   color: var(--c-faint);
   font-size: 0.72rem;
 }
@@ -43,11 +42,11 @@
   height: 1.1em;
   vertical-align: text-bottom;
   background: var(--c-signal);
-  animation: blink 1s steps(2) infinite;
+  animation: breathe 1.8s ease-in-out infinite;
 }
 
-@keyframes blink {
-  50% { opacity: 0; }
+@keyframes breathe {
+  50% { opacity: 0.15; }
 }
 
 @media (prefers-reduced-motion: reduce) {
