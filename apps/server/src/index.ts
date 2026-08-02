@@ -1,11 +1,11 @@
 import { createServer } from 'node:http'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import { loadConfig } from './server/config.js'
-import { createStaticHandler } from './server/http.js'
-import { createRequestHandler } from './server/routes.js'
-import { createSessionStore } from './server/sessions.js'
-import { createSseHub } from './server/sse.js'
-import { getUsage } from './usage/index.js'
+import { loadConfig } from './server/config'
+import { createStaticHandler } from './server/http'
+import { createRequestHandler } from './server/routes'
+import { createSessionStore } from './server/sessions'
+import { createSseHub } from './server/sse'
+import { getUsage } from './usage/index'
 
 const config = loadConfig()
 const modelRuntime = await ModelRuntime.create()

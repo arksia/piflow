@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { AUTH_COOKIE, isLoopbackHost, isValidAccessToken } from '../auth.js'
+import { AUTH_COOKIE, isLoopbackHost, isValidAccessToken } from '../auth'
 
 export interface ServerConfig {
   port: number

@@ -14,10 +14,10 @@ import type {
   UsageWindow,
 } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { ServerConfig } from './config.js'
-import type { StaticHandler } from './http.js'
-import type { ManagedSession, SessionStore } from './sessions.js'
-import type { SseHub } from './sse.js'
+import type { ServerConfig } from './config'
+import type { StaticHandler } from './http'
+import type { ManagedSession, SessionStore } from './sessions'
+import type { SseHub } from './sse'
 import {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
@@ -30,8 +30,8 @@ import {
   AUTH_PATH,
   parseSessionActionPath,
 } from '@piflow/protocol'
-import { hasAuthCookie, isAllowedOrigin } from '../auth.js'
-import { json, readBody } from './http.js'
+import { hasAuthCookie, isAllowedOrigin } from '../auth'
+import { json, readBody } from './http'
 
 interface UsageSnapshot {
   plan?: string

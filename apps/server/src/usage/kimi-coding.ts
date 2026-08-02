@@ -1,4 +1,4 @@
-import type { UsageAdapter } from './types.js'
+import type { UsageAdapter } from './types'
 
 interface KimiQuota {
   limit?: number | string

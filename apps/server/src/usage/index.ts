@@ -1,9 +1,9 @@
-import type { Credential, ProviderUsageSnapshot, UsageAdapter } from './types.js'
+import type { Credential, ProviderUsageSnapshot, UsageAdapter } from './types'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { kimiCoding } from './kimi-coding.js'
+import { kimiCoding } from './kimi-coding'
 
 // Add an adapter here to support usage reporting for another provider.
 const adapters: UsageAdapter[] = [kimiCoding]
