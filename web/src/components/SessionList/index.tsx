@@ -1,4 +1,4 @@
-import type { SessionInfoLite } from '../../session/types'
+import type { SessionInfoLite } from '@piflow/protocol'
 import { useState } from 'react'
 import { newSessionIn, openSession } from '../../session/actions'
 import { setSidebarOpen } from '../../session/store'

@@ -1,13 +1,6 @@
-export interface UsageWindow {
-  /** Window length in minutes. Zero represents a billing-period total. */
-  minutes: number
-  limit: number
-  used: number
-  remaining: number
-  resetTime?: string
-}
+import type { UsageWindow } from '@piflow/protocol'
 
-export interface UsageReport {
+export interface ProviderUsageSnapshot {
   plan?: string
   windows: UsageWindow[]
 }
@@ -20,5 +13,5 @@ export interface Credential {
 export interface UsageAdapter {
   /** pi provider ids this adapter handles */
   providers: readonly string[]
-  fetch: (cred: Credential) => Promise<UsageReport | null>
+  fetch: (cred: Credential) => Promise<ProviderUsageSnapshot | null>
 }

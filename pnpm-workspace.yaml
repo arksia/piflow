@@ -2,6 +2,7 @@ shellEmulator: true
 trustPolicy: no-downgrade
 
 packages:
+  - packages/*
   - server
   - web
 allowBuilds:

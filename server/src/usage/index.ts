@@ -1,4 +1,4 @@
-import type { Credential, UsageAdapter, UsageReport } from './types.js'
+import type { Credential, ProviderUsageSnapshot, UsageAdapter } from './types.js'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,7 @@ import { kimiCoding } from './kimi-coding.js'
 // Add an adapter here to support usage reporting for another provider.
 const adapters: UsageAdapter[] = [kimiCoding]
 
-const cache = new Map<string, { at: number, data: UsageReport | null }>()
+const cache = new Map<string, { at: number, data: ProviderUsageSnapshot | null }>()
 const TTL = 30_000
 
 async function readCredential(provider: string): Promise<Credential | null> {
@@ -20,7 +20,7 @@ async function readCredential(provider: string): Promise<Credential | null> {
   return { key: c.key ?? c.apiKey, access: c.access ?? c.token }
 }
 
-export async function getUsage(provider: string, fresh = false): Promise<UsageReport | null> {
+export async function getUsage(provider: string, fresh = false): Promise<ProviderUsageSnapshot | null> {
   const cached = cache.get(provider)
   if (!fresh && cached && Date.now() - cached.at < TTL)
     return cached.data
@@ -32,5 +32,3 @@ export async function getUsage(provider: string, fresh = false): Promise<UsageRe
   cache.set(provider, { at: Date.now(), data })
   return data
 }
-
-export type { UsageReport, UsageWindow } from './types.js'

@@ -1,5 +1,11 @@
-import type { AgentEvent, ServerMessage, SessionState } from './protocol'
-import type { ChatMessage, SessionInfoLite, ToolState } from './types'
+import type {
+  AgentEvent,
+  ChatMessage,
+  ServerMessage,
+  SessionInfoLite,
+  SessionState,
+} from '@piflow/protocol'
+import type { ToolState } from './state'
 import { readSavedActivePath, saveActiveSessionFile } from './persistence'
 import { ensureView, notify, store } from './store'
 

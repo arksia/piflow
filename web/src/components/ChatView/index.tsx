@@ -1,5 +1,5 @@
+import type { ChatMessage } from '@piflow/protocol'
 import type { CSSProperties, UIEvent } from 'react'
-import type { ChatMessage } from '../../session/types'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'

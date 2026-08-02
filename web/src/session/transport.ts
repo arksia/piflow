@@ -1,5 +1,8 @@
-import type { ServerMessage } from './protocol'
-import type { ModelInfo, SessionInfoLite } from './types'
+import type {
+  ModelsResponse,
+  ServerMessage,
+  SessionsResponse,
+} from '@piflow/protocol'
 import { openSession } from './actions'
 import { api } from './api'
 import { route } from './reducer'
@@ -12,8 +15,8 @@ function restoreSession(path: string) {
 async function resync() {
   try {
     const [sessions, models] = await Promise.all([
-      api<{ sessions: SessionInfoLite[] }>('/api/sessions'),
-      api<{ models: ModelInfo[] }>('/api/models'),
+      api<SessionsResponse>('/api/sessions'),
+      api<ModelsResponse>('/api/models'),
     ])
     store.models = models.models
     route({ type: 'sessions', sessions: sessions.sessions }, restoreSession)

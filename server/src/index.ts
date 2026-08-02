@@ -1,3 +1,19 @@
+import type {
+  AgentEvent,
+  ChatMessage,
+  DirectoriesResponse,
+  DirectoryListing,
+  HelloResponse,
+  ModelInfo,
+  ModelsResponse,
+  ServerMessage,
+  SessionContext,
+  SessionInfoLite,
+  SessionsResponse,
+  SessionState,
+  SessionStateResponse,
+  UsageReport,
+} from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { existsSync } from 'node:fs'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
@@ -49,21 +65,21 @@ const pool = new Map<string, Managed>()
 
 const sseClients = new Set<ServerResponse>()
 
-function sseWrite(res: ServerResponse, msg: unknown) {
+function sseWrite(res: ServerResponse, msg: ServerMessage) {
   res.write(`data: ${JSON.stringify(msg)}\n\n`)
 }
 
-function broadcast(msg: unknown) {
+function broadcast(msg: ServerMessage) {
   for (const res of sseClients)
     sseWrite(res, msg)
 }
 
-function modelInfo(session: AgentSession) {
+function modelInfo(session: AgentSession): ModelInfo | null {
   const m = session.model
   return m ? { id: m.id, name: m.name, provider: m.provider } : null
 }
 
-function sessionState(m: Managed) {
+function sessionState(m: Managed): SessionState {
   return {
     key: m.key,
     sessionId: m.session.sessionId,
@@ -72,8 +88,8 @@ function sessionState(m: Managed) {
     model: modelInfo(m.session),
     thinkingLevel: m.session.thinkingLevel,
     thinkingLevels: m.session.getAvailableThinkingLevels(),
-    context: m.session.getContextUsage() ?? null,
-    messages: m.session.messages,
+    context: (m.session.getContextUsage() ?? null) as SessionContext | null,
+    messages: m.session.messages as ChatMessage[],
   }
 }
 
@@ -99,15 +115,15 @@ async function openSession(opts: { path?: string, cwd?: string, fresh?: boolean 
 
   session.subscribe((event) => {
     const context = ['message_end', 'compaction_end', 'agent_settled'].includes(event.type)
-      ? session.getContextUsage() ?? null
+      ? (session.getContextUsage() ?? null) as SessionContext | null
       : undefined
-    broadcast({ type: 'event', session: key, event, context })
+    broadcast({ type: 'event', session: key, event: event as AgentEvent, context })
   })
 
   return managed
 }
 
-async function listSessions() {
+async function listSessions(): Promise<SessionInfoLite[]> {
   const all = await SessionManager.listAll()
   return all
     .map(s => ({
@@ -115,15 +131,15 @@ async function listSessions() {
       id: s.id,
       cwd: s.cwd,
       name: s.name ?? null,
-      created: s.created,
-      modified: s.modified,
+      created: s.created.toISOString(),
+      modified: s.modified.toISOString(),
       messageCount: s.messageCount,
       firstMessage: s.firstMessage.slice(0, 120),
     }))
     .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
 }
 
-async function listDirectories(path: string) {
+async function listDirectories(path: string): Promise<DirectoryListing> {
   const directory = await realpath(resolve(path))
   const info = await stat(directory)
   if (!info.isDirectory())
@@ -197,29 +213,32 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 
   if (method === 'GET' && path === '/api/hello')
-    return json(res, 200, { cwd: ROOT_CWD })
+    return json(res, 200, { cwd: ROOT_CWD } satisfies HelloResponse)
 
   if (method === 'GET' && path === '/api/sessions')
-    return json(res, 200, { sessions: await listSessions() })
+    return json(res, 200, { sessions: await listSessions() } satisfies SessionsResponse)
 
   if (method === 'GET' && path === '/api/models') {
-    const models = (await modelRuntime.getAvailable()).map(m => ({
+    const models: ModelInfo[] = (await modelRuntime.getAvailable()).map(m => ({
       id: m.id,
       name: m.name,
       provider: m.provider,
     }))
-    return json(res, 200, { models })
+    return json(res, 200, { models } satisfies ModelsResponse)
   }
 
-  if (method === 'GET' && path === '/api/directories')
-    return json(res, 200, { listing: await listDirectories(url.searchParams.get('path') ?? ROOT_CWD) })
+  if (method === 'GET' && path === '/api/directories') {
+    return json(res, 200, {
+      listing: await listDirectories(url.searchParams.get('path') ?? ROOT_CWD),
+    } satisfies DirectoriesResponse)
+  }
 
   if (method === 'GET' && path === '/api/usage') {
     const key = url.searchParams.get('key')
     const managed = key ? pool.get(key) : undefined
     const provider = managed?.session.model?.provider ?? url.searchParams.get('provider')
     if (!provider)
-      return json(res, 200, { provider: null, supported: false, windows: [] })
+      return json(res, 200, { provider: null, supported: false, windows: [] } satisfies UsageReport)
     const fresh = url.searchParams.get('fresh') === '1'
     const report = await getUsage(provider, fresh)
     return json(res, 200, {
@@ -227,7 +246,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       supported: !!report,
       plan: report?.plan,
       windows: report?.windows ?? [],
-    })
+    } satisfies UsageReport)
   }
 
   if (method === 'POST' && path === '/api/sessions/open') {
@@ -238,14 +257,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (!known)
       return json(res, 404, { error: 'session not found' })
     const managed = await openSession({ path: known.path, cwd: known.cwd })
-    return json(res, 200, { state: sessionState(managed) })
+    return json(res, 200, { state: sessionState(managed) } satisfies SessionStateResponse)
   }
 
   if (method === 'POST' && path === '/api/sessions/new') {
     const body = await readBody(req)
     const cwd = typeof body.cwd === 'string' ? (await listDirectories(body.cwd)).path : ROOT_CWD
     const managed = await openSession({ cwd, fresh: true })
-    return json(res, 200, { state: sessionState(managed) })
+    return json(res, 200, { state: sessionState(managed) } satisfies SessionStateResponse)
   }
 
   const action = path.match(/^\/api\/sessions\/([^/]+)\/(prompt|abort|model|thinking)$/)

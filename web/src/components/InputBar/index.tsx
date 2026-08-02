@@ -1,5 +1,6 @@
+import type { UsageWindow } from '@piflow/protocol'
 import type { CSSProperties, KeyboardEvent } from 'react'
-import type { SessionView, UsageWindow } from '../../session/types'
+import type { SessionView } from '../../session/state'
 import { useEffect, useRef, useState } from 'react'
 import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
 import { useStore } from '../../session/use-store'
