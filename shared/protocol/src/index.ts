@@ -1,3 +1,30 @@
+export {
+  API_DIRECTORIES_PATH,
+  API_EVENTS_PATH,
+  API_HELLO_PATH,
+  API_MODELS_PATH,
+  API_SESSIONS_NEW_PATH,
+  API_SESSIONS_OPEN_PATH,
+  API_SESSIONS_PATH,
+  API_USAGE_PATH,
+  AUTH_PATH,
+  buildAuthPath,
+  buildDirectoriesPath,
+  buildSessionActionPath,
+  buildUsagePath,
+  parseSessionActionPath,
+  SESSION_ACTIONS,
+} from './http'
+export type {
+  ApiOkResponse,
+  NewSessionRequest,
+  OpenSessionRequest,
+  PromptRequest,
+  SessionAction,
+  SetModelRequest,
+  SetThinkingRequest,
+} from './http'
+
 export interface SessionInfoLite {
   path: string
   id: string

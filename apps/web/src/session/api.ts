@@ -1,3 +1,6 @@
+import type { SessionAction } from '@piflow/protocol'
+import { buildSessionActionPath } from '@piflow/protocol'
+
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, options)
   const data: unknown = await response.json().catch(() => ({}))
@@ -16,6 +19,6 @@ export function post<T>(path: string, body?: unknown): Promise<T> {
   })
 }
 
-export function sessionUrl(key: string, action: string) {
-  return `/api/sessions/${encodeURIComponent(key)}/${action}`
+export function sessionUrl(key: string, action: SessionAction) {
+  return buildSessionActionPath(key, action)
 }

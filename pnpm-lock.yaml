@@ -33,17 +33,17 @@ importers:
         specifier: ^40.0.0
         version: 40.0.0(stylelint@17.14.1(typescript@5.9.3))
 
-  packages/protocol:
+  shared/protocol:
     devDependencies:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
 
-  server:
+  apps/server:
     dependencies:
       '@piflow/protocol':
         specifier: workspace:*
-        version: link:../packages/protocol
+        version: link:../../shared/protocol
       '@earendil-works/pi-coding-agent':
         specifier: ^0.80.7
         version: 0.80.10(ws@8.21.1)(zod@4.4.3)
@@ -58,11 +58,11 @@ importers:
         specifier: ^5.8.0
         version: 5.9.3
 
-  web:
+  apps/web:
     dependencies:
       '@piflow/protocol':
         specifier: workspace:*
-        version: link:../packages/protocol
+        version: link:../../shared/protocol
       '@fontsource/dm-mono':
         specifier: ^5.2.0
         version: 5.3.0
