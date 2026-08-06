@@ -36,25 +36,6 @@
   font-size: 0.72rem;
 }
 
-.assistant.live .caret {
-  display: inline-block;
-  width: 8px;
-  height: 1.1em;
-  vertical-align: text-bottom;
-  background: var(--c-signal);
-  animation: breathe 1.8s ease-in-out infinite;
-}
-
-@keyframes breathe {
-  50% { opacity: 0.15; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .assistant.live .caret {
-    animation: none;
-  }
-}
-
 .thinking {
   margin: 8px 0;
   font-size: 0.85rem;

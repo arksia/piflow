@@ -53,15 +53,16 @@ function MessageItem({ message, toolResults, live = false }: Props) {
   if (message.role === 'assistant') {
     return (
       <div className={`${styles.message} ${styles.assistant} ${live ? styles.live : ''}`}>
-        {blocks.map((block) => {
+        {blocks.map((block, index) => {
+          const key = live ? `live:${block.type}:${index}` : blockKey(block)
           if (block.type === 'text') {
             return live
-              ? <StreamingMarkdownView key={blockKey(block)} text={block.text} />
-              : <MarkdownView key={blockKey(block)} text={block.text} />
+              ? <StreamingMarkdownView key={key} text={block.text} />
+              : <MarkdownView key={key} text={block.text} />
           }
           if (block.type === 'thinking') {
             return (
-              <details key={blockKey(block)} className={styles.thinking}>
+              <details key={key} className={styles.thinking}>
                 <summary>思考过程</summary>
                 <div className={styles.thinkingBody}>{block.thinking}</div>
               </details>
@@ -74,7 +75,6 @@ function MessageItem({ message, toolResults, live = false }: Props) {
         {message.stopReason === 'error'
           ? <div className={styles.messageError}>{message.errorMessage || '请求失败'}</div>
           : null}
-        {live ? <span className={styles.caret} /> : null}
       </div>
     )
   }
