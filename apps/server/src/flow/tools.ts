@@ -159,6 +159,24 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   return [listConnections, sendMessage, searchContext, readContext]
 }
 
+export function formatFlowDirectory(document: Awaited<ReturnType<FlowStore['read']>>, sessionPath: string): string | null {
+  const node = findNodeBySession(document, sessionPath)
+  if (!node)
+    return null
+  const incomingIds = new Set(document.edges.filter(edge => edge.target === node.id).map(edge => edge.source))
+  const incoming = document.nodes.filter(candidate => incomingIds.has(candidate.id))
+  const outgoing = listOutboundNodes(document, node.id)
+  return [
+    'Flow connection directory updated. Connections are explicit capability boundaries.',
+    'Incoming nodes may be searched with search_flow_context. Outgoing nodes may receive send_flow_message.',
+    '',
+    'Incoming:',
+    ...directoryLines(incoming),
+    'Outgoing:',
+    ...directoryLines(outgoing),
+  ].join('\n')
+}
+
 async function getSourceContext(options: CreateFlowToolsOptions) {
   const source = requireSource(options)
   if (!source.sessionPath)
@@ -179,6 +197,12 @@ function requireSource(options: CreateFlowToolsOptions): ToolSession {
 
 function publicNode(node: FlowNode) {
   return { id: node.id, name: node.name, goal: node.goal }
+}
+
+function directoryLines(nodes: FlowNode[]) {
+  return nodes.length
+    ? nodes.map(node => `- ${node.id} | ${node.name} | ${node.goal.slice(0, 160) || 'No current goal'}`)
+    : ['- None']
 }
 
 function readChain(messages: ChatMessage[]): { id: string, hop: number } {

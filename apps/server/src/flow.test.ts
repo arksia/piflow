@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
 import { canReadNode, createFlowStore, listOutboundNodes } from './flow/store'
+import { formatFlowDirectory } from './flow/tools'
 
 it('persists topology without allowing topology updates to erase message history', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
@@ -49,6 +50,13 @@ it('uses directed edges as discovery and context-read boundaries', () => {
   assert.equal(canReadNode(document, 'b', 'a'), true)
   assert.equal(canReadNode(document, 'a', 'b'), false)
   assert.equal(canReadNode(document, 'c', 'a'), false)
+
+  const directoryA = formatFlowDirectory(document, '/project/a.jsonl')
+  assert.match(directoryA ?? '', /Outgoing:\n- b \| Module B/)
+  assert.doesNotMatch(directoryA ?? '', /Isolated/)
+
+  const directoryB = formatFlowDirectory(document, '/project/b.jsonl')
+  assert.match(directoryB ?? '', /Incoming:\n- a \| Module A/)
 })
 
 function fixtureTopology(root: string): FlowTopology {

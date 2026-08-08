@@ -4,7 +4,7 @@ import type { FlowStore } from '../flow/store'
 import { readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { createAgentSession, SessionManager } from '@earendil-works/pi-coding-agent'
-import { createFlowTools } from '../flow/tools'
+import { createFlowTools, formatFlowDirectory } from '../flow/tools'
 
 type ModelRuntimeInstance = Awaited<ReturnType<typeof ModelRuntime.create>>
 type AgentSession = Awaited<ReturnType<typeof createAgentSession>>['session']
@@ -19,6 +19,7 @@ export interface ManagedSession {
 export interface SessionStore {
   createFreshSession: (cwd?: string, persist?: boolean) => Promise<ManagedSession>
   openSavedSession: (path: string) => Promise<ManagedSession | null>
+  prompt: (managed: ManagedSession, text: string, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
   get: (key: string) => ManagedSession | undefined
   listDirectories: (path: string) => Promise<DirectoryListing>
   listSessions: () => Promise<SessionInfoLite[]>
@@ -39,6 +40,7 @@ const CONTEXT_EVENTS = new Set(['message_end', 'compaction_end', 'agent_settled'
 export function createSessionStore(options: CreateSessionStoreOptions): SessionStore {
   const { rootCwd, modelRuntime, flow, publish } = options
   const pool = new Map<string, ManagedSession>()
+  const flowDirectories = new Map<string, string>()
 
   function toModelInfo(session: AgentSession): ModelInfo | null {
     const model = session.model
@@ -110,11 +112,30 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       messages: managed.session.messages as ChatMessage[],
       isStreaming: managed.session.isStreaming,
       prompt: async (text: string, followUp: boolean) => {
-        await managed.session.prompt(text, {
-          streamingBehavior: followUp ? 'followUp' : undefined,
-        })
+        await prompt(managed, text, followUp ? 'followUp' : undefined)
       },
     }
+  }
+
+  async function prompt(managed: ManagedSession, text: string, streamingBehavior?: 'steer' | 'followUp') {
+    await injectFlowDirectory(managed)
+    await managed.session.prompt(text, { streamingBehavior })
+  }
+
+  async function injectFlowDirectory(managed: ManagedSession) {
+    const sessionPath = managed.session.sessionFile
+    if (!sessionPath)
+      return
+    const directory = formatFlowDirectory(await flow.read(managed.cwd), sessionPath)
+    if (directory === null || flowDirectories.get(sessionPath) === directory)
+      return
+    await managed.session.sendCustomMessage({
+      customType: 'flow_directory',
+      content: directory,
+      display: false,
+      details: {},
+    }, managed.session.isStreaming ? { deliverAs: 'nextTurn' } : undefined)
+    flowDirectories.set(sessionPath, directory)
   }
 
   async function resolveFlowTarget(node: FlowNode, projectPath: string): Promise<ManagedSession> {
@@ -193,6 +214,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   return {
     createFreshSession,
     openSavedSession,
+    prompt,
     get: key => pool.get(key),
     listDirectories,
     listSessions,
