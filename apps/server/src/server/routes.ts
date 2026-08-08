@@ -64,9 +64,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
   async function handlePrompt(managed: ManagedSession, text: string) {
     try {
-      await managed.session.prompt(text, {
-        streamingBehavior: managed.session.isStreaming ? 'steer' : undefined,
-      })
+      await sessions.prompt(managed, text, managed.session.isStreaming ? 'steer' : undefined)
     }
     catch (err) {
       sse.broadcast({ type: 'error', session: managed.key, error: String(err) })
