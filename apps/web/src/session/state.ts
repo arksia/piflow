@@ -17,6 +17,7 @@ export interface ToolState {
 
 export interface SessionView {
   key: string
+  sessionFile: string | null
   messages: ChatMessage[]
   live: ChatMessage | null
   isStreaming: boolean

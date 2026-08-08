@@ -1,11 +1,13 @@
 import type {
   ApiOkResponse,
   DirectoriesResponse,
+  FlowDocumentResponse,
   HelloResponse,
   ModelsResponse,
   NewSessionRequest,
   OpenSessionRequest,
   PromptRequest,
+  ReplaceFlowRequest,
   SessionsResponse,
   SessionStateResponse,
   SetModelRequest,
@@ -14,6 +16,7 @@ import type {
   UsageWindow,
 } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { FlowStore } from '../flow/store'
 import type { ServerConfig } from './config'
 import type { StaticHandler } from './http'
 import type { ManagedSession, SessionStore } from './sessions'
@@ -21,6 +24,7 @@ import type { SseHub } from './sse'
 import {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
+  API_FLOW_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_SESSIONS_NEW_PATH,
@@ -44,10 +48,11 @@ interface CreateRequestHandlerOptions {
   sse: SseHub
   serveStatic: StaticHandler
   getUsage: (provider: string, fresh?: boolean) => Promise<UsageSnapshot | null>
+  flow: FlowStore
 }
 
 export function createRequestHandler(options: CreateRequestHandlerOptions) {
-  const { config, sessions, sse, serveStatic, getUsage } = options
+  const { config, sessions, sse, serveStatic, getUsage, flow } = options
 
   async function publishState(managed: ManagedSession) {
     sse.broadcast({ type: 'state', state: sessions.getState(managed) })
@@ -94,6 +99,27 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       } satisfies DirectoriesResponse)
     }
 
+    if (method === 'GET' && path === API_FLOW_PATH) {
+      const projectPath = url.searchParams.get('projectPath') ?? config.rootCwd
+      return json(res, 200, { document: await flow.read(projectPath) } satisfies FlowDocumentResponse)
+    }
+
+    if (method === 'PUT' && path === API_FLOW_PATH) {
+      const body = await readBody<ReplaceFlowRequest>(req)
+      if (typeof body.projectPath !== 'string' || !body.topology)
+        return json(res, 400, { error: 'projectPath and topology required' })
+      const projectPath = (await flow.read(body.projectPath)).projectPath
+      const knownSessions = await sessions.listSessions()
+      const invalidNode = body.topology.nodes.find((node) => {
+        const session = sessions.get(node.sessionPath) ?? knownSessions.find(session => session.path === node.sessionPath)
+        return !session || session.cwd !== projectPath
+      })
+      if (invalidNode)
+        return json(res, 400, { error: `session is not part of this project: ${invalidNode.sessionPath}` })
+      const document = await flow.replaceTopology(projectPath, body.topology)
+      return json(res, 200, { document } satisfies FlowDocumentResponse)
+    }
+
     if (method === 'GET' && path === API_USAGE_PATH) {
       const key = url.searchParams.get('key')
       const managed = key ? sessions.get(key) : undefined
@@ -122,7 +148,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
     if (method === 'POST' && path === API_SESSIONS_NEW_PATH) {
       const body = await readBody<NewSessionRequest>(req)
-      const managed = await sessions.createFreshSession(body.cwd)
+      const managed = await sessions.createFreshSession(body.cwd, body.persist === true)
       return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
     }
 

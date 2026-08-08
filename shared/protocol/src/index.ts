@@ -1,6 +1,7 @@
 export {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
+  API_FLOW_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_SESSIONS_NEW_PATH,
@@ -10,6 +11,7 @@ export {
   AUTH_PATH,
   buildAuthPath,
   buildDirectoriesPath,
+  buildFlowPath,
   buildSessionActionPath,
   buildUsagePath,
   parseSessionActionPath,
@@ -34,6 +36,65 @@ export interface SessionInfoLite {
   modified: string
   messageCount: number
   firstMessage: string
+}
+
+export interface FlowPosition {
+  x: number
+  y: number
+}
+
+export interface FlowViewport extends FlowPosition {
+  zoom: number
+}
+
+export interface FlowNode {
+  id: string
+  sessionPath: string
+  name: string
+  goal: string
+  position: FlowPosition
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FlowEdge {
+  id: string
+  source: string
+  target: string
+  createdAt: string
+}
+
+export interface FlowMessageRecord {
+  id: string
+  edgeId: string
+  source: string
+  target: string
+  chainId: string
+  hop: number
+  preview: string
+  sentAt: string
+}
+
+export interface FlowTopology {
+  nodes: FlowNode[]
+  edges: FlowEdge[]
+  viewport: FlowViewport
+}
+
+export interface FlowDocument extends FlowTopology {
+  version: 1
+  projectPath: string
+  messages: FlowMessageRecord[]
+  updatedAt: string
+}
+
+export interface FlowDocumentResponse {
+  document: FlowDocument
+}
+
+export interface ReplaceFlowRequest {
+  projectPath: string
+  topology: FlowTopology
 }
 
 export interface DirectoryEntry {

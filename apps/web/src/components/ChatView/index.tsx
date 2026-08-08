@@ -5,6 +5,7 @@ import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
+import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
 
 const SCROLL_KEY = 'piflow.scroll'
@@ -22,7 +23,11 @@ function readScrollMap(): Record<string, number> {
   }
 }
 
-export default function ChatView() {
+interface ChatViewProps {
+  onShowFlow: () => void
+}
+
+export default function ChatView({ onShowFlow }: ChatViewProps) {
   const store = useStore()
   const view = store.activeKey ? (store.views[store.activeKey] ?? null) : null
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -132,6 +137,7 @@ export default function ChatView() {
       <header className={styles.bar}>
         <button className={styles.menu} title="会话列表" aria-label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>☰</button>
         <span ref={titleRef} className={styles.title}>{title}</span>
+        <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
         <button className={styles.width} title="切换聊天宽度" aria-label="切换聊天宽度" onClick={cycleWidth}>⇔</button>
         <span className={`${styles.status} ${statusText ? styles.on : ''}`}>{statusText}</span>
       </header>

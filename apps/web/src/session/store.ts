@@ -43,6 +43,7 @@ export function setSidebarOpen(open: boolean) {
 export function ensureView(key: string): SessionView {
   return (store.views[key] ??= {
     key,
+    sessionFile: null,
     messages: [],
     live: null,
     isStreaming: false,

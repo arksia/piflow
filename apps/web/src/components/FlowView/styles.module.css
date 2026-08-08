@@ -1,0 +1,225 @@
+.workspace {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: #080808;
+}
+
+.bar {
+  z-index: 4;
+  display: flex;
+  min-height: 57px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-bg);
+}
+
+.heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.heading strong {
+  color: var(--c-ink);
+  font-size: 0.92rem;
+}
+
+.heading span {
+  min-width: 0;
+  color: var(--c-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saving {
+  color: var(--c-muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.add,
+.delete {
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.add {
+  background: var(--c-mid);
+  color: var(--c-bg);
+  font-weight: 600;
+}
+
+.add:hover {
+  background: var(--c-ink);
+}
+
+.delete {
+  color: #ff9b92;
+}
+
+.delete:hover {
+  background: #f851491c;
+}
+
+.panel {
+  position: absolute;
+  z-index: 5;
+  top: 66px;
+  right: 16px;
+  width: min(340px, calc(100% - 32px));
+  padding: 16px;
+  border: 1px solid #383838;
+  border-radius: 8px;
+  background: #111;
+}
+
+.panel label {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.panel input,
+.panel textarea,
+.panel select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  border: 1px solid #383838;
+  border-radius: 5px;
+  outline: none;
+  background: #090909;
+  color: var(--c-ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.panel input,
+.panel select {
+  height: 36px;
+  padding: 0 10px;
+}
+
+.panel textarea {
+  resize: vertical;
+  padding: 8px 10px;
+}
+
+.panel input:focus,
+.panel textarea:focus,
+.panel select:focus {
+  border-color: var(--c-signal);
+}
+
+.panel input::placeholder,
+.panel textarea::placeholder {
+  color: #898989;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.panel-actions button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  color: var(--c-muted);
+  font-size: 0.78rem;
+}
+
+.panel-actions button:hover {
+  color: var(--c-ink);
+}
+
+.panel-actions .confirm {
+  background: var(--c-mid);
+  color: var(--c-bg);
+  font-weight: 600;
+}
+
+.panel-actions .confirm:disabled {
+  background: #333;
+  color: #777;
+}
+
+.error {
+  position: absolute;
+  z-index: 6;
+  right: 16px;
+  bottom: 16px;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 9px 12px;
+  border-radius: 6px;
+  background: #321b1a;
+  color: #ffb4ad;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.loading {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--c-muted);
+  font-size: 0.82rem;
+}
+
+/* stylelint-disable selector-pseudo-class-no-unknown, selector-class-pattern */
+.workspace :global(.react-flow) {
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace :global(.react-flow__controls),
+.workspace :global(.react-flow__minimap) {
+  border: 1px solid #303030;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #101010;
+}
+
+.workspace :global(.react-flow__controls-button) {
+  border-bottom-color: #303030;
+  background: #101010;
+  fill: var(--c-mid);
+}
+
+.workspace :global(.react-flow__controls-button:hover) {
+  background: #202020;
+}
+
+.workspace :global(.react-flow__edge.selected path) {
+  stroke: #c4a6f0 !important;
+  stroke-width: 2;
+}
+/* stylelint-enable selector-pseudo-class-no-unknown, selector-class-pattern */
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (width <= 768px) {
+  .workspace {
+    display: none;
+  }
+}
