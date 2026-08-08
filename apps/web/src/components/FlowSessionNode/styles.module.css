@@ -1,0 +1,93 @@
+.node {
+  width: 288px;
+  min-height: 156px;
+  padding: 16px;
+  border: 1px solid #343434;
+  border-radius: 8px;
+  background: #111;
+  color: var(--c-body);
+}
+
+.node.selected {
+  border-color: var(--c-signal);
+}
+
+.topline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 18px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #777;
+}
+
+.status-dot.running {
+  background: #56d6b2;
+}
+
+.status-dot.failed {
+  background: #ff786d;
+}
+
+.status {
+  color: var(--c-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.node h2 {
+  margin: 10px 0 5px;
+  color: var(--c-ink);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.node p {
+  min-height: 40px;
+  margin: 0 0 10px;
+  color: var(--c-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.node p.empty {
+  color: var(--c-faint);
+}
+
+.node button {
+  color: #c9b1ed;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.node button:hover {
+  color: var(--c-ink);
+}
+
+.handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #111;
+  background: #aa8cd9;
+}
+
+/* 视觉保持 10px 圆点，命中区域扩大到 24px */
+.handle::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+}
+
+.handle:hover {
+  background: #d3bdf5;
+  transform: scale(1.25);
+}

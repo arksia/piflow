@@ -1,0 +1,33 @@
+.switcher {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  background: var(--c-raise);
+}
+
+.switcher button {
+  min-width: 48px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.switcher button:hover {
+  color: var(--c-ink);
+}
+
+.switcher button.active {
+  background: #292929;
+  color: var(--c-ink);
+}
+
+@media (width <= 768px) {
+  .flow {
+    display: none;
+  }
+}

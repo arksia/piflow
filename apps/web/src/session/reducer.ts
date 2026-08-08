@@ -28,6 +28,7 @@ export function applySessions(sessions: SessionInfoLite[], restoreSession: (path
 
 export function applyState(state: SessionState) {
   const view = ensureView(state.key)
+  view.sessionFile = state.sessionFile ?? null
   view.messages = state.messages
   view.live = null
   view.isStreaming = state.isStreaming

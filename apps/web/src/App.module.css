@@ -21,6 +21,14 @@
   display: none;
 }
 
+.loading {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--c-muted);
+  font-size: 0.85rem;
+}
+
 @media (width <= 768px) {
   .sidebar {
     position: fixed;

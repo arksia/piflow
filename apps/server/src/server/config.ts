@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +12,7 @@ export interface ServerConfig {
   authToken: string
   authHeader: string
   webDist: string
+  dataDir: string
 }
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -38,5 +40,6 @@ export function loadConfig(env = process.env): ServerConfig {
     authToken,
     authHeader: `${AUTH_COOKIE}=${authToken}; HttpOnly; SameSite=Strict; Path=/`,
     webDist: DEFAULT_WEB_DIST,
+    dataDir: resolve(env.PIFLOW_DATA_DIR ?? resolve(homedir(), '.piflow')),
   }
 }

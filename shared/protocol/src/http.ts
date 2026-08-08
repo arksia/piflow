@@ -6,6 +6,7 @@ export const API_SESSIONS_PATH = '/api/sessions'
 export const API_MODELS_PATH = '/api/models'
 export const API_DIRECTORIES_PATH = '/api/directories'
 export const API_USAGE_PATH = '/api/usage'
+export const API_FLOW_PATH = '/api/flow'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 
@@ -19,6 +20,7 @@ export interface OpenSessionRequest {
 
 export interface NewSessionRequest {
   cwd?: string
+  persist?: boolean
 }
 
 export interface PromptRequest {
@@ -56,6 +58,10 @@ export function buildUsagePath(options: { key?: string, provider?: string, fresh
     provider,
     fresh: fresh ? '1' : undefined,
   })
+}
+
+export function buildFlowPath(projectPath: string): string {
+  return buildPathWithSearch(API_FLOW_PATH, { projectPath })
 }
 
 export function buildSessionActionPath(key: string, action: SessionAction): string {

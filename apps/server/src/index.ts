@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
+import { createFlowStore } from './flow/store'
 import { loadConfig } from './server/config'
 import { createStaticHandler } from './server/http'
 import { createRequestHandler } from './server/routes'
@@ -10,9 +11,11 @@ import { getUsage } from './usage/index'
 const config = loadConfig()
 const modelRuntime = await ModelRuntime.create()
 const sse = createSseHub(config.rootCwd)
+const flow = createFlowStore(config.dataDir)
 const sessions = createSessionStore({
   rootCwd: config.rootCwd,
   modelRuntime,
+  flow,
   publish: sse.broadcast,
 })
 const serveStatic = createStaticHandler(config.webDist)
@@ -22,6 +25,7 @@ const httpServer = createServer(createRequestHandler({
   sse,
   serveStatic,
   getUsage,
+  flow,
 }))
 
 httpServer.listen(config.port, config.host, () => {
