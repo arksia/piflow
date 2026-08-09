@@ -10,7 +10,7 @@
   --c-inline-code: #cccccc2e;
   --c-line: #222;
   --c-raise: #0f0f0f;
-  --c-signal: #a160fc;
+  --c-signal: #e8e8e8;
   --c-diff-add: #3fb95026;
   --c-diff-del: #f8514926;
   --c-diff-add-fg: #7ee787aa;
@@ -45,7 +45,7 @@ body {
 }
 
 ::selection {
-  background: #a160fc33;
+  background: #ffffff26;
 }
 
 button {

@@ -63,7 +63,7 @@
 }
 
 .node button {
-  color: #c9b1ed;
+  color: var(--c-mid);
   font-size: 0.76rem;
   line-height: 1.5;
 }
@@ -76,7 +76,7 @@
   width: 10px;
   height: 10px;
   border: 2px solid #111;
-  background: #aa8cd9;
+  background: var(--c-mid);
 }
 
 /* 视觉保持 10px 圆点，命中区域扩大到 24px */
@@ -88,6 +88,6 @@
 }
 
 .handle:hover {
-  background: #d3bdf5;
+  background: var(--c-ink);
   transform: scale(1.25);
 }

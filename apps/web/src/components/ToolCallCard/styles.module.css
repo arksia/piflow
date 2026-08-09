@@ -38,6 +38,14 @@
   color: var(--c-ink);
 }
 
+.head.static {
+  cursor: default;
+}
+
+.head.static:hover .name {
+  color: var(--c-mid);
+}
+
 .summary {
   font-family: var(--font-mono);
   font-size: 0.78rem;

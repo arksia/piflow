@@ -101,8 +101,8 @@ export default memo(MessageItem, (prev, next) => {
     return false
   if (prev.toolResults === next.toolResults)
     return true
-  // toolResults is mutated in place per tool id; only re-render when a
-  // state this message actually displays has been replaced
+  // toolResults entries are replaced per tool id; only re-render when a
+  // state this message actually displays has changed
   const blocks = Array.isArray(next.message.content) ? next.message.content : []
   for (const block of blocks) {
     if (block.type === 'toolCall' && prev.toolResults[block.id] !== next.toolResults[block.id])

@@ -79,7 +79,6 @@
 
 .item.active {
   background: var(--c-raise);
-  box-shadow: inset 2px 0 0 var(--c-signal);
 }
 
 .label {

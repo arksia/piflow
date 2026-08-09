@@ -178,7 +178,8 @@ h2 {
 
 .create {
   flex-shrink: 0;
-  background: var(--c-signal);
+  background: var(--c-ink);
+  color: var(--c-bg);
 }
 
 @media (width <= 520px) {
