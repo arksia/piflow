@@ -1,11 +1,11 @@
-import type { FlowTopology } from '@piflow/protocol'
+import type { ChatMessage, FlowTopology } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
 import { canReadNode, createFlowStore, listOutboundNodes } from './flow/store'
-import { formatFlowDirectory } from './flow/tools'
+import { formatFlowDirectory, searchMessages } from './flow/tools'
 
 it('persists topology without allowing topology updates to erase message history', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
@@ -57,6 +57,21 @@ it('uses directed edges as discovery and context-read boundaries', () => {
 
   const directoryB = formatFlowDirectory(document, '/project/b.jsonl')
   assert.match(directoryB ?? '', /Incoming:\n- a \| Module A/)
+})
+
+it('searches messages by exact text and returns newest matches first', () => {
+  const messages: ChatMessage[] = [
+    { role: 'user', content: 'Context corruption decision from yesterday' },
+    { role: 'assistant', content: '上下文已经腐化' },
+    { role: 'assistant', content: 'Context changed before unrelated corruption appeared' },
+    { role: 'assistant', content: 'Latest CONTEXT CORRUPTION decision' },
+  ]
+
+  const results = searchMessages(messages, 'context corruption')
+
+  assert.deepEqual(results.map(result => result.messageIndex), [3, 0])
+  assert.equal('score' in results[0]!, false)
+  assert.deepEqual(searchMessages(messages, '上下文已经').map(result => result.messageIndex), [1])
 })
 
 function fixtureTopology(root: string): FlowTopology {
