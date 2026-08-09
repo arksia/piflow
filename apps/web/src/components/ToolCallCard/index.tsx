@@ -11,7 +11,7 @@ export default function ToolCallCard({ call, state }: Props) {
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const args = call.arguments ?? {}
-  const value = args.command ?? args.path ?? args.pattern ?? args.query ?? args.url ?? ''
+  const value = args.command ?? args.path ?? args.pattern ?? args.query ?? args.url ?? args.message ?? ''
   const rawSummary = String(value)
   const summary = rawSummary.length > 72 ? `${rawSummary.slice(0, 72)}…` : rawSummary
   const details = state?.result?.details
