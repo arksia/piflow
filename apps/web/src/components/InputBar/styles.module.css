@@ -34,11 +34,11 @@
 }
 
 .box.streaming {
-  border-color: #a160fc44;
+  border-color: #ffffff1f;
 }
 
 .box.streaming:focus-within {
-  border-color: #a160fc66;
+  border-color: #fff3;
 }
 
 .box textarea {

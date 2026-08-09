@@ -42,22 +42,33 @@ export default function ToolCallCard({ call, state }: Props) {
   const truncated = lines.length > 60 && !expanded
   const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput
   const status = state?.running ? 'running' : state?.isError ? 'error' : state?.result ? 'done' : 'pending'
+  const expandable = Boolean(diff || rawOutput)
 
   function copyOutput() {
     void navigator.clipboard.writeText(rawOutput)
   }
 
+  const head = (
+    <>
+      <span className={styles.name}>{call.name}</span>
+      <span className={styles.summary} title={rawSummary}>{summary}</span>
+      {status === 'running' ? <span className={styles.signal} title="运行中" /> : null}
+      {status === 'error' ? <span className={styles.error}>失败</span> : null}
+    </>
+  )
+
   return (
     <div className={`${styles.tool} ${styles[status]}`}>
-      <button className={styles.head} aria-expanded={open} onClick={() => setOpen(value => !value)}>
-        <span className={`${styles.chevron} ${open ? styles.open : ''}`}>›</span>
-        <span className={styles.name}>{call.name}</span>
-        <span className={styles.summary} title={rawSummary}>{summary}</span>
-        {status === 'running' ? <span className={styles.signal} title="运行中" /> : null}
-        {status === 'error' ? <span className={styles.error}>失败</span> : null}
-      </button>
+      {expandable
+        ? (
+            <button className={styles.head} aria-expanded={open} onClick={() => setOpen(value => !value)}>
+              <span className={`${styles.chevron} ${open ? styles.open : ''}`}>›</span>
+              {head}
+            </button>
+          )
+        : <div className={`${styles.head} ${styles.static}`}>{head}</div>}
 
-      {open
+      {expandable && open
         ? (
             <div className={styles.body}>
               {diff

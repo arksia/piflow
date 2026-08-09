@@ -96,19 +96,30 @@ export function handleEvent(key: string, event: AgentEvent) {
     case 'tool_execution_start':
       if (!event.toolCallId)
         break
-      view.toolResults[event.toolCallId] = { running: true, args: event.args }
+      view.toolResults = {
+        ...view.toolResults,
+        [event.toolCallId]: { running: true, args: event.args },
+      }
       break
 
-    case 'tool_execution_update':
+    case 'tool_execution_update': {
       if (!event.toolCallId)
         break
-      (view.toolResults[event.toolCallId] ??= {}).partial = event.partialResult
+      const previous = view.toolResults[event.toolCallId]
+      view.toolResults = {
+        ...view.toolResults,
+        [event.toolCallId]: { ...previous, partial: event.partialResult },
+      }
       break
+    }
 
     case 'tool_execution_end':
       if (!event.toolCallId)
         break
-      view.toolResults[event.toolCallId] = { result: event.result, isError: event.isError }
+      view.toolResults = {
+        ...view.toolResults,
+        [event.toolCallId]: { result: event.result, isError: event.isError },
+      }
       break
 
     case 'compaction_start':
