@@ -216,26 +216,27 @@ function readChain(messages: ChatMessage[]): { id: string, hop: number } {
   return { id: crypto.randomUUID(), hop: 0 }
 }
 
-function searchMessages(messages: ChatMessage[], query: string) {
-  const terms = [...new Set(query.toLocaleLowerCase().split(/\s+/).filter(Boolean))]
+export function searchMessages(messages: ChatMessage[], query: string) {
+  const needle = query.trim().toLocaleLowerCase()
+  if (!needle)
+    return []
+
   return messages
     .map((message, messageIndex) => {
       const text = messageText(message)
       const lower = text.toLocaleLowerCase()
-      const score = terms.reduce((total, term) => total + (lower.includes(term) ? 1 : 0), 0)
-      if (!score)
+      const first = lower.indexOf(needle)
+      if (first < 0)
         return null
-      const first = Math.min(...terms.map(term => lower.indexOf(term)).filter(index => index >= 0))
       const start = Math.max(0, first - 120)
       return {
         messageIndex,
         role: message.role,
         excerpt: text.slice(start, start + 360),
-        score,
       }
     })
     .filter(result => result !== null)
-    .sort((a, b) => b.score - a.score || b.messageIndex - a.messageIndex)
+    .sort((a, b) => b.messageIndex - a.messageIndex)
     .slice(0, MAX_RESULTS)
 }
 

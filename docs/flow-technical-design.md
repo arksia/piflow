@@ -418,14 +418,16 @@ Parameters:
 }
 ```
 
-The source must be directly incoming. Search is deterministic keyword matching over source-session messages.
+The source must be directly incoming. Search is a deterministic, case-insensitive literal substring match over source-session messages.
 
 Current limits:
 
 - at most 8 results
 - excerpts are at most 360 characters
 - query length is at most 500 characters
-- terms are split on whitespace and matched case-insensitively
+- results are ordered newest first
+- the complete query is matched literally, including whitespace
+- results do not expose a synthetic relevance score
 
 Search results are indexes, not authoritative final evidence.
 
