@@ -140,8 +140,11 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
       (edge.source === sourceId && edge.target === targetId)
       || (edge.source === targetId && edge.target === sourceId),
     )
-    if (exists)
+    if (exists) {
+      setError('这两个会话已经建立关系')
+      setConnectMode(null)
       return
+    }
     const edge: FlowEdge = {
       id: crypto.randomUUID(),
       source: sourceId,
@@ -353,7 +356,7 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
             >
               <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#292929" />
               <Controls showInteractive={false} />
-              <MiniMap pannable zoomable nodeColor="#6d5890" maskColor="rgb(0 0 0 / 72%)" />
+              <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
             </ReactFlow>
           )}
 
@@ -386,7 +389,7 @@ function toCanvasEdges(edges: FlowEdge[]): Edge[] {
     target: edge.target,
     type: 'smoothstep',
     animated: false,
-    style: { stroke: '#8a70b2', strokeWidth: 1.5 },
+    style: { stroke: 'var(--c-muted)', strokeWidth: 1.5 },
   }))
 }
 

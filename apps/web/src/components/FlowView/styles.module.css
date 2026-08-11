@@ -228,7 +228,7 @@
 }
 
 .workspace :global(.react-flow__edge.selected path) {
-  stroke: #c4a6f0 !important;
+  stroke: var(--c-mid) !important;
   stroke-width: 2;
 }
 /* stylelint-enable selector-pseudo-class-no-unknown, selector-class-pattern */
