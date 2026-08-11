@@ -231,6 +231,12 @@
   stroke: var(--c-mid) !important;
   stroke-width: 2;
 }
+
+/* React Flow renders the interaction path with stroke-width: 20 but no stroke color,
+   making it unhittable. Give it a transparent stroke so the wide hit area works. */
+.workspace :global(.react-flow__edge-interaction) {
+  stroke: transparent;
+}
 /* stylelint-enable selector-pseudo-class-no-unknown, selector-class-pattern */
 
 .mode {
