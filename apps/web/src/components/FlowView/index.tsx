@@ -1,6 +1,7 @@
 import type { FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
 import type {
   Edge,
+  EdgeChange,
   NodeChange,
   NodeMouseHandler,
   OnEdgesDelete,
@@ -10,6 +11,7 @@ import type {
 } from '@xyflow/react'
 import type { FlowCanvasNode } from '../FlowSessionNode'
 import {
+  applyEdgeChanges,
   applyNodeChanges,
   Background,
   BackgroundVariant,
@@ -194,6 +196,10 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
       setConnectMode(null)
   }
 
+  function onEdgesChange(changes: EdgeChange<Edge>[]) {
+    setEdges(current => applyEdgeChanges(changes, current))
+  }
+
   const onEdgesDelete: OnEdgesDelete<Edge> = (deleted) => {
     if (!document)
       return
@@ -348,6 +354,7 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
               onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
               onPaneClick={onPaneClick}
               onNodesDelete={onNodesDelete}
+              onEdgesChange={onEdgesChange}
               onEdgesDelete={onEdgesDelete}
               onMoveEnd={onMoveEnd}
               onSelectionChange={onSelectionChange}
