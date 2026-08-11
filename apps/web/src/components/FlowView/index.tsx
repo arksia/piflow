@@ -1,8 +1,8 @@
 import type { FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
 import type {
-  Connection,
   Edge,
   NodeChange,
+  NodeMouseHandler,
   OnEdgesDelete,
   OnNodesDelete,
   ReactFlowInstance,
@@ -32,6 +32,10 @@ interface FlowViewProps {
   onShowChat: () => void
 }
 
+interface ConnectMode {
+  sourceId: string
+}
+
 export default function FlowView({ onShowChat }: FlowViewProps) {
   const store = useStore()
   const activeView = store.activeKey ? store.views[store.activeKey] : undefined
@@ -46,6 +50,7 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
   const [nodes, setNodes] = useState<FlowCanvasNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
+  const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('')
@@ -99,6 +104,16 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
     }
   }, [focusSession, instance, projectPath, seedSessionCwd, seedSessionGoal, seedSessionName, seedSessionPath])
 
+  // Press Escape to cancel peer-connect mode.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape')
+        setConnectMode(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   async function persist(next: FlowDocument) {
     setDocument(next)
     setNodes(next.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
@@ -118,8 +133,39 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
     }
   }
 
+  function connectNodes(sourceId: string, targetId: string) {
+    if (!document || sourceId === targetId)
+      return
+    const exists = document.edges.some(edge =>
+      (edge.source === sourceId && edge.target === targetId)
+      || (edge.source === targetId && edge.target === sourceId),
+    )
+    if (exists)
+      return
+    const edge: FlowEdge = {
+      id: crypto.randomUUID(),
+      source: sourceId,
+      target: targetId,
+      createdAt: new Date().toISOString(),
+    }
+    void persist({ ...document, edges: [...document.edges, edge] })
+    setConnectMode(null)
+  }
+
   function onNodesChange(changes: NodeChange<FlowCanvasNode>[]) {
     setNodes(current => applyNodeChanges(changes, current))
+  }
+
+  const onNodeClick: NodeMouseHandler = (_event, node) => {
+    if (!connectMode)
+      return
+    if (node.id === connectMode.sourceId)
+      return
+    connectNodes(connectMode.sourceId, node.id)
+  }
+
+  function onPaneClick() {
+    setConnectMode(null)
   }
 
   function onNodeDragStop(_event: MouseEvent | TouchEvent, node: FlowCanvasNode) {
@@ -132,20 +178,6 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
     })
   }
 
-  function onConnect(connection: Connection) {
-    if (!document || !connection.source || !connection.target || connection.source === connection.target)
-      return
-    if (document.edges.some(edge => edge.source === connection.source && edge.target === connection.target))
-      return
-    const edge: FlowEdge = {
-      id: crypto.randomUUID(),
-      source: connection.source,
-      target: connection.target,
-      createdAt: new Date().toISOString(),
-    }
-    void persist({ ...document, edges: [...document.edges, edge] })
-  }
-
   const onNodesDelete: OnNodesDelete<FlowCanvasNode> = (deleted) => {
     if (!document)
       return
@@ -155,6 +187,8 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
       nodes: document.nodes.filter(node => !ids.has(node.id)),
       edges: document.edges.filter(edge => !ids.has(edge.source) && !ids.has(edge.target)),
     })
+    if (connectMode && ids.has(connectMode.sourceId))
+      setConnectMode(null)
   }
 
   const onEdgesDelete: OnEdgesDelete<Edge> = (deleted) => {
@@ -167,7 +201,9 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: FlowCanvasNode[], edges: Edge[] }) => {
     const next = { nodes: selectedNodes.map(node => node.id), edges: selectedEdges.map(edge => edge.id) }
     setSelection(current => sameSelection(current, next) ? current : next)
-  }, [])
+    if (connectMode && !selectedNodes.some(node => node.id === connectMode.sourceId))
+      setConnectMode(null)
+  }, [connectMode])
 
   function onMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
     if (!document || sameViewport(document.viewport, viewport))
@@ -228,14 +264,22 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
     setSelection({ nodes: [], edges: [] })
   }
 
+  const startConnect = useCallback(() => {
+    if (selection.nodes.length === 1)
+      setConnectMode({ sourceId: selection.nodes[0]! })
+  }, [selection])
+
   const availableSessions = store.sessions.filter(session => session.cwd === document?.projectPath && !document.nodes.some(node => node.sessionPath === session.path))
-  const statusKey = nodes.map(node => statusFor(node.data.sessionPath, store)).join(':')
-  const visibleNodes = useMemo(() => statusKey
-    ? nodes.map(node => ({
-        ...node,
-        data: { ...node.data, status: statusFor(node.data.sessionPath, store) },
-      }))
-    : nodes, [nodes, statusKey, store])
+  const visibleNodes = useMemo(() => nodes.map(node => ({
+    ...node,
+    data: {
+      ...node.data,
+      status: statusFor(node.data.sessionPath, store),
+      isAnchor: connectMode?.sourceId === node.id,
+    },
+  })), [nodes, connectMode, store])
+
+  const sourceNode = connectMode ? document?.nodes.find(node => node.id === connectMode.sourceId) : undefined
 
   return (
     <div className={styles.workspace}>
@@ -246,6 +290,12 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
         </div>
         {saving ? <span className={styles.saving}>保存中…</span> : null}
         {selection.nodes.length || selection.edges.length ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button> : null}
+        {selection.nodes.length === 1 && !connectMode
+          ? <button className={styles.connect} onClick={startConnect}>连接</button>
+          : null}
+        {connectMode
+          ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
+          : null}
         <button className={styles.add} disabled={!document} onClick={() => setPanelOpen(open => !open)}>+ 节点</button>
         <ViewSwitch active="flow" onChange={view => view === 'chat' && onShowChat()} />
       </header>
@@ -290,10 +340,10 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
               fitView={document.nodes.length > 0 && document.viewport.zoom === 1 && document.viewport.x === 0 && document.viewport.y === 0}
               onInit={setInstance}
               onNodesChange={onNodesChange}
+              onNodeClick={onNodeClick}
               onNodeDragStop={onNodeDragStop}
               onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
-              onConnect={onConnect}
-              connectionRadius={36}
+              onPaneClick={onPaneClick}
               onNodesDelete={onNodesDelete}
               onEdgesDelete={onEdgesDelete}
               onMoveEnd={onMoveEnd}
@@ -306,6 +356,16 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
               <MiniMap pannable zoomable nodeColor="#6d5890" maskColor="rgb(0 0 0 / 72%)" />
             </ReactFlow>
           )}
+
+      {connectMode && sourceNode
+        ? (
+            <div className={styles.mode}>
+              已选择“
+              {sourceNode.name}
+              ”，点击另一个会话建立关系，或按 Esc / 取消连接退出。
+            </div>
+          )
+        : null}
     </div>
   )
 }

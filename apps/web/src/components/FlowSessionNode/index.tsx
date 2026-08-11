@@ -1,5 +1,4 @@
 import type { Node, NodeProps } from '@xyflow/react'
-import { Handle, Position } from '@xyflow/react'
 import styles from './styles.module.css'
 
 export type FlowSessionNodeData = Record<string, unknown> & {
@@ -7,6 +6,7 @@ export type FlowSessionNodeData = Record<string, unknown> & {
   name: string
   goal: string
   status: 'idle' | 'running' | 'failed'
+  isAnchor?: boolean
   onOpen: () => void
 }
 
@@ -16,8 +16,7 @@ export default function FlowSessionNode({ data, selected }: NodeProps<FlowCanvas
   const status = data.status === 'running' ? '运行中' : data.status === 'failed' ? '需要处理' : '空闲'
 
   return (
-    <article className={`${styles.node} ${selected ? styles.selected : ''}`}>
-      <Handle className={styles.handle} type="target" position={Position.Left} />
+    <article className={`${styles.node} ${selected ? styles.selected : ''} ${data.isAnchor ? styles.anchor : ''}`}>
       <div className={styles.topline}>
         <span className={`${styles.statusDot} ${styles[data.status]}`} />
         <span className={styles.status}>{status}</span>
@@ -25,7 +24,6 @@ export default function FlowSessionNode({ data, selected }: NodeProps<FlowCanvas
       <h2>{data.name}</h2>
       {data.goal ? <p>{data.goal}</p> : <p className={styles.empty}>尚未设置目标</p>}
       <button className="nodrag" onClick={data.onOpen}>打开会话</button>
-      <Handle className={styles.handle} type="source" position={Position.Right} />
     </article>
   )
 }
