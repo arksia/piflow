@@ -1,7 +1,7 @@
 # Flow Technical Design
 
 **Status:** Implemented MVP with active follow-up work
-**Last updated:** 2026-08-11
+**Last updated:** 2026-08-12
 **Scope:** Project-scoped multi-session collaboration in piflow
 
 ## 1. Purpose
@@ -59,24 +59,17 @@ The node's `name` and `goal` are user-facing context descriptors. They also serv
 
 All Agent session nodes are peers. There is no parent/child hierarchy.
 
-Creating B while looking at A does not make B a branch of A. B starts with a clean context. A and B only gain knowledge of one another through user-created directed edges.
+Creating B while looking at A does not make B a branch of A. B starts with a clean context. A and B only gain knowledge of one another through user-created edges.
 
 This is deliberate. The purpose of splitting work into sessions is to reduce context corruption and context rot, not to silently copy an increasingly large conversation into every new Agent.
 
-### 3.3 Edges Are Directed Capability Boundaries
+### 3.3 Edges Are Undirected Relationships
 
-For an edge `A -> B`:
+On the canvas, an edge is a neutral, permanent relationship between two sessions. It does not imply a fixed source-to-target direction in the visual model; the line simply shows that the two nodes are related.
 
-- A may discover B as an outgoing node.
-- A may send an explicit message to B.
-- B may discover A as an incoming node.
-- B may search and read bounded excerpts from A's session.
-- B cannot send to A unless the user also creates `B -> A`.
-- A cannot search B unless the user also creates `B -> A`.
+Direction appears only briefly: when a new `FlowMessageRecord` is observed, the edge is drawn as `source -> target` with an arrow for three seconds, then returns to the neutral line.
 
-No edge means complete Flow-level isolation. The sessions do not discover each other and cannot use Flow tools to communicate or inspect one another.
-
-Deleting an edge revokes future discovery, sending, search, and read permissions. It does not rewrite messages or information already delivered into a session.
+The tool authorization model still maps `source` and `target` onto outgoing/incoming capabilities, but the user-facing topology is intentionally undirected. Deleting an edge revokes future discovery, sending, search, and read permissions. It does not rewrite messages or information already delivered into a session.
 
 ### 3.4 The User Owns The Topology
 
@@ -344,10 +337,12 @@ The user provides a node name and optional current goal. The node is placed near
 The user can:
 
 - drag nodes
-- draw directed connections from source handle to target handle
+- draw connections between two nodes
 - select and remove nodes or edges
 - pan and zoom
 - open a node's focused chat by button or double click
+
+Connections are drawn between invisible left/right handles that exist only as edge anchors; they are not clickable ports. The interaction path has a 20 px hit area so the thin line is still easy to grab.
 
 Removing a node removes its incident edges from the canvas. It does not delete the underlying pi session.
 
@@ -364,6 +359,19 @@ The status is derived from the browser's open session views. A session that is n
 ### 9.5 Desktop Scope
 
 Flow is desktop-only for the MVP. Chat remains the required mobile workflow.
+
+### 9.6 Message Activity And Polling
+
+When the canvas is visible, the UI polls the project's Flow document every three seconds and inspects only the `messages` array. It never reconstructs nodes, edges, or the viewport from the poll response, and it never overwrites the local topology.
+
+The first poll after a document becomes available marks the existing messages as seen, so historical messages are not replayed as activity. As new `FlowMessageRecord` items arrive:
+
+- the matching edge is oriented from `message.source` to `message.target`
+- an arrow marker is shown for three seconds
+- a short animation plays unless the user prefers reduced motion
+- after three seconds the edge reverts to the neutral line
+
+If a message references an edge ID that is no longer present in the current topology, it is ignored. When the project changes, the seen-message set and active-edge timers are reset so the new canvas starts from a clean state.
 
 ## 10. Agent Tool Model
 
@@ -711,6 +719,20 @@ Observed results:
 - Runtime's message was persisted at `15:19:57`, while Workspace's search-dependent message was persisted at `15:20:16`. This proves dual dispatch and no message loss in that run, but the 19-second gap did not exercise a true simultaneous store-write collision.
 - Canvas strictly acknowledged the second message, but its first acknowledgement also repeated an unrelated previously received canvas finding. This is an Agent instruction-following observation rather than a routing failure; narrow Flow prompts should not assume perfect response minimality.
 - Workspace's new dispatch incorrectly reused historical chain `76a26dc8-b7c0-4948-9f57-3cc37b375f3a` at hop 3. This is the chain-contamination defect described below.
+
+### 16.2 Canvas Message Activity Dogfood
+
+A short dogfood run verified the new directional activity rendering:
+
+- polling only inspects `messages` and never replaces topology state
+- existing messages on first load are treated as seen, so no history replay occurs
+- new messages orient the arrow in the correct source-to-target direction, including reverse sends
+- stale or missing edge IDs are ignored without errors
+- timers clear on project switch and visibility change
+- `prefers-reduced-motion` shows a static arrow and highlight instead of looping animation
+- selected edges and 20 px hit area remain usable while activity is active
+
+The main residual friction was confirming that the active edge style does not fight the selected-edge style when both apply. Passing `selected` explicitly on the derived edge object keeps React Flow's selection state stable.
 
 ## 17. MVP Non-Goals
 
