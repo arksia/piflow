@@ -1,7 +1,7 @@
 # Flow Technical Design
 
 **Status:** Implemented MVP with active follow-up work
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-11
 **Scope:** Project-scoped multi-session collaboration in piflow
 
 ## 1. Purpose
@@ -449,9 +449,11 @@ This two-step search/read design prevents accidental wholesale context inheritan
 
 ### 10.5 Collaboration Hop Limit
 
-Each user-started Agent collaboration chain is limited to 8 inter-node messages. Chain metadata is carried in a hidden HTML comment inside delivered prompts.
+Each user-started Agent collaboration chain is limited to 8 inter-node messages. The current implementation carries chain metadata in an HTML comment inside delivered prompts.
 
 The limit prevents uncontrolled Agent ping-pong. At the limit, the Agent must return control to the user before continuing.
+
+The comment is hidden from the rendered chat UI, but it is still model-visible session text. It must therefore be treated as transport input, not trusted server-owned state. The current parser does not preserve that boundary; see Section 18.2.
 
 ## 11. Context Discovery
 
@@ -688,6 +690,28 @@ The Flow MVP has also been exercised manually in a production build for:
 - session project validation
 - browser console errors
 
+### 16.1 K2.7 Dogfood Regression (2026-08-10)
+
+A narrow regression used three long-lived Kimi K2.7 sessions: Agent Workspace, Flow Runtime, and Flow Canvas. Workspace and Runtime were prompted concurrently in Chinese and were prohibited from reading or changing repository files.
+
+The test covered:
+
+- exact upstream search for `MessageItem 用户气泡的 #a160fc14/33`
+- removal of the former synthetic `score` field
+- independent Workspace-to-Canvas and Runtime-to-Canvas dispatches
+- Flow message persistence
+- Canvas receipt and response behavior
+- collaboration-chain identity and hop accounting
+
+Observed results:
+
+- K2.7 completed all three target turns without the earlier quota `403`.
+- `search_flow_context` returned only `messageIndex`, `role`, and `excerpt`; no `score` was present.
+- both Flow messages were persisted and received by Canvas without Canvas calling a tool.
+- Runtime's message was persisted at `15:19:57`, while Workspace's search-dependent message was persisted at `15:20:16`. This proves dual dispatch and no message loss in that run, but the 19-second gap did not exercise a true simultaneous store-write collision.
+- Canvas strictly acknowledged the second message, but its first acknowledgement also repeated an unrelated previously received canvas finding. This is an Agent instruction-following observation rather than a routing failure; narrow Flow prompts should not assume perfect response minimality.
+- Workspace's new dispatch incorrectly reused historical chain `76a26dc8-b7c0-4948-9f57-3cc37b375f3a` at hop 3. This is the chain-contamination defect described below.
+
 ## 17. MVP Non-Goals
 
 The following are intentionally not part of the current implementation:
@@ -714,27 +738,71 @@ Filesystem writes are serialized, but the complete read-modify-write operation i
 
 The next correctness improvement should serialize each complete project mutation, not only the final file write.
 
-### 18.2 Background State Publication
+### 18.2 Model-Visible Chain Metadata Can Contaminate New Chains
+
+`send_flow_message` currently calls `readChain()` over recent session messages. `readChain()` converts each message to plain text, searches for:
+
+```text
+<!-- piflow:chain=<id>;hop=<n> -->
+```
+
+and accepts the first match found while scanning backward until a user message boundary.
+
+This is unsafe because `messageText()` includes tool-call arguments and text results. Both `search_flow_context` excerpts and `read_flow_context` messages can legitimately quote an old Flow envelope containing the same marker. The parser cannot distinguish an envelope delivered by piflow from historical text returned by a tool or quoted by the model.
+
+The 2026-08-10 regression reproduced the failure:
+
+1. Workspace started an ordinary user turn with no incoming Flow envelope.
+2. Workspace searched Legacy Product & UI.
+3. The result excerpt ended with historical marker `chain=76a26dc8-b7c0-4948-9f57-3cc37b375f3a;hop=2`.
+4. Workspace then called `send_flow_message` for Canvas.
+5. `readChain()` found the marker inside the search tool result.
+6. The new message was persisted under that old chain at hop 3 instead of starting a new chain at hop 1.
+
+Consequences:
+
+- unrelated collaborations can be merged into one chain
+- a new collaboration can consume another chain's remaining hop budget
+- an old marker at hop 8 can incorrectly block a valid new send
+- quoted or retrieved content can influence routing metadata even though the server should own it
+- message history becomes unreliable for debugging collaboration sequences
+
+This does not bypass edge authorization: the current outgoing edge is still validated before sending. It is nevertheless a context-integrity and accounting defect.
+
+The fix must stop deriving trusted chain state from arbitrary model-visible text. Chain identity and hop count should be attached as structured server-side metadata to the inbound Flow turn, then read from that trusted state when a tool executes. A normal user prompt must start a fresh chain. Search results, context reads, assistant output, tool arguments, and quoted HTML comments must never create or advance a chain.
+
+Required regression coverage:
+
+- a real inbound Flow envelope continues its chain
+- a normal user prompt starts a new chain
+- a search result containing a historical marker cannot affect the next send
+- a context read containing a historical marker cannot affect the next send
+- assistant-authored or user-authored marker text cannot affect the next send
+- the hop limit still rejects the ninth message in one real chain
+
+Stripping markers from search excerpts would reduce one reproduction path but would not fix the trust-boundary error, because markers can re-enter through other model-visible content.
+
+### 18.3 Background State Publication
 
 Agent-to-Agent target prompts publish normal pi events, but the server does not yet guarantee a full authoritative session-state broadcast after every background target settles. A closed target may require reopening before all projected UI state is refreshed.
 
-### 18.3 Directory Fingerprints Are Process-Local
+### 18.4 Directory Fingerprints Are Process-Local
 
 The last injected directory fingerprint is stored in server memory. Restarting the server causes one complete directory reinjection on the next prompt.
 
 Persisting fingerprints is not currently justified because reinjection is bounded and self-correcting.
 
-### 18.4 Goal Quality Controls Discovery
+### 18.5 Goal Quality Controls Discovery
 
 The connection directory can only describe what the user records in node `name` and `goal`. Empty or stale goals make relevance discovery weaker.
 
 Automatic model-generated summaries are intentionally excluded because they add cost, staleness, and another context-corruption path.
 
-### 18.5 Search Is Lexical
+### 18.6 Search Is Lexical
 
 Keyword matching is predictable and cheap but misses synonyms and concepts expressed with unrelated wording. Models are instructed to try specific filenames and alternate queries.
 
-### 18.6 No Search-All Tool
+### 18.7 No Search-All Tool
 
 An Agent currently selects one incoming node and query. A possible future tool is:
 
@@ -744,7 +812,7 @@ search_all_upstream(query)
 
 It would search all directly authorized incoming nodes without exposing indirect nodes. This should be added only if direct-directory discovery still produces frequent missed context.
 
-### 18.7 Canvas Status Is A Browser Projection
+### 18.8 Canvas Status Is A Browser Projection
 
 The canvas does not maintain a server-authoritative status registry for every closed session. Status fidelity should improve before using Flow as an operational monitoring dashboard.
 
@@ -752,13 +820,14 @@ The canvas does not maintain a server-authoritative status registry for every cl
 
 Priority should remain on reliability rather than adding node types.
 
-1. Serialize complete Flow store mutations per project.
-2. Publish authoritative state after Agent-to-Agent target turns settle.
-3. Dogfood directory injection and measure whether Agents correctly search relevant upstream sessions.
-4. Improve node goal editing and freshness before introducing automatic summaries.
-5. Add focused integration coverage for topology update, next-turn injection, and edge revocation.
-6. Evaluate `search_all_upstream` only after observing real retrieval failures.
-7. Revisit worktrees only after concurrent-file conflicts become a demonstrated workflow problem.
+1. Move collaboration-chain identity and hop accounting out of model-visible text and add the Section 18.2 regressions.
+2. Serialize complete Flow store mutations per project.
+3. Publish authoritative state after Agent-to-Agent target turns settle.
+4. Dogfood directory injection and measure whether Agents correctly search relevant upstream sessions.
+5. Improve node goal editing and freshness before introducing automatic summaries.
+6. Add focused integration coverage for topology update, next-turn injection, and edge revocation.
+7. Evaluate `search_all_upstream` only after observing real retrieval failures.
+8. Revisit worktrees only after concurrent-file conflicts become a demonstrated workflow problem.
 
 ## 20. Review Checklist
 
@@ -767,6 +836,7 @@ Any future Flow change should preserve these questions and answers:
 - Does a node still represent one independent pi session?
 - Can the user understand the direct communication topology?
 - Does every read or send operation have a current directed-edge authorization check?
+- Is collaboration-chain metadata derived only from trusted server state rather than model-visible text?
 - Can an Agent learn enough metadata to discover relevant context without inheriting it?
 - Is full content fetched only on demand and in bounded form?
 - Does deleting an edge revoke future capability?
