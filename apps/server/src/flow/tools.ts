@@ -3,7 +3,7 @@ import type { ChatMessage, FlowNode } from '@piflow/protocol'
 import type { FlowStore } from './store'
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
-import { canReadNode, findNodeBySession, listOutboundNodes } from './store'
+import { canAccessNode, findConnection, findNodeBySession, listConnectedNodes } from './store'
 
 const MAX_HOPS = 8
 const MAX_RESULTS = 8
@@ -28,27 +28,25 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   const listConnections = defineTool({
     name: 'list_flow_connections',
     label: 'Flow connections',
-    description: 'List only the Flow nodes this session is explicitly connected to. Outgoing nodes can receive messages. Incoming nodes can be searched for context.',
-    promptSnippet: 'Inspect explicitly connected Flow nodes and their direction',
+    description: 'List only the Flow sessions explicitly connected to this session. Connected peers can receive messages and be searched for context.',
+    promptSnippet: 'Inspect explicitly connected peer sessions',
     promptGuidelines: [
       'Flow nodes are isolated unless the user connects them. Never assume another node exists; call list_flow_connections to discover authorized neighbors.',
-      'Use search_flow_context when an incoming node may contain relevant prior work. Do not guess what another node decided.',
+      'Use search_flow_context when a connected peer may contain relevant prior work. Do not guess what another node decided.',
     ],
     parameters: Type.Object({}),
     async execute() {
       const { document, node } = await getSourceContext(options)
-      const outgoing = listOutboundNodes(document, node.id).map(publicNode)
-      const incomingIds = new Set(document.edges.filter(edge => edge.target === node.id).map(edge => edge.source))
-      const incoming = document.nodes.filter(candidate => incomingIds.has(candidate.id)).map(publicNode)
-      return textResult(JSON.stringify({ outgoing, incoming }, null, 2))
+      const peers = listConnectedNodes(document, node.id).map(publicNode)
+      return textResult(JSON.stringify({ peers }, null, 2))
     },
   })
 
   const sendMessage = defineTool({
     name: 'send_flow_message',
     label: 'Send Flow message',
-    description: 'Send an explicit task or result to a directly connected outgoing Flow node. The target runs immediately when idle or receives a follow-up when busy.',
-    promptSnippet: 'Send a deliberate message to an authorized downstream Flow node',
+    description: 'Send an explicit task or result to a directly connected Flow peer. The target runs immediately when idle or receives a follow-up when busy.',
+    promptSnippet: 'Send a deliberate message to a connected Flow peer',
     promptGuidelines: [
       'Send only information the target needs. Do not paste your complete conversation or tool history.',
       `A user-started collaboration chain allows at most ${MAX_HOPS} inter-node messages.`,
@@ -61,10 +59,10 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
     async execute(_toolCallId, params) {
       const sourceSession = requireSource(options)
       const { document, node: sourceNode } = await getSourceContext(options)
-      const targetNode = listOutboundNodes(document, sourceNode.id).find(node => node.id === params.targetNodeId)
+      const targetNode = listConnectedNodes(document, sourceNode.id).find(node => node.id === params.targetNodeId)
       if (!targetNode)
-        throw new Error('target is not connected by an outgoing Flow edge')
-      const edge = document.edges.find(edge => edge.source === sourceNode.id && edge.target === targetNode.id)
+        throw new Error('target is not a connected Flow peer')
+      const edge = findConnection(document, sourceNode.id, targetNode.id)
       if (!edge)
         throw new Error('Flow edge not found')
 
@@ -101,20 +99,20 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   const searchContext = defineTool({
     name: 'search_flow_context',
     label: 'Search Flow context',
-    description: 'Search message history in one directly connected incoming Flow node. Returns bounded excerpts and stable message indexes; use read_flow_context to inspect source text before relying on it.',
-    promptSnippet: 'Search an authorized upstream Flow conversation without importing it wholesale',
+    description: 'Search message history in one directly connected Flow peer. Returns bounded excerpts and stable message indexes; use read_flow_context to inspect source text before relying on it.',
+    promptSnippet: 'Search a connected Flow conversation without importing it wholesale',
     promptGuidelines: [
       'Search results are indexes, not final evidence. Read relevant source messages with read_flow_context.',
       'Use specific keywords and file names. Try a second query when the first wording may miss the concept.',
     ],
     parameters: Type.Object({
-      sourceNodeId: Type.String({ description: 'Incoming node id returned by list_flow_connections' }),
+      sourceNodeId: Type.String({ description: 'Peer node id returned by list_flow_connections' }),
       query: Type.String({ minLength: 1, maxLength: 500 }),
     }),
     async execute(_toolCallId, params) {
       const { document, node: reader } = await getSourceContext(options)
-      if (!canReadNode(document, reader.id, params.sourceNodeId))
-        throw new Error('source is not connected by an incoming Flow edge')
+      if (!canAccessNode(document, reader.id, params.sourceNodeId))
+        throw new Error('source is not a connected Flow peer')
       const sourceNode = document.nodes.find(node => node.id === params.sourceNodeId)
       if (!sourceNode)
         throw new Error('source Flow node not found')
@@ -127,17 +125,17 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   const readContext = defineTool({
     name: 'read_flow_context',
     label: 'Read Flow context',
-    description: 'Read an exact message and a small surrounding window from one directly connected incoming Flow node. Use message indexes returned by search_flow_context.',
-    promptSnippet: 'Read exact upstream source messages by stable index',
+    description: 'Read an exact message and a small surrounding window from one directly connected Flow peer. Use message indexes returned by search_flow_context.',
+    promptSnippet: 'Read exact peer messages by stable index',
     parameters: Type.Object({
-      sourceNodeId: Type.String({ description: 'Incoming node id returned by list_flow_connections' }),
+      sourceNodeId: Type.String({ description: 'Peer node id returned by list_flow_connections' }),
       messageIndex: Type.Integer({ minimum: 0 }),
       radius: Type.Optional(Type.Integer({ minimum: 0, maximum: 3, default: 1 })),
     }),
     async execute(_toolCallId, params) {
       const { document, node: reader } = await getSourceContext(options)
-      if (!canReadNode(document, reader.id, params.sourceNodeId))
-        throw new Error('source is not connected by an incoming Flow edge')
+      if (!canAccessNode(document, reader.id, params.sourceNodeId))
+        throw new Error('source is not a connected Flow peer')
       const sourceNode = document.nodes.find(node => node.id === params.sourceNodeId)
       if (!sourceNode)
         throw new Error('source Flow node not found')
@@ -163,17 +161,13 @@ export function formatFlowDirectory(document: Awaited<ReturnType<FlowStore['read
   const node = findNodeBySession(document, sessionPath)
   if (!node)
     return null
-  const incomingIds = new Set(document.edges.filter(edge => edge.target === node.id).map(edge => edge.source))
-  const incoming = document.nodes.filter(candidate => incomingIds.has(candidate.id))
-  const outgoing = listOutboundNodes(document, node.id)
+  const peers = listConnectedNodes(document, node.id)
   return [
-    'Flow connection directory updated. Connections are explicit capability boundaries.',
-    'Incoming nodes may be searched with search_flow_context. Outgoing nodes may receive send_flow_message.',
+    'Flow collaboration directory updated. Connections are explicit capability boundaries between peer sessions.',
+    'Connected peers may be searched with search_flow_context and may receive send_flow_message.',
     '',
-    'Incoming:',
-    ...directoryLines(incoming),
-    'Outgoing:',
-    ...directoryLines(outgoing),
+    'Peers:',
+    ...directoryLines(peers),
   ].join('\n')
 }
 
