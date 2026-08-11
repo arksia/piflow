@@ -111,13 +111,26 @@ export function findNodeBySession(document: FlowDocument, sessionPath: string): 
   return document.nodes.find(node => node.sessionPath === sessionPath)
 }
 
-export function listOutboundNodes(document: FlowDocument, sourceId: string): FlowNode[] {
-  const targets = new Set(document.edges.filter(edge => edge.source === sourceId).map(edge => edge.target))
-  return document.nodes.filter(node => targets.has(node.id))
+export function listConnectedNodes(document: FlowDocument, nodeId: string): FlowNode[] {
+  const peerIds = new Set(document.edges.flatMap((edge) => {
+    if (edge.source === nodeId)
+      return [edge.target]
+    if (edge.target === nodeId)
+      return [edge.source]
+    return []
+  }))
+  return document.nodes.filter(node => peerIds.has(node.id))
 }
 
-export function canReadNode(document: FlowDocument, readerId: string, sourceId: string): boolean {
-  return document.edges.some(edge => edge.source === sourceId && edge.target === readerId)
+export function findConnection(document: FlowDocument, firstId: string, secondId: string): FlowEdge | undefined {
+  return document.edges.find(edge => (
+    (edge.source === firstId && edge.target === secondId)
+    || (edge.source === secondId && edge.target === firstId)
+  ))
+}
+
+export function canAccessNode(document: FlowDocument, readerId: string, sourceId: string): boolean {
+  return findConnection(document, readerId, sourceId) !== undefined
 }
 
 function parseDocument(value: unknown, projectPath: string): FlowDocument {
@@ -147,6 +160,8 @@ function parseTopology(value: unknown): FlowTopology {
     throw new Error('duplicate flow edge')
   if (edges.some(edge => edge.source === edge.target || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)))
     throw new Error('invalid flow edge endpoints')
+  if (new Set(edges.map(connectionKey)).size !== edges.length)
+    throw new Error('duplicate flow connection')
   if (!isRecord(value.viewport))
     throw new Error('invalid flow viewport')
   const zoom = asNumber(value.viewport.zoom, 'viewport.zoom')
@@ -190,6 +205,10 @@ function parseEdge(value: unknown): FlowEdge {
     target: asString(value.target, 'edge.target'),
     createdAt: asString(value.createdAt, 'edge.createdAt'),
   }
+}
+
+function connectionKey(edge: FlowEdge): string {
+  return [edge.source, edge.target].sort().join('\0')
 }
 
 function parseMessage(value: unknown): FlowMessageRecord {

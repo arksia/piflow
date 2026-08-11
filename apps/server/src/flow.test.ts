@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
-import { canReadNode, createFlowStore, listOutboundNodes } from './flow/store'
+import { canAccessNode, createFlowStore, findConnection, listConnectedNodes } from './flow/store'
 import { formatFlowDirectory, searchMessages } from './flow/tools'
 
 it('persists topology without allowing topology updates to erase message history', async () => {
@@ -36,7 +36,7 @@ it('persists topology without allowing topology updates to erase message history
   }
 })
 
-it('uses directed edges as discovery and context-read boundaries', () => {
+it('uses connections as symmetric discovery and context boundaries', () => {
   const document = {
     version: 1 as const,
     projectPath: '/project',
@@ -45,18 +45,41 @@ it('uses directed edges as discovery and context-read boundaries', () => {
     ...fixtureTopology('/project'),
   }
 
-  assert.deepEqual(listOutboundNodes(document, 'a').map(node => node.id), ['b'])
-  assert.deepEqual(listOutboundNodes(document, 'b'), [])
-  assert.equal(canReadNode(document, 'b', 'a'), true)
-  assert.equal(canReadNode(document, 'a', 'b'), false)
-  assert.equal(canReadNode(document, 'c', 'a'), false)
+  assert.deepEqual(listConnectedNodes(document, 'a').map(node => node.id), ['b'])
+  assert.deepEqual(listConnectedNodes(document, 'b').map(node => node.id), ['a'])
+  assert.equal(canAccessNode(document, 'a', 'b'), true)
+  assert.equal(canAccessNode(document, 'b', 'a'), true)
+  assert.equal(canAccessNode(document, 'c', 'a'), false)
+  assert.equal(findConnection(document, 'b', 'a')?.id, 'a-b')
 
   const directoryA = formatFlowDirectory(document, '/project/a.jsonl')
-  assert.match(directoryA ?? '', /Outgoing:\n- b \| Module B/)
+  assert.match(directoryA ?? '', /Peers:\n- b \| Module B/)
   assert.doesNotMatch(directoryA ?? '', /Isolated/)
 
   const directoryB = formatFlowDirectory(document, '/project/b.jsonl')
-  assert.match(directoryB ?? '', /Incoming:\n- a \| Module A/)
+  assert.match(directoryB ?? '', /Peers:\n- a \| Module A/)
+})
+
+it('rejects a second edge between the same peers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  const topology = fixtureTopology(root)
+
+  try {
+    const store = createFlowStore(join(root, 'data'))
+    await assert.rejects(
+      store.replaceTopology(root, {
+        ...topology,
+        edges: [
+          ...topology.edges,
+          { id: 'b-a', source: 'b', target: 'a', createdAt: new Date().toISOString() },
+        ],
+      }),
+      /duplicate flow connection/,
+    )
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 it('searches messages by exact text and returns newest matches first', () => {
