@@ -14,7 +14,7 @@
 }
 
 .node.anchor {
-  box-shadow: 0 0 0 1px var(--c-signal), 0 0 14px 2px rgb(86 214 178 / 18%);
+  box-shadow: 0 0 0 1px var(--c-signal);
 }
 
 .topline {
@@ -75,5 +75,16 @@
 
 .node button:hover {
   color: var(--c-ink);
+}
+
+/* Invisible anchors for React Flow edges. They must exist so edges can render,
+   but they are not visible, not clickable, and carry no port metaphor. */
+.node .hidden-handle {
+  width: 1px;
+  height: 1px;
+  border: none;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
 }
 
