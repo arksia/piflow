@@ -1,4 +1,4 @@
-import type { FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
+import type { FlowDocument, FlowEdge, FlowMessageRecord, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
 import type {
   Edge,
   EdgeChange,
@@ -16,10 +16,11 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  MarkerType,
   MiniMap,
   ReactFlow,
 } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadFlow, saveFlow } from '../../flow/api'
 import { createBackgroundSession, openSession } from '../../session/actions'
 import { useStore } from '../../session/use-store'
@@ -49,10 +50,14 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
   const seedSessionGoal = activeSession?.firstMessage ?? ''
   const seedSessionCwd = activeSession?.cwd ?? ''
   const [document, setDocument] = useState<FlowDocument | null>(null)
+  const documentRef = useRef<FlowDocument | null>(null)
   const [nodes, setNodes] = useState<FlowCanvasNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
+  const [activeEdges, setActiveEdges] = useState(() => new Map<string, { source: string, target: string }>())
+  const activeTimersRef = useRef(new Map<string, number>())
+  const seenMessageIdsRef = useRef(new Set<string>())
   const [panelOpen, setPanelOpen] = useState(false)
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('')
@@ -60,6 +65,7 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
+  const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const focusSession = useCallback(async (path: string) => {
     try {
       await openSession(path)
@@ -96,7 +102,6 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
           return
         setDocument(resolved)
         setNodes(resolved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
-        setEdges(toCanvasEdges(resolved.edges))
         if (instance)
           void instance.setViewport(resolved.viewport)
       })
@@ -116,6 +121,118 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  // Honor prefers-reduced-motion for animated message arrows.
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    function onChange() {
+      setReducedMotion(media.matches)
+    }
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  // Keep a mutable reference to the latest document and mark the initial messages
+  // as seen so the message-activity animation does not replay history on load.
+  useEffect(() => {
+    documentRef.current = document
+    if (document && seenMessageIdsRef.current.size === 0)
+      seenMessageIdsRef.current = new Set(document.messages.map(m => m.id))
+  }, [document])
+
+  // Poll for new inter-node messages while the canvas is visible.
+  // Only the message list is inspected; topology is never overwritten from poll.
+  useEffect(() => {
+    if (!projectPath)
+      return
+    let cancelled = false
+    let intervalId: number | null = null
+    const timers = activeTimersRef.current
+
+    function processIncoming(messages: FlowMessageRecord[]) {
+      const currentDocument = documentRef.current
+      if (!currentDocument)
+        return
+      const newMessages = messages.filter(message => !seenMessageIdsRef.current.has(message.id))
+      if (newMessages.length === 0)
+        return
+      for (const message of newMessages) {
+        seenMessageIdsRef.current.add(message.id)
+        const edge = currentDocument.edges.find(e => e.id === message.edgeId)
+        if (!edge)
+          continue
+        const previousTimer = activeTimersRef.current.get(message.edgeId)
+        if (previousTimer)
+          window.clearTimeout(previousTimer)
+        const timer = window.setTimeout(() => {
+          setActiveEdges((current) => {
+            const next = new Map(current)
+            next.delete(message.edgeId)
+            return next
+          })
+          activeTimersRef.current.delete(message.edgeId)
+        }, 3000)
+        activeTimersRef.current.set(message.edgeId, timer)
+        setActiveEdges((current) => {
+          const next = new Map(current)
+          next.set(message.edgeId, { source: message.source, target: message.target })
+          return next
+        })
+      }
+    }
+
+    function tick() {
+      void loadFlow(projectPath)
+        .then((loaded) => {
+          if (cancelled)
+            return
+          processIncoming(loaded.messages)
+        })
+        .catch(() => {
+          // Polling failures are not surfaced; the next tick will retry.
+        })
+    }
+
+    function start() {
+      intervalId = window.setInterval(tick, 3000)
+    }
+
+    function stop() {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId)
+        intervalId = null
+      }
+    }
+
+    function handleVisibility() {
+      if (window.document.visibilityState === 'hidden')
+        stop()
+      else
+        start()
+    }
+
+    start()
+    window.document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      cancelled = true
+      stop()
+      window.document.removeEventListener('visibilitychange', handleVisibility)
+      for (const timer of timers.values())
+        window.clearTimeout(timer)
+      timers.clear()
+      seenMessageIdsRef.current.clear()
+      setActiveEdges(new Map())
+    }
+  }, [projectPath])
+
+  // Re-render edges when topology, active message events, selection, or motion preference change.
+  useEffect(() => {
+    if (!document)
+      return
+    // Edges are derived from document topology, active messages, selection, and motion preference.
+    // eslint-disable-next-line react/set-state-in-effect
+    setEdges(toCanvasEdges(document.edges, activeEdges, new Set(selection.edges), reducedMotion))
+  }, [document, activeEdges, selection.edges, reducedMotion])
+
   async function persist(next: FlowDocument) {
     setDocument(next)
     setNodes(next.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
@@ -125,7 +242,6 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
       const saved = await saveFlow(next.projectPath, topologyOf(next))
       setDocument(saved)
       setNodes(saved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
-      setEdges(toCanvasEdges(saved.edges))
     }
     catch (reason) {
       setError(String(reason))
@@ -389,15 +505,37 @@ function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
   }
 }
 
-function toCanvasEdges(edges: FlowEdge[]): Edge[] {
-  return edges.map(edge => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    type: 'smoothstep',
-    animated: false,
-    style: { stroke: 'var(--c-muted)', strokeWidth: 1.5 },
-  }))
+function toCanvasEdges(
+  edges: FlowEdge[],
+  activeEdges: Map<string, { source: string, target: string }>,
+  selectedEdgeIds: Set<string>,
+  reducedMotion: boolean,
+): Edge[] {
+  return edges.map((edge) => {
+    const active = activeEdges.get(edge.id)
+    const selected = selectedEdgeIds.has(edge.id)
+    if (active) {
+      return {
+        id: edge.id,
+        source: active.source,
+        target: active.target,
+        type: 'smoothstep',
+        animated: !reducedMotion,
+        selected,
+        markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: 'var(--c-signal)' },
+        style: { stroke: 'var(--c-signal)', strokeWidth: 2 },
+      }
+    }
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: 'smoothstep',
+      animated: false,
+      selected,
+      style: { stroke: 'var(--c-muted)', strokeWidth: 1.5 },
+    }
+  })
 }
 
 function topologyOf(document: FlowDocument): FlowTopology {
