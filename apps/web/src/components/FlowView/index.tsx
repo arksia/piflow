@@ -193,6 +193,9 @@ export default function FlowView({ onShowChat }: FlowViewProps) {
     }
 
     function start() {
+      if (intervalId !== null || window.document.visibilityState === 'hidden')
+        return
+      tick()
       intervalId = window.setInterval(tick, 3000)
     }
 

@@ -69,7 +69,7 @@ On the canvas, an edge is a neutral, permanent relationship between two sessions
 
 Direction appears only briefly: when a new `FlowMessageRecord` is observed, the edge is drawn as `source -> target` with an arrow for three seconds, then returns to the neutral line.
 
-The tool authorization model still maps `source` and `target` onto outgoing/incoming capabilities, but the user-facing topology is intentionally undirected. Deleting an edge revokes future discovery, sending, search, and read permissions. It does not rewrite messages or information already delivered into a session.
+The tool authorization model is symmetric: either connected peer may discover, search, read, or message the other. `source` and `target` remain storage and React Flow endpoint fields only. Deleting an edge revokes future discovery, sending, search, and read permissions. It does not rewrite messages or information already delivered into a session.
 
 ### 3.4 The User Owns The Topology
 
@@ -84,7 +84,7 @@ Edges do not broadcast changes and do not trigger Agents by themselves.
 Communication occurs only when:
 
 - a user sends a prompt to a node, or
-- an Agent explicitly calls `send_flow_message` for an authorized outgoing node.
+- an Agent explicitly calls `send_flow_message` for an authorized peer.
 
 Agents are expected to exchange focused tasks, questions, decisions, and results. Complete transcripts and tool histories are not copied.
 
@@ -99,7 +99,7 @@ The semantics are intentionally different from a deterministic media pipeline:
 - outputs are messages and searchable context, not generated media assets
 - users decide topology while Agents decide whether and when to use authorized tools
 
-The context retrieval design is influenced by Clowder's context-grep approach and the session-management discussion in `cat-cafe-tutorials`. Keyword search and exact nearby reads are used to retrieve only the required source material instead of summarizing or inheriting an entire upstream session.
+The context retrieval design is influenced by Clowder's context-grep approach and the session-management discussion in `cat-cafe-tutorials`. Keyword search and exact nearby reads are used to retrieve only the required source material instead of summarizing or inheriting an entire peer session.
 
 ## 5. System Architecture
 
@@ -375,7 +375,7 @@ If a message references an edge ID that is no longer present in the current topo
 
 ## 10. Agent Tool Model
 
-Every pi session receives four custom Flow tools. A tool call succeeds only when the source session is persisted, appears on the current project's Flow canvas, and has the required directed edge.
+Every pi session receives four custom Flow tools. A tool call succeeds only when the source session is persisted, appears on the current project's Flow canvas, and is directly connected to the requested peer.
 
 ### 10.1 `list_flow_connections`
 
@@ -383,12 +383,11 @@ Returns direct neighbors only:
 
 ```json
 {
-  "incoming": [{ "id": "a", "name": "Auth", "goal": "Implement OAuth" }],
-  "outgoing": [{ "id": "c", "name": "UI", "goal": "Integrate login" }]
+  "peers": [{ "id": "a", "name": "Auth", "goal": "Implement OAuth" }]
 }
 ```
 
-Incoming nodes may be searched. Outgoing nodes may receive messages.
+Every listed peer may be searched, read, or sent a message.
 
 ### 10.2 `send_flow_message`
 
@@ -401,7 +400,7 @@ Parameters:
 }
 ```
 
-The target must be directly outgoing. The message is delivered as a pi prompt:
+The target must be a directly connected peer. The message is delivered as a pi prompt:
 
 ```text
 Message from Flow node "Auth":
@@ -426,7 +425,7 @@ Parameters:
 }
 ```
 
-The source must be directly incoming. Search is a deterministic, case-insensitive literal substring match over source-session messages.
+The source must be a directly connected peer. Search is a deterministic, case-insensitive literal substring match over source-session messages.
 
 Current limits:
 
@@ -469,7 +468,7 @@ The comment is hidden from the rendered chat UI, but it is still model-visible s
 
 Tools alone create a bootstrap problem:
 
-1. an Agent does not know which upstream nodes exist
+1. an Agent does not know which connected peers exist
 2. without that knowledge, it has no reason to call `list_flow_connections`
 3. without listing connections, it cannot know which source may be relevant
 4. therefore it may never call `search_flow_context`
@@ -498,12 +497,11 @@ The directory does not contain:
 Before prompting a Flow session, the server computes its direct connection directory:
 
 ```text
-Flow connection directory updated. Connections are explicit capability boundaries.
-Incoming nodes may be searched with search_flow_context. Outgoing nodes may receive send_flow_message.
+Flow collaboration directory updated. Connections are explicit capability boundaries between peer sessions.
+Connected peers may be searched with search_flow_context and may receive send_flow_message.
 
-Incoming:
+Peers:
 - a | Auth | Implement OAuth login
-Outgoing:
 - c | UI | Integrate login API
 ```
 
@@ -518,8 +516,7 @@ It participates in model context but is not rendered as a user message.
 
 The formatted directory itself is used as a fingerprint. A new directory is injected only when this session's visible direct topology changes, including:
 
-- an incoming edge is added or removed
-- an outgoing edge is added or removed
+- a direct peer connection is added or removed
 - a direct neighbor's name changes
 - a direct neighbor's goal changes
 
@@ -538,10 +535,9 @@ After a server restart, the in-memory fingerprint cache is empty, so the next pr
 
 After directory injection, an Agent knows:
 
-- which direct upstream nodes are searchable
-- which direct downstream nodes are messageable
-- each direct node's ID, name, and current goal
-- which tools apply to each direction
+- which direct peers are searchable, readable, and messageable
+- each direct peer's ID, name, and current goal
+- which tools apply to connected peers
 
 It still does not know what the other session actually said or decided until it performs a permitted search and read.
 
@@ -679,8 +675,8 @@ Current automated coverage includes:
 
 - Flow topology persistence
 - preservation of message metadata during topology replacement
-- directed discovery and context-read permissions
-- connection directory direction and isolation
+- symmetric peer discovery and context-read permissions
+- connection directory updates and isolation
 - empty pi session persistence before any messages
 - existing authentication and provider usage behavior
 
@@ -704,7 +700,7 @@ A narrow regression used three long-lived Kimi K2.7 sessions: Agent Workspace, F
 
 The test covered:
 
-- exact upstream search for `MessageItem 用户气泡的 #a160fc14/33`
+- exact peer search for `MessageItem 用户气泡的 #a160fc14/33`
 - removal of the former synthetic `score` field
 - independent Workspace-to-Canvas and Runtime-to-Canvas dispatches
 - Flow message persistence
@@ -720,19 +716,19 @@ Observed results:
 - Canvas strictly acknowledged the second message, but its first acknowledgement also repeated an unrelated previously received canvas finding. This is an Agent instruction-following observation rather than a routing failure; narrow Flow prompts should not assume perfect response minimality.
 - Workspace's new dispatch incorrectly reused historical chain `76a26dc8-b7c0-4948-9f57-3cc37b375f3a` at hop 3. This is the chain-contamination defect described below.
 
-### 16.2 Canvas Message Activity Dogfood
+### 16.2 Canvas Collaboration Dogfood
 
-A short dogfood run verified the new directional activity rendering:
+The peer-connection work was implemented through the piflow canvas itself and reviewed in a browser. That run found three regressions that static checks did not catch:
 
-- polling only inspects `messages` and never replaces topology state
-- existing messages on first load are treated as seen, so no history replay occurs
-- new messages orient the arrow in the correct source-to-target direction, including reverse sends
-- stale or missing edge IDs are ignored without errors
-- timers clear on project switch and visibility change
-- `prefers-reduced-motion` shows a static arrow and highlight instead of looping animation
-- selected edges and 20 px hit area remain usable while activity is active
+- removing React Flow handles also removed the geometry anchors, so every persisted edge disappeared with error `#008`
+- the generated 20 px interaction path had no stroke and therefore no usable hit target
+- controlled edges had no `onEdgesChange` path, so edge selection was immediately overwritten and deletion was inaccessible
 
-The main residual friction was confirming that the active edge style does not fight the selected-edge style when both apply. Passing `selected` explicitly on the derived edge object keeps React Flow's selection state stable.
+Each regression was fixed in a separate follow-up commit and then browser-verified. Existing and newly created edges rendered without console warnings, duplicate connections produced feedback, edge selection and deletion worked, and the temporary test relationship was removed from local Flow data.
+
+The long-lived Flow Canvas session then stalled twice while producing the message-activity change. Moving the unfinished diff to a clean, narrowly scoped Flow Activity peer allowed the implementation to finish. This supports the product hypothesis that fresh peer sessions reduce the cost of project-level context switching, but it also exposed two operational limits: task handoff is still manual, and one medium-sized change consumed the remaining K2.7 five-hour allowance.
+
+The directional message activity itself has passed lint, type checking, tests, and build, but has not yet received the requested live send-and-reverse-send browser test because the K2.7 allowance reached zero immediately after the commit. The documentation must not treat that end-to-end behavior as verified until a real `send_flow_message` event is observed on an open canvas, including expiry back to a neutral edge and reduced-motion behavior.
 
 ## 17. MVP Non-Goals
 
@@ -789,7 +785,7 @@ Consequences:
 - quoted or retrieved content can influence routing metadata even though the server should own it
 - message history becomes unreliable for debugging collaboration sequences
 
-This does not bypass edge authorization: the current outgoing edge is still validated before sending. It is nevertheless a context-integrity and accounting defect.
+This does not bypass edge authorization: the current direct peer connection is still validated before sending. It is nevertheless a context-integrity and accounting defect.
 
 The fix must stop deriving trusted chain state from arbitrary model-visible text. Chain identity and hop count should be attached as structured server-side metadata to the inbound Flow turn, then read from that trusted state when a tool executes. A normal user prompt must start a fresh chain. Search results, context reads, assistant output, tool arguments, and quoted HTML comments must never create or advance a chain.
 
@@ -826,13 +822,13 @@ Keyword matching is predictable and cheap but misses synonyms and concepts expre
 
 ### 18.7 No Search-All Tool
 
-An Agent currently selects one incoming node and query. A possible future tool is:
+An Agent currently selects one connected peer and query. A possible future tool is:
 
 ```text
-search_all_upstream(query)
+search_all_peers(query)
 ```
 
-It would search all directly authorized incoming nodes without exposing indirect nodes. This should be added only if direct-directory discovery still produces frequent missed context.
+It would search all directly connected peers without exposing indirect nodes. This should be added only if direct-directory discovery still produces frequent missed context.
 
 ### 18.8 Canvas Status Is A Browser Projection
 
@@ -845,10 +841,10 @@ Priority should remain on reliability rather than adding node types.
 1. Move collaboration-chain identity and hop accounting out of model-visible text and add the Section 18.2 regressions.
 2. Serialize complete Flow store mutations per project.
 3. Publish authoritative state after Agent-to-Agent target turns settle.
-4. Dogfood directory injection and measure whether Agents correctly search relevant upstream sessions.
+4. Dogfood directory injection and measure whether Agents correctly search relevant peer sessions.
 5. Improve node goal editing and freshness before introducing automatic summaries.
 6. Add focused integration coverage for topology update, next-turn injection, and edge revocation.
-7. Evaluate `search_all_upstream` only after observing real retrieval failures.
+7. Evaluate `search_all_peers` only after observing real retrieval failures.
 8. Revisit worktrees only after concurrent-file conflicts become a demonstrated workflow problem.
 
 ## 20. Review Checklist
@@ -857,7 +853,7 @@ Any future Flow change should preserve these questions and answers:
 
 - Does a node still represent one independent pi session?
 - Can the user understand the direct communication topology?
-- Does every read or send operation have a current directed-edge authorization check?
+- Does every read or send operation have a current direct-peer authorization check?
 - Is collaboration-chain metadata derived only from trusted server state rather than model-visible text?
 - Can an Agent learn enough metadata to discover relevant context without inheriting it?
 - Is full content fetched only on demand and in bounded form?
