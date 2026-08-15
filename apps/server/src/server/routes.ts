@@ -67,7 +67,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       await sessions.prompt(managed, text, managed.session.isStreaming ? 'steer' : undefined)
     }
     catch (err) {
-      sse.broadcast({ type: 'error', session: managed.key, error: String(err) })
+      sessions.publishError(managed.key, String(err))
     }
     await publishState(managed)
     await publishSessions()

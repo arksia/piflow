@@ -1,5 +1,5 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import type { AgentEvent, ChatMessage, DirectoryListing, FlowNode, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState } from '@piflow/protocol'
+import type { AgentEvent, ChatMessage, DirectoryListing, FlowNode, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState, SessionStatus, SessionStatusRecord } from '@piflow/protocol'
 import type { FlowStore } from '../flow/store'
 import { readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -26,6 +26,8 @@ export interface SessionStore {
   getAvailableModels: () => Promise<ModelInfo[]>
   findModel: (provider: string, modelId: string) => AvailableModel | undefined
   getState: (managed: ManagedSession) => SessionState
+  getStatusSnapshot: () => SessionStatusRecord[]
+  publishError: (key: string, error: string) => void
 }
 
 interface CreateSessionStoreOptions {
@@ -38,9 +40,41 @@ interface CreateSessionStoreOptions {
 const CONTEXT_EVENTS = new Set(['message_end', 'compaction_end', 'agent_settled'])
 
 export function createSessionStore(options: CreateSessionStoreOptions): SessionStore {
-  const { rootCwd, modelRuntime, flow, publish } = options
+  const { rootCwd, modelRuntime, flow } = options
   const pool = new Map<string, ManagedSession>()
   const flowDirectories = new Map<string, string>()
+  const statuses = new Map<string, SessionStatusRecord>()
+  const publish = options.publish
+
+  function setStatus(managed: ManagedSession, status: SessionStatus) {
+    const record: SessionStatusRecord = {
+      key: managed.key,
+      sessionFile: managed.session.sessionFile ?? null,
+      status,
+      updatedAt: new Date().toISOString(),
+    }
+    const existing = statuses.get(managed.key)
+    if (existing && existing.status === record.status && existing.sessionFile === record.sessionFile)
+      return
+    statuses.set(managed.key, record)
+    publish({ type: 'status_delta', status: record })
+  }
+
+  function setStatusByKey(key: string, status: SessionStatus) {
+    const managed = pool.get(key)
+    if (!managed)
+      return
+    setStatus(managed, status)
+  }
+
+  function getStatusSnapshot(): SessionStatusRecord[] {
+    return Array.from(statuses.values())
+  }
+
+  function publishError(key: string, error: string) {
+    setStatusByKey(key, 'failed')
+    publish({ type: 'error', error, session: key })
+  }
 
   function toModelInfo(session: AgentSession): ModelInfo | null {
     const model = session.model
@@ -94,8 +128,15 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     pool.set(key, managed)
     if (session.sessionFile)
       pool.set(session.sessionFile, managed)
+    setStatus(managed, 'idle')
 
     session.subscribe((event) => {
+      if (event.type === 'agent_start' && managed)
+        setStatus(managed, 'running')
+      if (event.type === 'agent_settled' && managed) {
+        const settledStatus = settledStatusFromMessages(managed.session.messages as ChatMessage[])
+        setStatus(managed, settledStatus)
+      }
       const context = CONTEXT_EVENTS.has(event.type)
         ? (session.getContextUsage() ?? null) as SessionContext | null
         : undefined
@@ -192,8 +233,13 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   async function createFreshSession(cwd?: string, persist = false): Promise<ManagedSession> {
     const resolvedCwd = typeof cwd === 'string' ? (await listDirectories(cwd)).path : rootCwd
     const managed = await openSession({ cwd: resolvedCwd, fresh: true })
-    if (persist)
+    if (persist) {
       await persistEmptySession(managed.session.sessionManager)
+      const sessionFile = managed.session.sessionFile
+      if (sessionFile)
+        pool.set(sessionFile, managed)
+      setStatusByKey(managed.key, 'idle')
+    }
     return managed
   }
 
@@ -221,7 +267,18 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     getAvailableModels,
     findModel,
     getState,
+    getStatusSnapshot,
+    publishError,
   }
+}
+
+export function settledStatusFromMessages(messages: ChatMessage[]): 'idle' | 'failed' {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message?.role === 'assistant')
+      return message.stopReason === 'error' ? 'failed' : 'idle'
+  }
+  return 'idle'
 }
 
 export async function persistEmptySession(sessionManager: SessionManager) {
