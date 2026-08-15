@@ -23,6 +23,7 @@ export const store: StoreState = {
   usage: {},
   activeKey: null,
   views: {},
+  statuses: {},
   sidebarOpen: false,
 }
 

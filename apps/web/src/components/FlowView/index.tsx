@@ -557,10 +557,7 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
 }
 
 function statusFor(sessionPath: string, store: ReturnType<typeof useStore>): 'idle' | 'running' | 'failed' {
-  const view = Object.values(store.views).find(view => view.sessionFile === sessionPath || view.key === sessionPath)
-  if (view?.error)
-    return 'failed'
-  return view?.isStreaming ? 'running' : 'idle'
+  return store.statuses[sessionPath]?.status ?? 'idle'
 }
 
 function sessionLabel(session: SessionInfoLite) {

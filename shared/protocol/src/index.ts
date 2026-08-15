@@ -172,6 +172,15 @@ export interface SessionContext {
   percent: number
 }
 
+export type SessionStatus = 'idle' | 'running' | 'failed'
+
+export interface SessionStatusRecord {
+  key: string
+  sessionFile: string | null
+  status: SessionStatus
+  updatedAt: string
+}
+
 export interface ToolContentPart {
   type: string
   text?: string
@@ -212,6 +221,8 @@ export type ServerMessage
     | { type: 'models', models: ModelInfo[] }
     | { type: 'state', state: SessionState }
     | { type: 'event', session: string, event: AgentEvent, context?: SessionContext | null }
+    | { type: 'status_snapshot', statuses: SessionStatusRecord[] }
+    | { type: 'status_delta', status: SessionStatusRecord }
     | { type: 'error', error: string, session?: string }
 
 export interface HelloResponse {

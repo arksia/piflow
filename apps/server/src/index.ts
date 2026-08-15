@@ -18,6 +18,7 @@ const sessions = createSessionStore({
   flow,
   publish: sse.broadcast,
 })
+sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
 const serveStatic = createStaticHandler(config.webDist)
 const httpServer = createServer(createRequestHandler({
   config,

@@ -4,6 +4,7 @@ import type {
   ServerMessage,
   SessionInfoLite,
   SessionState,
+  SessionStatusRecord,
 } from '@piflow/protocol'
 import type { ToolState } from './state'
 import { readSavedActivePath, saveActiveSessionFile } from './persistence'
@@ -138,6 +139,23 @@ export function handleEvent(key: string, event: AgentEvent) {
   notify()
 }
 
+export function applyStatusSnapshot(statuses: SessionStatusRecord[]) {
+  const next: Record<string, SessionStatusRecord> = {}
+  for (const record of statuses)
+    next[record.sessionFile ?? record.key] = record
+  store.statuses = next
+  notify()
+}
+
+export function applyStatusDelta(status: SessionStatusRecord) {
+  const key = status.sessionFile ?? status.key
+  const current = store.statuses[key]
+  if (!current || status.updatedAt >= current.updatedAt) {
+    store.statuses[key] = status
+    notify()
+  }
+}
+
 export function route(message: ServerMessage, restoreSession: (path: string) => void) {
   switch (message.type) {
     case 'hello':
@@ -156,6 +174,14 @@ export function route(message: ServerMessage, restoreSession: (path: string) => 
 
     case 'state':
       applyState(message.state)
+      break
+
+    case 'status_snapshot':
+      applyStatusSnapshot(message.statuses)
+      break
+
+    case 'status_delta':
+      applyStatusDelta(message.status)
       break
 
     case 'event':

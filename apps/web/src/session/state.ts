@@ -3,6 +3,7 @@ import type {
   ModelInfo,
   SessionContext,
   SessionInfoLite,
+  SessionStatusRecord,
   ToolExecutionPayload,
   UsageReport,
 } from '@piflow/protocol'
@@ -40,5 +41,6 @@ export interface StoreState {
   usage: Record<string, UsageReport>
   activeKey: string | null
   views: Record<string, SessionView>
+  statuses: Record<string, SessionStatusRecord>
   sidebarOpen: boolean
 }
