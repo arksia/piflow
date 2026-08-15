@@ -118,8 +118,11 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
           const target = await resolveFlowTarget(node, projectPath)
           return toToolSession(target)
         },
-        onDispatchError: (error) => {
-          publish({ type: 'error', error: String(error), session: managed?.key })
+        onDispatchError: (target, error) => {
+          if (target.sessionPath)
+            publishError(target.sessionPath, String(error))
+          else
+            publish({ type: 'error', error: String(error) })
         },
       }),
     })
