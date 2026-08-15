@@ -21,7 +21,7 @@ interface CreateFlowToolsOptions {
   flow: FlowStore
   source: () => ToolSession | undefined
   resolveTarget: (node: FlowNode, projectPath: string) => Promise<ToolSession>
-  onDispatchError: (error: unknown) => void
+  onDispatchError: (target: ToolSession, error: unknown) => void
 }
 
 export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition[] {
@@ -91,7 +91,7 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
         '',
         `<!-- piflow:chain=${chain.id};hop=${hop} -->`,
       ].join('\n')
-      void target.prompt(envelope, target.isStreaming).catch(options.onDispatchError)
+      void target.prompt(envelope, target.isStreaming).catch(error => options.onDispatchError(target, error))
       return textResult(`Message sent to ${targetNode.name} (${hop}/${MAX_HOPS} in this collaboration chain).`)
     },
   })
