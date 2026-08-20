@@ -48,6 +48,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
     ? `上下文已用 ${contextPercent}%（${formatTokens(view.context.tokens)} / ${formatTokens(view.context.contextWindow)}）`
     : ''
   const canSend = store.connected && text.trim().length > 0
+  const isLive = store.connected && !!view?.isStreaming
   const ringStyle = { '--p': contextPercent } as CSSProperties
 
   const viewKey = view?.key
@@ -140,7 +141,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
             )
           : null}
 
-        <div className={`${styles.box} ${view?.isStreaming ? styles.streaming : ''}`}>
+        <div className={`${styles.box} ${isLive ? styles.streaming : ''}`}>
           <textarea
             ref={areaRef}
             value={text}
@@ -151,7 +152,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
           />
           <div className={styles.footer}>
             <div className={styles.left}>
-              {view?.isStreaming
+              {isLive
                 ? (
                     <span className={styles.steer}>
                       <span className={styles.dot} />
@@ -190,7 +191,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                     </button>
                   )
                 : null}
-              {view?.isStreaming
+              {isLive
                 ? (
                     <button
                       className={`${styles.button} ${styles.ring} ${styles.stop} ${contextLevel}`}
