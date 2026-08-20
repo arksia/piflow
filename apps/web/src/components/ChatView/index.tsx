@@ -111,11 +111,12 @@ export default function ChatView({ onShowFlow }: ChatViewProps) {
 
   const isEmpty = !view || view.messages.length === 0
   const chatStyle = { '--chat-w': `${WIDTHS[widthIndex] ?? WIDTHS[1]}px` } as CSSProperties
-  const statusText = !store.connected
+  const isLive = store.connected && !!view?.isStreaming
+  const statusLabel = !store.connected
     ? '连接中…'
     : view?.isCompacting
       ? '压缩上下文'
-      : view?.isStreaming
+      : isLive
         ? '生成中'
         : ''
 
@@ -139,7 +140,7 @@ export default function ChatView({ onShowFlow }: ChatViewProps) {
         <span ref={titleRef} className={styles.title}>{title}</span>
         <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
         <button className={styles.width} title="切换聊天宽度" aria-label="切换聊天宽度" onClick={cycleWidth}>⇔</button>
-        <span className={`${styles.status} ${statusText ? styles.on : ''}`}>{statusText}</span>
+        <span className={`${styles.status} ${statusLabel ? styles.on : ''}`}>{statusLabel}</span>
       </header>
 
       <div ref={scrollerRef} className={`${styles.scroll} ${isEmpty ? styles.centered : ''}`} onScroll={onScroll}>
@@ -165,7 +166,7 @@ export default function ChatView({ onShowFlow }: ChatViewProps) {
                   />
                 ))}
                 {view.live ? <MessageItem message={view.live} toolResults={view.toolResults} live /> : null}
-                {view.isStreaming && !view.live
+                {isLive && !view.live
                   ? (
                       <div className={styles.pending}>
                         <span className={styles.dot} />
@@ -173,7 +174,7 @@ export default function ChatView({ onShowFlow }: ChatViewProps) {
                       </div>
                     )
                   : null}
-                {view.isCompacting ? <div className={styles.note}>正在压缩上下文…</div> : null}
+                {store.connected && view.isCompacting ? <div className={styles.note}>正在压缩上下文…</div> : null}
                 {view.error ? <div className={styles.error}>{view.error}</div> : null}
               </div>
             )}
