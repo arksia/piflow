@@ -1,5 +1,10 @@
 .message {
   margin-bottom: 20px;
+  content-visibility: auto;
+
+  /* 160px accounts for typical tool cards and thinking blocks,
+     reducing scroll position jumps when offscreen messages enter the viewport. */
+  contain-intrinsic-size: auto 160px;
 }
 
 .user {
