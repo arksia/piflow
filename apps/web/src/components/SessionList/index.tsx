@@ -1,5 +1,5 @@
 import type { SessionInfoLite } from '@piflow/protocol'
-import { useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { newSessionIn, openSession } from '../../session/actions'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
@@ -29,16 +29,28 @@ function label(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
 }
 
-export default function SessionList() {
+function projectName(cwd: string) {
+  const trimmed = cwd.replace(/\/+$/, '')
+  return trimmed.split('/').pop() || cwd
+}
+
+interface SessionListProps {
+  onToggleSidebar: () => void
+}
+
+function SessionList({ onToggleSidebar }: SessionListProps) {
   const store = useStore()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
-  const byCwd = new Map<string, SessionInfoLite[]>()
-  for (const session of store.sessions) {
-    const sessions = byCwd.get(session.cwd) ?? []
-    sessions.push(session)
-    byCwd.set(session.cwd, sessions)
-  }
+  const byCwd = useMemo(() => {
+    const map = new Map<string, SessionInfoLite[]>()
+    for (const session of store.sessions) {
+      const sessions = map.get(session.cwd) ?? []
+      sessions.push(session)
+      map.set(session.cwd, sessions)
+    }
+    return map
+  }, [store.sessions])
 
   async function pick(session: SessionInfoLite) {
     if (!store.connected)
@@ -68,20 +80,29 @@ export default function SessionList() {
     }
   }
 
+  const projectCount = byCwd.size
+
   return (
     <>
       <div className={styles.list}>
         <div className={styles.top}>
-          <span className={styles.brand}>piflow</span>
-          <button className={styles.newSession} title="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
-            + 新会话
-          </button>
+          <div>
+            <span className={styles.brand}>piflow</span>
+            <span className={styles.subtitle}>coding workspace</span>
+          </div>
+          <div className={styles.topActions}>
+            <button className={styles.newSession} title="新会话" aria-label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>+</button>
+            <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}>☰</button>
+          </div>
         </div>
 
         {[...byCwd.entries()].map(([cwd, sessions]) => (
           <div key={cwd} className={styles.group}>
             <div className={styles.cwdRow}>
-              <div className={styles.cwd} title={cwd}>{shorten(cwd)}</div>
+              <div className={styles.projectIdentity}>
+                <div className={styles.projectName} title={cwd}>{projectName(cwd)}</div>
+                <div className={styles.cwd} title={cwd}>{shorten(cwd)}</div>
+              </div>
               <button
                 className={styles.projectNew}
                 title={`在 ${shorten(cwd)} 中新建会话`}
@@ -115,6 +136,12 @@ export default function SessionList() {
         ))}
 
         {!store.connected ? <div className={styles.offline}>连接中…</div> : null}
+        <div className={styles.footer}>
+          {projectCount}
+          {' 个项目 · '}
+          {store.sessions.length}
+          {' 个会话'}
+        </div>
       </div>
       {newSessionOpen
         ? (
@@ -131,3 +158,5 @@ export default function SessionList() {
     </>
   )
 }
+
+export default memo(SessionList)
