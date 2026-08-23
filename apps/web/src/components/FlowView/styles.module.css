@@ -10,12 +10,28 @@
 .bar {
   z-index: 4;
   display: flex;
-  min-height: 57px;
+  min-height: 58px;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
+  margin: 0 8px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--c-line);
   background: var(--c-bg);
+}
+
+.menu {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--c-muted);
+  font-size: 0.95rem;
+}
+
+.menu:hover {
+  color: var(--c-ink);
 }
 
 .heading {
@@ -263,6 +279,10 @@
 }
 
 @media (width <= 768px) {
+  .menu {
+    display: none;
+  }
+
   .workspace {
     display: none;
   }
