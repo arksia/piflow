@@ -7,7 +7,7 @@
     "build": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.80.7",

@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
-import { canAccessNode, createFlowStore, findConnection, listConnectedNodes } from './flow/store'
-import { formatFlowDirectory, searchMessages } from './flow/tools'
+import { canAccessNode, createFlowStore, findConnection, listConnectedNodes } from './store'
+import { formatFlowDirectory, searchMessages } from './tools'
 
 it('persists topology without allowing topology updates to erase message history', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
