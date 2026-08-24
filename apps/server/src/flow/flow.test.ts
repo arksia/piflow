@@ -52,11 +52,11 @@ it('uses connections as symmetric discovery and context boundaries', () => {
   assert.equal(canAccessNode(document, 'c', 'a'), false)
   assert.equal(findConnection(document, 'b', 'a')?.id, 'a-b')
 
-  const directoryA = formatFlowDirectory(document, '/project/a.jsonl')
+  const directoryA = formatFlowDirectory(document, join('/project', 'a.jsonl'))
   assert.match(directoryA ?? '', /Peers:\n- b \| Module B/)
   assert.doesNotMatch(directoryA ?? '', /Isolated/)
 
-  const directoryB = formatFlowDirectory(document, '/project/b.jsonl')
+  const directoryB = formatFlowDirectory(document, join('/project', 'b.jsonl'))
   assert.match(directoryB ?? '', /Peers:\n- a \| Module A/)
 })
 
