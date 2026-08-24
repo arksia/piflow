@@ -144,8 +144,8 @@ The main modules are:
 
 - [`flow/store.ts`](../apps/server/src/flow/store.ts): schema parsing, local persistence, and graph permission helpers
 - [`flow/tools.ts`](../apps/server/src/flow/tools.ts): pi custom tools, bounded retrieval, message dispatch, and connection directory formatting
-- [`server/sessions.ts`](../apps/server/src/server/sessions.ts): pi session lifecycle, target resolution, empty-session persistence, and pre-turn directory injection
-- [`server/routes.ts`](../apps/server/src/server/routes.ts): Flow HTTP routes and project ownership validation
+- [`server/sessions.ts`](../apps/server/src/core/sessions.ts): pi session lifecycle, target resolution, empty-session persistence, and pre-turn directory injection
+- [`server/routes.ts`](../apps/server/src/core/routes.ts): Flow HTTP routes and project ownership validation
 
 ### 5.3 Canonical Ownership
 
