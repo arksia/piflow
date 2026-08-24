@@ -1,7 +1,7 @@
 import type { ChatMessage } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { settledStatusFromMessages } from './server/sessions'
+import { settledStatusFromMessages } from './core/sessions'
 
 it('marks settled as failed when the last assistant message stopped on error', () => {
   const messages: ChatMessage[] = [

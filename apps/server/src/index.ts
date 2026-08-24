@@ -1,11 +1,11 @@
 import { createServer } from 'node:http'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
+import { loadConfig } from './core/config'
+import { createStaticHandler } from './core/http'
+import { createRequestHandler } from './core/routes'
+import { createSessionStore } from './core/sessions'
+import { createSseHub } from './core/sse'
 import { createFlowStore } from './flow/store'
-import { loadConfig } from './server/config'
-import { createStaticHandler } from './server/http'
-import { createRequestHandler } from './server/routes'
-import { createSessionStore } from './server/sessions'
-import { createSseHub } from './server/sse'
 import { getUsage } from './usage/index'
 
 const config = loadConfig()

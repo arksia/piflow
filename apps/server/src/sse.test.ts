@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import assert from 'node:assert/strict'
 import { Readable, Writable } from 'node:stream'
 import { it } from 'node:test'
-import { createSseHub } from './server/sse'
+import { createSseHub } from './core/sse'
 
 function mockRequest(): IncomingMessage {
   const req = new Readable({ read() {} }) as IncomingMessage

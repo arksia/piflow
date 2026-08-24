@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
-import { persistEmptySession } from './server/sessions'
+import { persistEmptySession } from './core/sessions'
 
 it('persists a new session before it has any messages', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-session-'))
