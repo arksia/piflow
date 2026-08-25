@@ -8,11 +8,14 @@ export function notify() {
   version++
   if (flushFrame)
     return
-  flushFrame = requestAnimationFrame(() => {
+  const flush = () => {
     flushFrame = 0
     for (const listener of listeners)
       listener()
-  })
+  }
+  // Hidden tabs never fire rAF; fall back to a timer so SSE-driven updates
+  // are not dropped while the page is backgrounded.
+  flushFrame = document.hidden ? setTimeout(flush, 100) : requestAnimationFrame(flush)
 }
 
 export const store: StoreState = {
