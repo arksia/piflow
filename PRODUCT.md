@@ -1,7 +1,7 @@
 # Product
 
 Name: `piflow`
-Platform: `apps/web`
+Platform: `packages/web`
 Register: `product`
 Date: `2026-07-31`
 
