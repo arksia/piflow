@@ -127,14 +127,14 @@ The frontend uses React 19, Vite, and `@xyflow/react`.
 
 The project moved from its early Vue direction to React while the codebase was still small. Vite was retained because the bundler and development model did not require replacement. `@xyflow/react` was selected instead of hand-building canvas pan, zoom, selection, handles, edge routing, and accessibility behavior. The React migration also aligns the implementation with the ecosystem used by the visual workflow products that informed the Flow interaction model.
 
-Flow is lazy-loaded from [`apps/web/src/App.tsx`](../apps/web/src/App.tsx), so the canvas dependency does not block the initial chat route.
+Flow is lazy-loaded from [`packages/web/src/App.tsx`](../packages/web/src/App.tsx), so the canvas dependency does not block the initial chat route.
 
 The main components are:
 
-- [`FlowView`](../apps/web/src/components/FlowView/index.tsx): canvas state, persistence, topology editing, node creation, selection, and navigation
-- [`FlowSessionNode`](../apps/web/src/components/FlowSessionNode/index.tsx): session node presentation and handles
-- [`ViewSwitch`](../apps/web/src/components/ViewSwitch/index.tsx): dedicated Chat/Flow mode switch
-- [`flow/api.ts`](../apps/web/src/flow/api.ts): typed Flow HTTP client
+- [`FlowView`](../packages/web/src/components/FlowView/index.tsx): canvas state, persistence, topology editing, node creation, selection, and navigation
+- [`FlowSessionNode`](../packages/web/src/components/FlowSessionNode/index.tsx): session node presentation and handles
+- [`ViewSwitch`](../packages/web/src/components/ViewSwitch/index.tsx): dedicated Chat/Flow mode switch
+- [`flow/api.ts`](../packages/web/src/flow/api.ts): typed Flow HTTP client
 
 ### 5.2 Server
 
@@ -142,10 +142,10 @@ The server owns authoritative Flow persistence and all Agent capabilities.
 
 The main modules are:
 
-- [`flow/store.ts`](../apps/server/src/flow/store.ts): schema parsing, local persistence, and graph permission helpers
-- [`flow/tools.ts`](../apps/server/src/flow/tools.ts): pi custom tools, bounded retrieval, message dispatch, and connection directory formatting
-- [`server/sessions.ts`](../apps/server/src/core/sessions.ts): pi session lifecycle, target resolution, empty-session persistence, and pre-turn directory injection
-- [`server/routes.ts`](../apps/server/src/core/routes.ts): Flow HTTP routes and project ownership validation
+- [`flow/store.ts`](../packages/server/src/flow/store.ts): schema parsing, local persistence, and graph permission helpers
+- [`flow/tools.ts`](../packages/server/src/flow/tools.ts): pi custom tools, bounded retrieval, message dispatch, and connection directory formatting
+- [`server/sessions.ts`](../packages/server/src/core/sessions.ts): pi session lifecycle, target resolution, empty-session persistence, and pre-turn directory injection
+- [`server/routes.ts`](../packages/server/src/core/routes.ts): Flow HTTP routes and project ownership validation
 
 ### 5.3 Canonical Ownership
 

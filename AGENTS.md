@@ -9,7 +9,7 @@ piflow is a browser GUI for the [pi coding agent](https://github.com/earendil-wo
 ## Repository layout
 
 ```
-apps/
+packages/
 ├── server/          # Node.js backend (runs via tsx, no build step for dev)
 │   └── src/
 │       ├── core/    # HTTP/SSE server: config, http, routes, sessions, sse
@@ -22,7 +22,8 @@ apps/
 │       ├── session/     # Global state: reducer, store, transport, api
 │       ├── flow/        # Flow canvas HTTP client
 │       └── markdown/    # Streaming markdown pipeline (shiki, sanitize)
-└── cli/             # (planned) CLI + daemon
+├── cli/             # (planned) CLI + daemon
+└── builtin-extensions/  # (planned) built-in pi extensions
 
 shared/
 └── protocol/        # @piflow/protocol — shared TS types (ServerMessage, etc.)
@@ -54,13 +55,13 @@ pnpm build          # production build (web dist + server tsc)
 
 | Concern | File |
 |---|---|
-| Server bootstrap | `apps/server/src/index.ts` |
-| HTTP routes + auth | `apps/server/src/core/routes.ts` |
-| Session lifecycle | `apps/server/src/core/sessions.ts` |
-| Flow agent tools | `apps/server/src/flow/tools.ts` |
-| Flow persistence | `apps/server/src/flow/store.ts` |
-| Frontend event projection | `apps/web/src/session/reducer.ts` |
-| SSE transport | `apps/web/src/session/transport.ts` |
+| Server bootstrap | `packages/server/src/index.ts` |
+| HTTP routes + auth | `packages/server/src/core/routes.ts` |
+| Session lifecycle | `packages/server/src/core/sessions.ts` |
+| Flow agent tools | `packages/server/src/flow/tools.ts` |
+| Flow persistence | `packages/server/src/flow/store.ts` |
+| Frontend event projection | `packages/web/src/session/reducer.ts` |
+| SSE transport | `packages/web/src/session/transport.ts` |
 
 ## Non-negotiables
 

@@ -1,6 +1,6 @@
 # Design Review
 
-Target: `apps/web`
+Target: `packages/web`
 Date: `2026-07-31`
 
 ## Summary
@@ -25,8 +25,8 @@ Fix:
 - Rename internal terms like `steer` and `thinking` into plain language.
 
 Relevant files:
-- [`apps/web/src/components/ChatView/index.tsx`](./apps/web/src/components/ChatView/index.tsx)
-- [`apps/web/src/components/InputBar/index.tsx`](./apps/web/src/components/InputBar/index.tsx)
+- [`packages/web/src/components/ChatView/index.tsx`](./packages/web/src/components/ChatView/index.tsx)
+- [`packages/web/src/components/InputBar/index.tsx`](./packages/web/src/components/InputBar/index.tsx)
 
 ### P1 - Flattened hierarchy from opacity
 
@@ -38,8 +38,8 @@ Fix:
 - Strengthen selected, hover, and focus-visible states.
 
 Relevant files:
-- [`apps/web/src/styles/main.css`](./apps/web/src/styles/main.css)
-- [`apps/web/src/components/SessionList/styles.module.css`](./apps/web/src/components/SessionList/styles.module.css)
+- [`packages/web/src/styles/main.css`](./packages/web/src/styles/main.css)
+- [`packages/web/src/components/SessionList/styles.module.css`](./packages/web/src/components/SessionList/styles.module.css)
 
 ### P1 - State overload
 
@@ -51,9 +51,9 @@ Fix:
 - Respect reduced motion for every animated state.
 
 Relevant files:
-- [`apps/web/src/components/ChatView/styles.module.css`](./apps/web/src/components/ChatView/styles.module.css)
-- [`apps/web/src/components/InputBar/styles.module.css`](./apps/web/src/components/InputBar/styles.module.css)
-- [`apps/web/src/components/MessageItem/styles.module.css`](./apps/web/src/components/MessageItem/styles.module.css)
+- [`packages/web/src/components/ChatView/styles.module.css`](./packages/web/src/components/ChatView/styles.module.css)
+- [`packages/web/src/components/InputBar/styles.module.css`](./packages/web/src/components/InputBar/styles.module.css)
+- [`packages/web/src/components/MessageItem/styles.module.css`](./packages/web/src/components/MessageItem/styles.module.css)
 
 ### P2 - Tool output is truncated too aggressively
 
@@ -65,8 +65,8 @@ Fix:
 - Visually distinguish mutation, success, and failure states.
 
 Relevant files:
-- [`apps/web/src/components/ToolCallCard/index.tsx`](./apps/web/src/components/ToolCallCard/index.tsx)
-- [`apps/web/src/components/ToolCallCard/styles.module.css`](./apps/web/src/components/ToolCallCard/styles.module.css)
+- [`packages/web/src/components/ToolCallCard/index.tsx`](./packages/web/src/components/ToolCallCard/index.tsx)
+- [`packages/web/src/components/ToolCallCard/styles.module.css`](./packages/web/src/components/ToolCallCard/styles.module.css)
 
 ### P2 - Mobile and popover safeguards are thin
 
@@ -79,15 +79,15 @@ Fix:
 - Expose `aria-expanded` and a clearer dismissal path.
 
 Relevant files:
-- [`apps/web/src/App.tsx`](./apps/web/src/App.tsx)
-- [`apps/web/src/App.module.css`](./apps/web/src/App.module.css)
-- [`apps/web/src/components/InputBar/index.tsx`](./apps/web/src/components/InputBar/index.tsx)
+- [`packages/web/src/App.tsx`](./packages/web/src/App.tsx)
+- [`packages/web/src/App.module.css`](./packages/web/src/App.module.css)
+- [`packages/web/src/components/InputBar/index.tsx`](./packages/web/src/components/InputBar/index.tsx)
 
 ## Deterministic Scan Notes
 
-- `layout-transition` warning in `apps/web/src/components/ChatView/styles.module.css`
-- `layout-transition` warning in `apps/web/src/components/InputBar/styles.module.css`
-- `side-tab` warning in `apps/web/src/components/MessageItem/styles.module.css`
+- `layout-transition` warning in `packages/web/src/components/ChatView/styles.module.css`
+- `layout-transition` warning in `packages/web/src/components/InputBar/styles.module.css`
+- `side-tab` warning in `packages/web/src/components/MessageItem/styles.module.css`
 
 ## Follow-up
 

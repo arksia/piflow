@@ -272,7 +272,7 @@
 - 可见状态：断线时标题栏显示“连接中…”，同时输入区仍显示“回复中 · 发送将插队传达”（互相矛盾）；重连后 `resync → applyState` 无条件把 `isStreaming` 覆盖为 false，会话安静回到空闲，没有任何“上次运行已中断”的提示。
 - 发生的阻塞或误解：状态不可信——用户无法区分“已完成”和“被杀死”。
 - 影响等级：P0
-- 证据：`apps/web/src/components/ChatView/index.tsx`（statusText 只看 connected/isCompacting/isStreaming）；`apps/web/src/components/InputBar/index.tsx`（“回复中”只看 `view.isStreaming`）；`apps/web/src/session/reducer.ts` `applyState` 无条件覆盖；`apps/server/src/core/sessions.ts` `openSession` 无条件 `setStatus(managed, 'idle')`，且内存 `statuses` registry 随进程消失。
+- 证据：`packages/web/src/components/ChatView/index.tsx`（statusText 只看 connected/isCompacting/isStreaming）；`packages/web/src/components/InputBar/index.tsx`（“回复中”只看 `view.isStreaming`）；`packages/web/src/session/reducer.ts` `applyState` 无条件覆盖；`packages/server/src/core/sessions.ts` `openSession` 无条件 `setStatus(managed, 'idle')`，且内存 `statuses` registry 随进程消失。
 - 最小修复：本轮仅修复断线状态矛盾——ChatView/InputBar 用局部 `isLive = store.connected && !!view?.isStreaming` 同时门控 streaming 样式、“回复中”文案、“正在生成…”和停止/发送按钮分支，断线时一律只显示“连接中…”并回到发送按钮。曾尝试“从持久消息推导 interrupted”，因协议无 server generation、异常终止无可区分的 stopReason，不满足“可靠”而被驳回；**interrupted 本轮未实现**，留待有 server generation 语义后再做。
 - 是否需要协议或 server 改动：本轮否（改动只在 Web 组件内）；`interrupted` 需要 server generation 支持，未做。
 
@@ -283,7 +283,7 @@
 - 可见状态：任务可找到，但标题是首条长 prompt 的截断，无法一眼确认目标。
 - 发生的阻塞或误解：操作不可发现/辨识成本高，非阻塞。
 - 影响等级：P1
-- 证据：`apps/server/src/core/sessions.ts` `listSessions` 使用 `firstMessage.slice(0, 120)`；`apps/web/src/components/SessionList/index.tsx` 以 `name || firstMessage` 显示。
+- 证据：`packages/server/src/core/sessions.ts` `listSessions` 使用 `firstMessage.slice(0, 120)`；`packages/web/src/components/SessionList/index.tsx` 以 `name || firstMessage` 显示。
 - 最小修复：P1 阶段的会话重命名；本轮不动。
 - 是否需要协议或 server 改动：否（重命名需要 server 支持时另行评估）。
 
@@ -294,7 +294,7 @@
 - 可见状态：项目路径（NewSessionDialog 目录选择）、当前模型名、各 provider 额度窗口与重置时间、上下文用量百分比均直接可见。
 - 发生的阻塞或误解：无。这是值得保留的正向体验。
 - 影响等级：无（正向记录）
-- 证据：`apps/web/src/components/InputBar/index.tsx` `formatWindow`/quota/model 按钮；`apps/web/src/components/NewSessionDialog/index.tsx`。
+- 证据：`packages/web/src/components/InputBar/index.tsx` `formatWindow`/quota/model 按钮；`packages/web/src/components/NewSessionDialog/index.tsx`。
 - 最小修复：无。
 - 是否需要协议或 server 改动：否。
 
@@ -305,7 +305,7 @@
 - 可见状态：对开发者表现为“API 坏了”，实际是认证 bootstrap 不可见。
 - 发生的阻塞或误解：loopback 下 `/auth` 无条件 204 并种 cookie，`/api/*` 只认 cookie；浏览器 `transport.ts` 先打 `/auth`，CLI 用户无从得知这一步。
 - 影响等级：P2（开发者体验，不阻塞产品用户）
-- 证据：`apps/server/src/core/routes.ts` `handleAuthRequest`（`config.isLoopback || suppliedToken === …`）与 `isAuthenticated`（只查 cookie）；`apps/web/src/session/transport.ts` `connect()` 先请求 `buildAuthPath`。
+- 证据：`packages/server/src/core/routes.ts` `handleAuthRequest`（`config.isLoopback || suppliedToken === …`）与 `isAuthenticated`（只查 cookie）；`packages/web/src/session/transport.ts` `connect()` 先请求 `buildAuthPath`。
 - 最小修复：在 README 或 server 启动日志中说明 `/auth` bootstrap；本轮不改代码。
 - 是否需要协议或 server 改动：否。
 
