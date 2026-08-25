@@ -1,6 +1,8 @@
 export {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
+  API_EXTENSIONS_PATH,
+  API_EXTENSIONS_UI_RESPONSE_PATH,
   API_FLOW_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
@@ -191,6 +193,52 @@ export interface ToolExecutionPayload {
   details?: Record<string, unknown>
 }
 
+export interface ExtensionSourceInfo {
+  source: string
+  scope: 'user' | 'project'
+  filtered: boolean
+  installedPath?: string
+}
+
+export type ExtensionUIMethod = 'select' | 'confirm' | 'input' | 'notify'
+
+export interface ExtensionUIRequest {
+  id: string
+  method: ExtensionUIMethod
+  title?: string
+  message?: string
+  options?: string[]
+  placeholder?: string
+  notifyType?: 'info' | 'warning' | 'error'
+}
+
+export interface ExtensionUIResponse {
+  id: string
+  session: string
+  cancelled?: boolean
+  value?: string
+  confirmed?: boolean
+}
+
+export interface ExtensionsResponse {
+  extensions: ExtensionSourceInfo[]
+}
+
+export interface InstallExtensionRequest {
+  source: string
+  local?: boolean
+}
+
+export interface RemoveExtensionRequest {
+  source: string
+  local?: boolean
+}
+
+export interface ExtensionChangeResponse {
+  ok: true
+  reloaded: number
+}
+
 export interface SessionState {
   key: string
   sessionId?: string
@@ -201,6 +249,7 @@ export interface SessionState {
   thinkingLevel?: string | null
   thinkingLevels?: string[]
   context?: SessionContext | null
+  extensionRequests: ExtensionUIRequest[]
 }
 
 export interface AgentEvent {
@@ -223,6 +272,7 @@ export type ServerMessage
     | { type: 'event', session: string, event: AgentEvent, context?: SessionContext | null }
     | { type: 'status_snapshot', statuses: SessionStatusRecord[] }
     | { type: 'status_delta', status: SessionStatusRecord }
+    | { type: 'extension_ui_request', session: string, request: ExtensionUIRequest }
     | { type: 'error', error: string, session?: string }
 
 export interface HelloResponse {

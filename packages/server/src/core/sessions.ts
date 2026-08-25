@@ -1,9 +1,11 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import type { AgentEvent, ChatMessage, DirectoryListing, FlowNode, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState, SessionStatus, SessionStatusRecord } from '@piflow/protocol'
+import type { AgentEvent, ChatMessage, DirectoryListing, ExtensionUIResponse, FlowNode, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState, SessionStatus, SessionStatusRecord } from '@piflow/protocol'
+import type { UiBridge } from '../extensions/ui-bridge'
 import type { FlowStore } from '../flow/store'
 import { readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { createAgentSession, SessionManager } from '@earendil-works/pi-coding-agent'
+import { createUiBridge } from '../extensions/ui-bridge'
 import { createFlowTools, formatFlowDirectory } from '../flow/tools'
 
 type ModelRuntimeInstance = Awaited<ReturnType<typeof ModelRuntime.create>>
@@ -14,6 +16,15 @@ export interface ManagedSession {
   key: string
   cwd: string
   session: AgentSession
+  uiBridge: UiBridge
+}
+
+/** Thrown when a session-level mutation is rejected because sessions are streaming. */
+export class SessionsStreamingError extends Error {
+  constructor(public readonly keys: string[]) {
+    super(`sessions are streaming: ${keys.join(', ')}`)
+    this.name = 'SessionsStreamingError'
+  }
 }
 
 export interface SessionStore {
@@ -28,6 +39,8 @@ export interface SessionStore {
   getState: (managed: ManagedSession) => SessionState
   getStatusSnapshot: () => SessionStatusRecord[]
   publishError: (key: string, error: string) => void
+  reloadExtensions: () => Promise<number>
+  respondExtensionUi: (response: ExtensionUIResponse) => boolean
 }
 
 interface CreateSessionStoreOptions {
@@ -92,6 +105,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       thinkingLevels: managed.session.getAvailableThinkingLevels(),
       context: (managed.session.getContextUsage() ?? null) as SessionContext | null,
       messages: managed.session.messages as ChatMessage[],
+      extensionRequests: managed.uiBridge.pendingRequests(),
     }
   }
 
@@ -127,10 +141,11 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       }),
     })
 
-    managed = { key, cwd, session }
+    managed = { key, cwd, session, uiBridge: createUiBridge(key, publish) }
     pool.set(key, managed)
     if (session.sessionFile)
       pool.set(session.sessionFile, managed)
+    await session.bindExtensions({ uiContext: managed.uiBridge.context, mode: 'rpc' })
     setStatus(managed, 'idle')
 
     session.subscribe((event) => {
@@ -260,6 +275,33 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       .find(model => model.provider === provider && model.id === modelId)
   }
 
+  function activeSessions(): ManagedSession[] {
+    return Array.from(new Set(pool.values()))
+  }
+
+  async function reloadExtensions(): Promise<number> {
+    const active = activeSessions()
+    const streaming = active.filter(managed => managed.session.isStreaming).map(managed => managed.key)
+    if (streaming.length > 0)
+      throw new SessionsStreamingError(streaming)
+    for (const managed of active) {
+      // reload() tears down the extension runtime; suspended dialogs are dead afterwards.
+      managed.uiBridge.cancelPending()
+      await managed.session.reload()
+      await managed.session.bindExtensions({ uiContext: managed.uiBridge.context, mode: 'rpc' })
+      publish({ type: 'state', state: getState(managed) })
+    }
+    return active.length
+  }
+
+  function respondExtensionUi(response: ExtensionUIResponse): boolean {
+    const managed = pool.get(response.session)
+    if (!managed)
+      return false
+    managed.uiBridge.handleResponse(response)
+    return true
+  }
+
   return {
     createFreshSession,
     openSavedSession,
@@ -272,6 +314,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     getState,
     getStatusSnapshot,
     publishError,
+    reloadExtensions,
+    respondExtensionUi,
   }
 }
 

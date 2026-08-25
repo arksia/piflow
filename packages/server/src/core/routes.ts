@@ -1,12 +1,17 @@
 import type {
   ApiOkResponse,
   DirectoriesResponse,
+  ExtensionChangeResponse,
+  ExtensionsResponse,
+  ExtensionUIResponse,
   FlowDocumentResponse,
   HelloResponse,
+  InstallExtensionRequest,
   ModelsResponse,
   NewSessionRequest,
   OpenSessionRequest,
   PromptRequest,
+  RemoveExtensionRequest,
   ReplaceFlowRequest,
   SessionsResponse,
   SessionStateResponse,
@@ -16,6 +21,7 @@ import type {
   UsageWindow,
 } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ExtensionManager } from '../extensions/manager'
 import type { FlowStore } from '../flow/store'
 import type { ServerConfig } from './config'
 import type { StaticHandler } from './http'
@@ -24,6 +30,8 @@ import type { SseHub } from './sse'
 import {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
+  API_EXTENSIONS_PATH,
+  API_EXTENSIONS_UI_RESPONSE_PATH,
   API_FLOW_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
@@ -36,6 +44,7 @@ import {
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
 import { json, readBody } from './http'
+import { SessionsStreamingError } from './sessions'
 
 interface UsageSnapshot {
   plan?: string
@@ -49,10 +58,11 @@ interface CreateRequestHandlerOptions {
   serveStatic: StaticHandler
   getUsage: (provider: string, fresh?: boolean) => Promise<UsageSnapshot | null>
   flow: FlowStore
+  extensions: ExtensionManager
 }
 
 export function createRequestHandler(options: CreateRequestHandlerOptions) {
-  const { config, sessions, sse, serveStatic, getUsage, flow } = options
+  const { config, sessions, sse, serveStatic, getUsage, flow, extensions } = options
 
   async function publishState(managed: ManagedSession) {
     sse.broadcast({ type: 'state', state: sessions.getState(managed) })
@@ -71,6 +81,20 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     }
     await publishState(managed)
     await publishSessions()
+  }
+
+  async function reloadAfterExtensionChange(res: ServerResponse) {
+    try {
+      const reloaded = await sessions.reloadExtensions()
+      return json(res, 200, { ok: true, reloaded } satisfies ExtensionChangeResponse)
+    }
+    catch (err) {
+      if (err instanceof SessionsStreamingError) {
+        // The change is already persisted; it takes effect once sessions can reload.
+        return json(res, 409, { error: String(err), sessions: err.keys })
+      }
+      throw err
+    }
   }
 
   async function handleApiRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
@@ -116,6 +140,36 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         return json(res, 400, { error: `session is not part of this project: ${invalidNode.sessionPath}` })
       const document = await flow.replaceTopology(projectPath, body.topology)
       return json(res, 200, { document } satisfies FlowDocumentResponse)
+    }
+
+    if (method === 'GET' && path === API_EXTENSIONS_PATH)
+      return json(res, 200, { extensions: extensions.list() } satisfies ExtensionsResponse)
+
+    if (method === 'POST' && path === API_EXTENSIONS_PATH) {
+      const body = await readBody<Partial<InstallExtensionRequest>>(req)
+      if (typeof body.source !== 'string' || !body.source.trim())
+        return json(res, 400, { error: 'source required' })
+      await extensions.install(body.source, body.local === true)
+      return reloadAfterExtensionChange(res)
+    }
+
+    if (method === 'DELETE' && path === API_EXTENSIONS_PATH) {
+      const body = await readBody<Partial<RemoveExtensionRequest>>(req)
+      if (typeof body.source !== 'string' || !body.source.trim())
+        return json(res, 400, { error: 'source required' })
+      const removed = await extensions.remove(body.source, body.local === true)
+      if (!removed)
+        return json(res, 404, { error: `extension not configured: ${body.source}` })
+      return reloadAfterExtensionChange(res)
+    }
+
+    if (method === 'POST' && path === API_EXTENSIONS_UI_RESPONSE_PATH) {
+      const body = await readBody<Partial<ExtensionUIResponse>>(req)
+      if (typeof body.id !== 'string' || typeof body.session !== 'string')
+        return json(res, 400, { error: 'id and session required' })
+      if (!sessions.respondExtensionUi(body as ExtensionUIResponse))
+        return json(res, 404, { error: `session not open: ${body.session}` })
+      return json(res, 200, { ok: true } satisfies ApiOkResponse)
     }
 
     if (method === 'GET' && path === API_USAGE_PATH) {
