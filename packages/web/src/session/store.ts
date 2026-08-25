@@ -24,6 +24,7 @@ export const store: StoreState = {
   activeKey: null,
   views: {},
   statuses: {},
+  extensionNotices: [],
   sidebarOpen: false,
 }
 
@@ -55,6 +56,7 @@ export function ensureView(key: string): SessionView {
     context: null,
     toolResults: {},
     queue: { steering: [], followUp: [] },
+    extensionRequests: [],
     error: null,
     tick: 0,
   })

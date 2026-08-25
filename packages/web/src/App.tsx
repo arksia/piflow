@@ -2,6 +2,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import styles from './App.module.css'
 import ChatView from './components/ChatView'
+import ExtensionDialog from './components/ExtensionDialog'
 import SessionList from './components/SessionList'
 import { setSidebarOpen } from './session/store'
 import { useStore } from './session/use-store'
@@ -111,6 +112,7 @@ export default function App() {
               </Suspense>
             )}
       </main>
+      <ExtensionDialog />
     </div>
   )
 }

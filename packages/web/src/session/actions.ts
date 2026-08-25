@@ -2,9 +2,15 @@ import type {
   ApiOkResponse,
   DirectoriesResponse,
   DirectoryListing,
+  ExtensionChangeResponse,
+  ExtensionSourceInfo,
+  ExtensionsResponse,
+  ExtensionUIResponse,
+  InstallExtensionRequest,
   NewSessionRequest,
   OpenSessionRequest,
   PromptRequest,
+  RemoveExtensionRequest,
   SessionState,
   SessionStateResponse,
   SetModelRequest,
@@ -12,6 +18,8 @@ import type {
   UsageReport,
 } from '@piflow/protocol'
 import {
+  API_EXTENSIONS_PATH,
+  API_EXTENSIONS_UI_RESPONSE_PATH,
   buildDirectoriesPath,
   buildUsagePath,
   API_SESSIONS_NEW_PATH as newSessionPath,
@@ -92,4 +100,35 @@ export function requestUsage(key: string, fresh = false) {
       notify()
     })
     .catch((error: unknown) => console.error('[piflow]', error))
+}
+
+export async function fetchExtensions(): Promise<ExtensionSourceInfo[]> {
+  const { extensions } = await api<ExtensionsResponse>(API_EXTENSIONS_PATH)
+  return extensions
+}
+
+export function installExtension(source: string): Promise<ExtensionChangeResponse> {
+  return post<ExtensionChangeResponse>(API_EXTENSIONS_PATH, { source } satisfies InstallExtensionRequest)
+}
+
+export function removeExtension(source: string): Promise<ExtensionChangeResponse> {
+  return api<ExtensionChangeResponse>(API_EXTENSIONS_PATH, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ source } satisfies RemoveExtensionRequest),
+  })
+}
+
+/** Optimistically drop the dialog locally, then answer the suspended extension call. */
+export async function answerExtensionRequest(response: ExtensionUIResponse): Promise<void> {
+  const view = ensureView(response.session)
+  view.extensionRequests = view.extensionRequests.filter(request => request.id !== response.id)
+  view.tick++
+  notify()
+  await post<ApiOkResponse>(API_EXTENSIONS_UI_RESPONSE_PATH, response)
+}
+
+export function dismissExtensionNotice(id: string) {
+  store.extensionNotices = store.extensionNotices.filter(notice => notice.request.id !== id)
+  notify()
 }
