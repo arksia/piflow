@@ -5,6 +5,7 @@ import { createStaticHandler } from './core/http'
 import { createRequestHandler } from './core/routes'
 import { createSessionStore } from './core/sessions'
 import { createSseHub } from './core/sse'
+import { createExtensionManager } from './extensions/manager'
 import { createFlowStore } from './flow/store'
 import { getUsage } from './usage/index'
 
@@ -12,6 +13,7 @@ const config = loadConfig()
 const modelRuntime = await ModelRuntime.create()
 const sse = createSseHub(config.rootCwd)
 const flow = createFlowStore(config.dataDir)
+const extensions = createExtensionManager(config.rootCwd)
 const sessions = createSessionStore({
   rootCwd: config.rootCwd,
   modelRuntime,
@@ -27,6 +29,7 @@ const httpServer = createServer(createRequestHandler({
   serveStatic,
   getUsage,
   flow,
+  extensions,
 }))
 
 httpServer.listen(config.port, config.host, () => {

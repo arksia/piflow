@@ -7,6 +7,8 @@ export const API_MODELS_PATH = '/api/models'
 export const API_DIRECTORIES_PATH = '/api/directories'
 export const API_USAGE_PATH = '/api/usage'
 export const API_FLOW_PATH = '/api/flow'
+export const API_EXTENSIONS_PATH = '/api/extensions'
+export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 
