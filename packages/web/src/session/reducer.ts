@@ -37,6 +37,7 @@ export function applyState(state: SessionState) {
   view.thinkingLevel = state.thinkingLevel ?? null
   view.thinkingLevels = state.thinkingLevels ?? []
   view.context = state.context ?? null
+  view.extensionRequests = state.extensionRequests
   view.error = null
 
   const results: Record<string, ToolState> = {}
@@ -183,6 +184,23 @@ export function route(message: ServerMessage, restoreSession: (path: string) => 
     case 'status_delta':
       applyStatusDelta(message.status)
       break
+
+    case 'extension_ui_request': {
+      // Notices are fire-and-forget: the server never tracks them as pending,
+      // so they live outside view state until the user dismisses them.
+      if (message.request.method === 'notify') {
+        store.extensionNotices = [...store.extensionNotices, { session: message.session, request: message.request }]
+        notify()
+        break
+      }
+      const view = ensureView(message.session)
+      if (!view.extensionRequests.some(request => request.id === message.request.id)) {
+        view.extensionRequests = [...view.extensionRequests, message.request]
+        view.tick++
+        notify()
+      }
+      break
+    }
 
     case 'event':
       if (message.context !== undefined)

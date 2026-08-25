@@ -3,6 +3,7 @@ import { memo, useMemo, useState } from 'react'
 import { newSessionIn, openSession } from '../../session/actions'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
+import ExtensionManagerDialog from '../ExtensionManagerDialog'
 import NewSessionDialog from '../NewSessionDialog'
 import styles from './styles.module.css'
 
@@ -41,6 +42,7 @@ interface SessionListProps {
 function SessionList({ onToggleSidebar }: SessionListProps) {
   const store = useStore()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
+  const [extensionsOpen, setExtensionsOpen] = useState(false)
   const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
   const byCwd = useMemo(() => {
     const map = new Map<string, SessionInfoLite[]>()
@@ -92,6 +94,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
           </div>
           <div className={styles.topActions}>
             <button className={styles.newSession} title="新会话" aria-label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>+</button>
+            <button className={styles.newSession} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>⚙</button>
             <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}>☰</button>
           </div>
         </div>
@@ -155,6 +158,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             />
           )
         : null}
+      {extensionsOpen ? <ExtensionManagerDialog onClose={() => setExtensionsOpen(false)} /> : null}
     </>
   )
 }

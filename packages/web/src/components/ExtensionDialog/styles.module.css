@@ -1,0 +1,150 @@
+.backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(4px);
+}
+
+.dialog {
+  display: flex;
+  width: min(440px, 100%);
+  max-height: min(560px, 86vh);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-raise);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+  padding: 18px 20px;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  color: var(--c-ink);
+  font-size: 0.95rem;
+}
+
+.message {
+  margin: 0;
+  color: var(--c-mid);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.option {
+  border: 1px solid var(--c-line);
+  border-radius: 5px;
+  padding: 9px 12px;
+  background: var(--c-bg);
+  color: var(--c-body);
+  font-size: 0.8rem;
+  text-align: left;
+  transition: border-color 0.15s var(--ease);
+}
+
+.option:hover {
+  border-color: var(--c-signal);
+  color: var(--c-ink);
+}
+
+.input-form input {
+  width: 100%;
+  border: 1px solid var(--c-line);
+  border-radius: 5px;
+  outline: none;
+  padding: 9px 10px;
+  background: var(--c-bg);
+  color: var(--c-body);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.input-form input:focus {
+  border-color: var(--c-signal);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel,
+.primary {
+  border-radius: 5px;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+}
+
+.cancel {
+  color: var(--c-muted);
+  background: var(--c-line);
+}
+
+.primary {
+  background: var(--c-ink);
+  color: var(--c-bg);
+}
+
+.notices {
+  position: fixed;
+  z-index: 45;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  max-width: min(360px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--c-raise);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 40%);
+}
+
+.notice.warning {
+  border-color: #c9a254;
+}
+
+.notice.error {
+  border-color: #f08a83;
+}
+
+.notice-text {
+  min-width: 0;
+  flex: 1;
+  color: var(--c-body);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.dismiss {
+  flex-shrink: 0;
+  color: var(--c-muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.dismiss:hover {
+  color: var(--c-ink);
+}

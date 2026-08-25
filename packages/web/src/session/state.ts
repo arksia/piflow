@@ -1,5 +1,6 @@
 import type {
   ChatMessage,
+  ExtensionUIRequest,
   ModelInfo,
   SessionContext,
   SessionInfoLite,
@@ -29,8 +30,14 @@ export interface SessionView {
   context: SessionContext | null
   toolResults: Record<string, ToolState>
   queue: { steering: readonly string[], followUp: readonly string[] }
+  extensionRequests: ExtensionUIRequest[]
   error: string | null
   tick: number
+}
+
+export interface ExtensionNotice {
+  session: string
+  request: ExtensionUIRequest
 }
 
 export interface StoreState {
@@ -42,5 +49,6 @@ export interface StoreState {
   activeKey: string | null
   views: Record<string, SessionView>
   statuses: Record<string, SessionStatusRecord>
+  extensionNotices: ExtensionNotice[]
   sidebarOpen: boolean
 }
