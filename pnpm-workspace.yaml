@@ -3,7 +3,6 @@ trustPolicy: no-downgrade
 
 packages:
   - packages/*
-  - shared/*
 allowBuilds:
   '@google/genai': false
   esbuild: true

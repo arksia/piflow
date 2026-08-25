@@ -162,7 +162,7 @@ This separation allows terminal pi and piflow to continue opening the same sessi
 
 ## 6. Data Model
 
-The shared protocol is defined in [`shared/protocol/src/index.ts`](../shared/protocol/src/index.ts).
+The shared protocol is defined in [`packages/protocol/src/index.ts`](../packages/protocol/src/index.ts).
 
 ```ts
 interface FlowNode {
