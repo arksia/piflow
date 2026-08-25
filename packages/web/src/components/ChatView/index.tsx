@@ -26,9 +26,10 @@ function readScrollMap(): Record<string, number> {
 interface ChatViewProps {
   onShowFlow: () => void
   onToggleSidebar: () => void
+  sidebarCollapsed: boolean
 }
 
-export default function ChatView({ onShowFlow, onToggleSidebar }: ChatViewProps) {
+export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed }: ChatViewProps) {
   const store = useStore()
   const view = store.activeKey ? (store.views[store.activeKey] ?? null) : null
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -189,7 +190,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar }: ChatViewProps)
   return (
     <div className={styles.chat} style={chatStyle}>
       <header className={styles.bar}>
-        <button className={styles.menu} title="会话列表" aria-label="会话列表" onClick={onToggleSidebar}>☰</button>
+        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}>☰</button> : null}
         <button className={styles.mobileMenu} title="会话列表" aria-label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>☰</button>
         <div className={styles.identity}>
           {title ? <div className={styles.title} title={title}>{title}</div> : null}

@@ -34,13 +34,14 @@ const nodeTypes = { session: FlowSessionNode }
 interface FlowViewProps {
   onShowChat: () => void
   onToggleSidebar: () => void
+  sidebarCollapsed: boolean
 }
 
 interface ConnectMode {
   sourceId: string
 }
 
-export default function FlowView({ onShowChat, onToggleSidebar }: FlowViewProps) {
+export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
   const store = useStore()
   const activeView = store.activeKey ? store.views[store.activeKey] : undefined
   const activeSessionPath = activeView?.sessionFile ?? store.activeKey
@@ -413,7 +414,7 @@ export default function FlowView({ onShowChat, onToggleSidebar }: FlowViewProps)
   return (
     <div className={styles.workspace}>
       <header className={styles.bar}>
-        <button className={styles.menu} title="会话列表" aria-label="会话列表" onClick={onToggleSidebar}>☰</button>
+        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}>☰</button> : null}
         <div className={styles.heading}>
           <strong>Flow</strong>
           <span title={projectPath}>{shorten(projectPath)}</span>

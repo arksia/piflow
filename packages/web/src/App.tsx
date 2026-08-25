@@ -105,10 +105,10 @@ export default function App() {
         : null}
       <main className={styles.main}>
         {workspaceView === 'chat'
-          ? <ChatView onShowFlow={onShowFlow} onToggleSidebar={toggleWorkspaceSidebar} />
+          ? <ChatView onShowFlow={onShowFlow} onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
           : (
               <Suspense fallback={<div className={styles.loading}>正在加载 Flow…</div>}>
-                <FlowView onShowChat={onShowChat} onToggleSidebar={toggleWorkspaceSidebar} />
+                <FlowView onShowChat={onShowChat} onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
               </Suspense>
             )}
       </main>
