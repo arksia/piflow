@@ -49,9 +49,9 @@ h2 {
 }
 
 .close {
+  display: grid;
+  place-items: center;
   color: var(--c-muted);
-  font-size: 1.4rem;
-  line-height: 1;
   transition: color 0.15s var(--ease);
 }
 
@@ -132,9 +132,12 @@ h2 {
 
 .remove {
   flex-shrink: 0;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 4px;
   color: var(--c-muted);
-  font-size: 1.05rem;
-  line-height: 1;
   transition: color 0.15s var(--ease);
 }
 

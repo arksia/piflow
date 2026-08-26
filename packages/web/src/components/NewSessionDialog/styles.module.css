@@ -49,9 +49,9 @@ h2 {
 }
 
 .close {
+  display: grid;
+  place-items: center;
   color: var(--c-muted);
-  font-size: 1.4rem;
-  line-height: 1;
   transition: color 0.15s var(--ease);
 }
 
@@ -110,8 +110,10 @@ h2 {
 
 .parent {
   flex-shrink: 0;
+  display: grid;
   width: 24px;
   height: 24px;
+  place-items: center;
   border: 1px solid var(--c-line);
   border-radius: 4px;
   color: var(--c-muted);
@@ -147,11 +149,10 @@ h2 {
 }
 
 .folder {
+  display: grid;
   width: 18px;
+  place-items: center;
   color: var(--c-signal);
-  font-family: var(--font-mono);
-  font-weight: 700;
-  text-align: center;
 }
 
 .message,
