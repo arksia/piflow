@@ -1,5 +1,6 @@
 import type { ExtensionUIRequest } from '@piflow/protocol'
 import type { FormEvent } from 'react'
+import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { answerExtensionRequest, dismissExtensionNotice } from '../../session/actions'
 import { useStore } from '../../session/use-store'
@@ -111,7 +112,7 @@ export default function ExtensionDialog() {
                     aria-label="知道了"
                     onClick={() => dismissExtensionNotice(notice.request.id)}
                   >
-                    ×
+                    <X size={13} />
                   </button>
                 </div>
               ))}

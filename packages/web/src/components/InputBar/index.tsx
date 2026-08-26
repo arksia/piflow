@@ -1,6 +1,7 @@
 import type { UsageWindow } from '@piflow/protocol'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { SessionView } from '../../session/state'
+import { ArrowUp, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
 import { useStore } from '../../session/use-store'
@@ -200,7 +201,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                       aria-label="中断回复"
                       onClick={() => abort(view.key)}
                     >
-                      <span className={styles.core}>■</span>
+                      <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
                     </button>
                   )
                 : (
@@ -212,7 +213,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                       disabled={!canSend}
                       onClick={() => void submit()}
                     >
-                      <span className={styles.core}>↑</span>
+                      <span className={styles.core}><ArrowUp size={14} /></span>
                     </button>
                   )}
             </div>

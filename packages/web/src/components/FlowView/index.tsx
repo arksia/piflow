@@ -20,6 +20,7 @@ import {
   MiniMap,
   ReactFlow,
 } from '@xyflow/react'
+import { PanelLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadFlow, saveFlow } from '../../flow/api'
 import { createBackgroundSession, openSession } from '../../session/actions'
@@ -414,7 +415,7 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
   return (
     <div className={styles.workspace}>
       <header className={styles.bar}>
-        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}>☰</button> : null}
+        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}><PanelLeft size={15} /></button> : null}
         <div className={styles.heading}>
           <strong>Flow</strong>
           <span title={projectPath}>{shorten(projectPath)}</span>

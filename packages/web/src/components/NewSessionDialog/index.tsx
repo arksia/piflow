@@ -1,5 +1,6 @@
 import type { DirectoryListing } from '@piflow/protocol'
 import type { FormEvent } from 'react'
+import { ArrowUp, Folder, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { newSessionIn, requestDirectories } from '../../session/actions'
 import styles from './styles.module.css'
@@ -77,7 +78,7 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
             <p className={styles.eyebrow}>新会话</p>
             <h2 id="new-session-title">选择项目文件夹</h2>
           </div>
-          <button className={styles.close} title="关闭" aria-label="关闭" onClick={onClose}>×</button>
+          <button className={styles.close} title="关闭" aria-label="关闭" onClick={onClose}><X size={16} /></button>
         </header>
 
         <form className={styles.pathForm} onSubmit={submitPath}>
@@ -98,7 +99,7 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
             aria-label="返回上级目录"
             onClick={() => listing?.parent && void browse(listing.parent)}
           >
-            ↑
+            <ArrowUp size={13} />
           </button>
           <span>{listing?.path ?? path}</span>
         </div>
@@ -115,7 +116,7 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
                       className={styles.directory}
                       onClick={() => void browse(directory.path)}
                     >
-                      <span className={styles.folder}>/</span>
+                      <span className={styles.folder}><Folder size={12} /></span>
                       <span>{directory.name}</span>
                     </button>
                   ))

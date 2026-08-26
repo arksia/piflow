@@ -1,4 +1,5 @@
 import type { SessionInfoLite } from '@piflow/protocol'
+import { MessageSquarePlus, PanelLeftClose, Plus, Settings } from 'lucide-react'
 import { memo, useMemo, useState } from 'react'
 import { newSessionIn, openSession } from '../../session/actions'
 import { setSidebarOpen } from '../../session/store'
@@ -93,8 +94,8 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             <span className={styles.subtitle}>coding workspace</span>
           </div>
           <div className={styles.topActions}>
-            <button className={styles.newSession} title="新会话" aria-label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>+</button>
-            <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}>☰</button>
+            <button className={styles.newSession} title="新会话" aria-label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}><MessageSquarePlus size={15} /></button>
+            <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}><PanelLeftClose size={15} /></button>
           </div>
         </div>
 
@@ -112,7 +113,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                 disabled={!store.connected || creatingCwd !== null}
                 onClick={() => void createIn(cwd)}
               >
-                {creatingCwd === cwd ? '…' : '+'}
+                {creatingCwd === cwd ? '…' : <Plus size={13} />}
               </button>
             </div>
             {sessions.map(session => (
@@ -145,7 +146,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             {store.sessions.length}
             {' 个会话'}
           </span>
-          <button className={styles.settings} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>⚙</button>
+          <button className={styles.settings} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}><Settings size={14} /></button>
         </div>
       </div>
       {newSessionOpen
