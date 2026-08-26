@@ -130,13 +130,18 @@
 
 .item {
   position: relative;
-  display: block;
   width: 100%;
-  text-align: left;
-  padding: 8px 8px 8px 10px;
   border-radius: 4px;
   line-height: 1.4;
   transition: background 0.15s var(--ease);
+}
+
+.item-main {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  text-align: left;
+  padding: 8px 8px 8px 10px;
 }
 
 .item:hover {
@@ -162,6 +167,7 @@
   display: block;
   color: var(--c-mid);
   overflow: hidden;
+  padding-right: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -174,6 +180,56 @@
   display: block;
   color: var(--c-faint);
   font-size: 0.75rem;
+}
+
+/* Row menu trigger — hover/focus reveal on fine pointers, always on touch */
+.menu {
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+
+.item:hover .menu,
+.item:focus-within .menu,
+.menu[data-open] {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .menu {
+    opacity: 1;
+  }
+}
+
+.editing {
+  padding: 6px 8px 6px 10px;
+}
+
+.rename-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--c-line);
+  border-radius: 4px;
+  outline: none;
+  padding: 5px 7px;
+  background: var(--c-bg);
+  color: var(--c-ink);
+  font-size: 0.85rem;
+}
+
+.rename-input:focus {
+  border-color: var(--c-signal);
+}
+
+.rename-input::placeholder {
+  color: var(--c-faint);
+}
+
+.rename-error {
+  display: block;
+  padding: 4px 2px 0;
+  color: #f08a83;
+  font-size: 0.7rem;
 }
 
 .offline {
