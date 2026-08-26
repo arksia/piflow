@@ -94,7 +94,6 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
           </div>
           <div className={styles.topActions}>
             <button className={styles.newSession} title="新会话" aria-label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>+</button>
-            <button className={styles.newSession} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>⚙</button>
             <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}>☰</button>
           </div>
         </div>
@@ -140,10 +139,13 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
 
         {!store.connected ? <div className={styles.offline}>连接中…</div> : null}
         <div className={styles.footer}>
-          {projectCount}
-          {' 个项目 · '}
-          {store.sessions.length}
-          {' 个会话'}
+          <span>
+            {projectCount}
+            {' 个项目 · '}
+            {store.sessions.length}
+            {' 个会话'}
+          </span>
+          <button className={styles.settings} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>⚙</button>
         </div>
       </div>
       {newSessionOpen
