@@ -12,7 +12,7 @@ export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 
-export const SESSION_ACTIONS = ['prompt', 'abort', 'model', 'thinking'] as const
+export const SESSION_ACTIONS = ['prompt', 'abort', 'model', 'thinking', 'rename', 'fork', 'delete'] as const
 
 export type SessionAction = (typeof SESSION_ACTIONS)[number]
 
@@ -36,6 +36,25 @@ export interface SetModelRequest {
 
 export interface SetThinkingRequest {
   level: string
+}
+
+export interface RenameSessionRequest {
+  /** Empty string clears the display name. */
+  name: string
+}
+
+export interface ForkSessionRequest {
+  /** Entry id of the user message to fork from. */
+  entryId: string
+}
+
+export interface ForkPoint {
+  entryId: string
+  text: string
+}
+
+export interface ForkPointsResponse {
+  points: ForkPoint[]
 }
 
 export interface ApiOkResponse {

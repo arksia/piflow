@@ -5,6 +5,8 @@ import type {
   ExtensionsResponse,
   ExtensionUIResponse,
   FlowDocumentResponse,
+  ForkPointsResponse,
+  ForkSessionRequest,
   HelloResponse,
   InstallExtensionRequest,
   ModelsResponse,
@@ -12,6 +14,7 @@ import type {
   OpenSessionRequest,
   PromptRequest,
   RemoveExtensionRequest,
+  RenameSessionRequest,
   ReplaceFlowRequest,
   SessionsResponse,
   SessionStateResponse,
@@ -205,50 +208,92 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     }
 
     const action = parseSessionActionPath(path)
-    if (method === 'POST' && action) {
-      const managed = sessions.get(action.key)
-      if (!managed)
-        return json(res, 404, { error: `session not open: ${action.key}` })
+    if (action) {
+      // rename/fork/delete accept closed sessions (key = session file path),
+      // so they bypass the pooled-session requirement of the actions below.
+      if (action.action === 'rename' && method === 'POST') {
+        const body = await readBody<Partial<RenameSessionRequest>>(req)
+        if (typeof body.name !== 'string')
+          return json(res, 400, { error: 'name required' })
+        if (!await sessions.renameSession(action.key, body.name.trim()))
+          return json(res, 404, { error: `session not found: ${action.key}` })
+        await publishSessions()
+        return json(res, 200, { ok: true } satisfies ApiOkResponse)
+      }
 
-      const body = await readBody(req)
+      if (action.action === 'fork' && method === 'GET') {
+        const points = await sessions.listForkPoints(action.key)
+        if (!points)
+          return json(res, 404, { error: `session not found: ${action.key}` })
+        return json(res, 200, { points } satisfies ForkPointsResponse)
+      }
 
-      switch (action.action) {
-        case 'prompt': {
-          const prompt = body as Partial<PromptRequest>
-          if (typeof prompt.text !== 'string' || !prompt.text.trim())
-            return json(res, 400, { error: 'text required' })
-          json(res, 202, { ok: true } satisfies ApiOkResponse)
-          void handlePrompt(managed, prompt.text)
-          return
-        }
+      if (action.action === 'fork' && method === 'POST') {
+        const body = await readBody<Partial<ForkSessionRequest>>(req)
+        if (typeof body.entryId !== 'string' || !body.entryId)
+          return json(res, 400, { error: 'entryId required' })
+        const managed = await sessions.forkSession(action.key, body.entryId)
+        if (!managed)
+          return json(res, 404, { error: `session not found: ${action.key}` })
+        await publishSessions()
+        return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
+      }
 
-        case 'abort':
-          await managed.session.abort()
-          return json(res, 200, { ok: true } satisfies ApiOkResponse)
+      if (action.action === 'delete' && method === 'POST') {
+        const result = await sessions.deleteSession(action.key)
+        if (result === 'missing')
+          return json(res, 404, { error: `session not found: ${action.key}` })
+        if (result === 'streaming')
+          return json(res, 409, { error: 'session is streaming' })
+        await publishSessions()
+        return json(res, 200, { ok: true } satisfies ApiOkResponse)
+      }
 
-        case 'model': {
-          const modelRequest = body as Partial<SetModelRequest>
-          const model = sessions.findModel(String(modelRequest.provider), String(modelRequest.modelId))
-          if (!model) {
-            return json(res, 404, {
-              error: `model not found: ${String(modelRequest.provider)}/${String(modelRequest.modelId)}`,
-            })
+      if (method === 'POST') {
+        const managed = sessions.get(action.key)
+        if (!managed)
+          return json(res, 404, { error: `session not open: ${action.key}` })
+
+        const body = await readBody(req)
+
+        switch (action.action) {
+          case 'prompt': {
+            const prompt = body as Partial<PromptRequest>
+            if (typeof prompt.text !== 'string' || !prompt.text.trim())
+              return json(res, 400, { error: 'text required' })
+            json(res, 202, { ok: true } satisfies ApiOkResponse)
+            void handlePrompt(managed, prompt.text)
+            return
           }
-          await managed.session.setModel(model)
-          await publishState(managed)
-          return json(res, 200, { ok: true } satisfies ApiOkResponse)
-        }
 
-        case 'thinking': {
-          const thinkingRequest = body as Partial<SetThinkingRequest>
-          const level = managed.session
-            .getAvailableThinkingLevels()
-            .find(candidate => candidate === thinkingRequest.level)
-          if (!level)
-            return json(res, 400, { error: 'unknown thinking level' })
-          managed.session.setThinkingLevel(level)
-          await publishState(managed)
-          return json(res, 200, { ok: true } satisfies ApiOkResponse)
+          case 'abort':
+            await managed.session.abort()
+            return json(res, 200, { ok: true } satisfies ApiOkResponse)
+
+          case 'model': {
+            const modelRequest = body as Partial<SetModelRequest>
+            const model = sessions.findModel(String(modelRequest.provider), String(modelRequest.modelId))
+            if (!model) {
+              return json(res, 404, {
+                error: `model not found: ${String(modelRequest.provider)}/${String(modelRequest.modelId)}`,
+              })
+            }
+            await managed.session.setModel(model)
+            await publishState(managed)
+            return json(res, 200, { ok: true } satisfies ApiOkResponse)
+          }
+
+          case 'thinking': {
+            const thinkingRequest = body as Partial<SetThinkingRequest>
+            const level = managed.session
+              .getAvailableThinkingLevels()
+              .find(candidate => candidate === thinkingRequest.level)
+            if (!level)
+              return json(res, 400, { error: 'unknown thinking level' })
+            managed.session.setThinkingLevel(level)
+            await publishState(managed)
+            return json(res, 200, { ok: true } satisfies ApiOkResponse)
+          }
         }
       }
     }

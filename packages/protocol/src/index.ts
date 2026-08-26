@@ -21,9 +21,13 @@ export {
 } from './http'
 export type {
   ApiOkResponse,
+  ForkPoint,
+  ForkPointsResponse,
+  ForkSessionRequest,
   NewSessionRequest,
   OpenSessionRequest,
   PromptRequest,
+  RenameSessionRequest,
   SessionAction,
   SetModelRequest,
   SetThinkingRequest,
