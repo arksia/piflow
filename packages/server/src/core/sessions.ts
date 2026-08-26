@@ -1,8 +1,9 @@
-import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import type { AgentEvent, ChatMessage, DirectoryListing, ExtensionUIResponse, FlowNode, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState, SessionStatus, SessionStatusRecord } from '@piflow/protocol'
+import type { ModelRuntime, SessionEntry } from '@earendil-works/pi-coding-agent'
+import type { AgentEvent, ChatMessage, DirectoryListing, ExtensionUIResponse, FlowNode, ForkPoint, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState, SessionStatus, SessionStatusRecord } from '@piflow/protocol'
 import type { UiBridge } from '../extensions/ui-bridge'
 import type { FlowStore } from '../flow/store'
-import { readdir, realpath, stat, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { createAgentSession, SessionManager } from '@earendil-works/pi-coding-agent'
 import { createUiBridge } from '../extensions/ui-bridge'
@@ -41,6 +42,10 @@ export interface SessionStore {
   publishError: (key: string, error: string) => void
   reloadExtensions: () => Promise<number>
   respondExtensionUi: (response: ExtensionUIResponse) => boolean
+  renameSession: (path: string, name: string) => Promise<boolean>
+  listForkPoints: (path: string) => Promise<ForkPoint[] | null>
+  forkSession: (path: string, entryId: string) => Promise<ManagedSession | null>
+  deleteSession: (path: string) => Promise<'deleted' | 'missing' | 'streaming'>
 }
 
 interface CreateSessionStoreOptions {
@@ -302,6 +307,64 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return true
   }
 
+  function managerFor(path: string): SessionManager | null {
+    const managed = pool.get(path)
+    if (managed)
+      return managed.session.sessionManager
+    return existsSync(path) ? SessionManager.open(path) : null
+  }
+
+  async function renameSession(path: string, name: string): Promise<boolean> {
+    const manager = managerFor(path)
+    if (!manager)
+      return false
+    manager.appendSessionInfo(name)
+    return true
+  }
+
+  async function listForkPoints(path: string): Promise<ForkPoint[] | null> {
+    const manager = managerFor(path)
+    if (!manager)
+      return null
+    const points: ForkPoint[] = []
+    for (const entry of manager.getEntries()) {
+      const text = userMessageText(entry)
+      if (text)
+        points.push({ entryId: entry.id, text: text.slice(0, 120) })
+    }
+    return points
+  }
+
+  async function forkSession(path: string, entryId: string): Promise<ManagedSession | null> {
+    const manager = managerFor(path)
+    if (!manager)
+      return null
+    const branchedPath = manager.createBranchedSession(entryId)
+    if (!branchedPath)
+      return null
+    return openSavedSession(branchedPath)
+  }
+
+  async function deleteSession(path: string): Promise<'deleted' | 'missing' | 'streaming'> {
+    const managed = pool.get(path)
+    if (managed) {
+      if (managed.session.isStreaming)
+        return 'streaming'
+      // Dispose before unlinking so the agent stops appending to the file.
+      managed.uiBridge.cancelPending()
+      managed.session.dispose()
+      for (const [key, value] of pool) {
+        if (value === managed)
+          pool.delete(key)
+      }
+      statuses.delete(managed.key)
+    }
+    if (!existsSync(path))
+      return managed ? 'deleted' : 'missing'
+    await unlink(path)
+    return 'deleted'
+  }
+
   return {
     createFreshSession,
     openSavedSession,
@@ -316,7 +379,21 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     publishError,
     reloadExtensions,
     respondExtensionUi,
+    renameSession,
+    listForkPoints,
+    forkSession,
+    deleteSession,
   }
+}
+
+export function userMessageText(entry: SessionEntry): string | null {
+  if (entry.type !== 'message' || entry.message.role !== 'user')
+    return null
+  const content = entry.message.content
+  const text = typeof content === 'string'
+    ? content
+    : content.map(part => part.type === 'text' ? part.text : '').join(' ')
+  return text.replace(/\s+/g, ' ').trim()
 }
 
 export function settledStatusFromMessages(messages: ChatMessage[]): 'idle' | 'failed' {
