@@ -1,11 +1,12 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import { MessageSquarePlus, PanelLeftClose, Plus, Settings } from 'lucide-react'
-import { memo, useMemo, useState } from 'react'
-import { newSessionIn, openSession } from '../../session/actions'
+import { memo, useMemo, useRef, useState } from 'react'
+import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
 import NewSessionDialog from '../NewSessionDialog'
+import SessionItemMenu from '../SessionItemMenu'
 import styles from './styles.module.css'
 
 function shorten(path: string) {
@@ -45,6 +46,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [extensionsOpen, setExtensionsOpen] = useState(false)
   const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
+  const [editingPath, setEditingPath] = useState<string | null>(null)
   const byCwd = useMemo(() => {
     const map = new Map<string, SessionInfoLite[]>()
     for (const session of store.sessions) {
@@ -117,23 +119,17 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
               </button>
             </div>
             {sessions.map(session => (
-              <button
+              <SessionRow
                 key={session.path}
-                className={`${styles.item} ${store.activeKey === session.path ? styles.active : ''}`}
-                disabled={!store.connected}
-                onClick={() => pick(session)}
-              >
-                <span className={styles.label}>{label(session)}</span>
-                <span className={styles.meta}>
-                  {relativeTime(session.modified)}
-                  {' '}
-                  ·
-                  {' '}
-                  {session.messageCount}
-                  {' '}
-                  条
-                </span>
-              </button>
+                session={session}
+                active={store.activeKey === session.path}
+                streaming={store.statuses[session.path]?.status === 'running'}
+                connected={store.connected}
+                editing={editingPath === session.path}
+                onPick={() => void pick(session)}
+                onRenameStart={() => setEditingPath(session.path)}
+                onRenameEnd={() => setEditingPath(null)}
+              />
             ))}
           </div>
         ))}
@@ -163,6 +159,107 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
         : null}
       {extensionsOpen ? <ExtensionManagerDialog onClose={() => setExtensionsOpen(false)} /> : null}
     </>
+  )
+}
+
+interface SessionRowProps {
+  session: SessionInfoLite
+  active: boolean
+  streaming: boolean
+  connected: boolean
+  editing: boolean
+  onPick: () => void
+  onRenameStart: () => void
+  onRenameEnd: () => void
+}
+
+function SessionRow({ session, active, streaming, connected, editing, onPick, onRenameStart, onRenameEnd }: SessionRowProps) {
+  if (editing)
+    return <RenameRow session={session} onDone={onRenameEnd} />
+  return (
+    <div className={`${styles.item} ${active ? styles.active : ''}`}>
+      <button className={styles.itemMain} disabled={!connected} onClick={onPick}>
+        <span className={styles.label}>{label(session)}</span>
+        <span className={styles.meta}>
+          {relativeTime(session.modified)}
+          {' '}
+          ·
+          {' '}
+          {session.messageCount}
+          {' '}
+          条
+        </span>
+      </button>
+      {connected
+        ? (
+            <SessionItemMenu
+              className={styles.menu}
+              session={session}
+              label={label(session)}
+              streaming={streaming}
+              onRename={onRenameStart}
+            />
+          )
+        : null}
+    </div>
+  )
+}
+
+function RenameRow({ session, onDone }: { session: SessionInfoLite, onDone: () => void }) {
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const cancelledRef = useRef(false)
+
+  async function commit() {
+    if (busy)
+      return
+    const value = inputRef.current?.value.trim() ?? ''
+    if (value === (session.name ?? '')) {
+      onDone()
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await renameSession(session.path, value)
+      onDone()
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '重命名失败')
+      setBusy(false)
+      inputRef.current?.focus()
+    }
+  }
+
+  return (
+    <div className={`${styles.item} ${styles.editing}`}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          void commit()
+        }}
+      >
+        <input
+          ref={inputRef}
+          className={styles.renameInput}
+          defaultValue={session.name ?? ''}
+          placeholder={session.firstMessage || '空会话'}
+          aria-label="会话名称"
+          aria-invalid={error !== null}
+          autoFocus
+          onFocus={event => event.currentTarget.select()}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              cancelledRef.current = true
+              event.currentTarget.blur()
+            }
+          }}
+          onBlur={() => cancelledRef.current ? onDone() : void commit()}
+        />
+        {error ? <span className={styles.renameError}>{error}</span> : null}
+      </form>
+    </div>
   )
 }
 

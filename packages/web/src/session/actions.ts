@@ -6,11 +6,15 @@ import type {
   ExtensionSourceInfo,
   ExtensionsResponse,
   ExtensionUIResponse,
+  ForkPoint,
+  ForkPointsResponse,
+  ForkSessionRequest,
   InstallExtensionRequest,
   NewSessionRequest,
   OpenSessionRequest,
   PromptRequest,
   RemoveExtensionRequest,
+  RenameSessionRequest,
   SessionState,
   SessionStateResponse,
   SetModelRequest,
@@ -26,7 +30,7 @@ import {
   API_SESSIONS_OPEN_PATH as openSessionPath,
 } from '@piflow/protocol'
 import { api, post, sessionUrl } from './api'
-import { saveActiveSessionFile } from './persistence'
+import { clearActiveSessionFile, saveActiveSessionFile } from './persistence'
 import { applyState } from './reducer'
 import { ensureView, notify, store } from './store'
 
@@ -130,5 +134,35 @@ export async function answerExtensionRequest(response: ExtensionUIResponse): Pro
 
 export function dismissExtensionNotice(id: string) {
   store.extensionNotices = store.extensionNotices.filter(notice => notice.request.id !== id)
+  notify()
+}
+
+/** Empty name clears the display name. The server broadcasts the refreshed session list. */
+export function renameSession(path: string, name: string): Promise<ApiOkResponse> {
+  return post<ApiOkResponse>(sessionUrl(path, 'rename'), { name } satisfies RenameSessionRequest)
+}
+
+export async function fetchForkPoints(path: string): Promise<ForkPoint[]> {
+  const { points } = await api<ForkPointsResponse>(sessionUrl(path, 'fork'))
+  return points
+}
+
+/** Fork at the given entry and switch to the branched session. */
+export async function forkSession(path: string, entryId: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(path, 'fork'), { entryId } satisfies ForkSessionRequest)
+  applyState(state)
+  store.activeKey = state.key
+  saveActiveSessionFile(state.sessionFile)
+  notify()
+  return state
+}
+
+export async function deleteSession(path: string): Promise<void> {
+  await post<ApiOkResponse>(sessionUrl(path, 'delete'))
+  if (store.activeKey === path) {
+    store.activeKey = null
+    clearActiveSessionFile()
+  }
+  delete store.views[path]
   notify()
 }
