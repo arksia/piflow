@@ -38,6 +38,8 @@ export interface SessionInfoLite {
   id: string
   cwd: string
   name: string | null
+  /** Path of the session this one was forked from, if any. */
+  parentSession: string | null
   created: string
   modified: string
   messageCount: number

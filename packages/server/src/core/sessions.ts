@@ -217,6 +217,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         id: session.id,
         cwd: session.cwd,
         name: session.name ?? null,
+        parentSession: session.parentSessionPath ?? null,
         created: session.created.toISOString(),
         modified: session.modified.toISOString(),
         messageCount: session.messageCount,
@@ -336,12 +337,16 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   }
 
   async function forkSession(path: string, entryId: string): Promise<ManagedSession | null> {
-    const manager = managerFor(path)
-    if (!manager)
+    if (!existsSync(path))
       return null
+    // Branch from a fresh on-disk instance: createBranchedSession mutates the
+    // manager in place, so forking a pooled live manager would hijack the
+    // source session's file/entry state.
+    const manager = SessionManager.open(path)
     const branchedPath = manager.createBranchedSession(entryId)
     if (!branchedPath)
       return null
+    await persistBranchedSession(manager, branchedPath)
     return openSavedSession(branchedPath)
   }
 
@@ -384,6 +389,22 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     forkSession,
     deleteSession,
   }
+}
+
+/**
+ * The SDK defers persisting a branched session until its first assistant
+ * message; write eagerly so the fork is immediately listable and openable.
+ * The manager must be the instance createBranchedSession just ran on — it
+ * holds the branched entries in memory.
+ *
+ * Exported for testing.
+ */
+export async function persistBranchedSession(manager: SessionManager, branchedPath: string): Promise<void> {
+  if (existsSync(branchedPath))
+    return
+  const header = manager.getHeader()
+  const entries = [header, ...manager.getEntries()].filter(entry => entry !== null)
+  await writeFile(branchedPath, `${entries.map(entry => JSON.stringify(entry)).join('\n')}\n`)
 }
 
 export function userMessageText(entry: SessionEntry): string | null {
