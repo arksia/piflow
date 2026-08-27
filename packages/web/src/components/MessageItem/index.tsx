@@ -52,7 +52,7 @@ function MessageItem({ message, toolResults, live = false }: Props) {
 
   if (message.role === 'assistant') {
     return (
-      <div className={`${styles.message} ${styles.assistant} ${live ? styles.live : ''}`}>
+      <div className={styles.message}>
         {blocks.map((block, index) => {
           const key = live ? `live:${block.type}:${index}` : blockKey(block)
           if (block.type === 'text') {
