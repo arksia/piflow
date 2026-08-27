@@ -18,3 +18,19 @@ export function readSavedActivePath(): string | null {
     return null
   }
 }
+
+const COLLAPSED_KEY = 'piflow.collapsed-sessions'
+
+export function readCollapsedSessions(): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(saved) ? saved.filter((path): path is string => typeof path === 'string') : [])
+  }
+  catch {
+    return new Set()
+  }
+}
+
+export function saveCollapsedSessions(collapsed: ReadonlySet<string>) {
+  localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]))
+}

@@ -14,8 +14,9 @@ export function notify() {
       listener()
   }
   // Hidden tabs never fire rAF; fall back to a timer so SSE-driven updates
-  // are not dropped while the page is backgrounded.
-  flushFrame = document.hidden ? setTimeout(flush, 100) : requestAnimationFrame(flush)
+  // are not dropped while the page is backgrounded. window.setTimeout keeps the
+  // numeric DOM handle even when @types/node is loaded by test files.
+  flushFrame = document.hidden ? window.setTimeout(flush, 100) : requestAnimationFrame(flush)
 }
 
 export const store: StoreState = {

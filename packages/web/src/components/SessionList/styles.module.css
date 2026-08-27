@@ -136,9 +136,37 @@
   transition: background 0.15s var(--ease);
 }
 
+.row-body {
+  display: flex;
+  align-items: flex-start;
+}
+
+.chevron {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  margin: 9px 0 0 2px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--c-faint);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.chevron:hover {
+  background: var(--c-line);
+  color: var(--c-ink);
+}
+
+.chevron-placeholder {
+  width: 18px;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
 .item-main {
-  display: block;
-  width: 100%;
+  min-width: 0;
+  flex: 1;
   border-radius: 4px;
   text-align: left;
   padding: 8px 8px 8px 10px;

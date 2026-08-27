@@ -9,7 +9,7 @@
     "lint": "eslint . --max-warnings 0 && stylelint 'packages/web/src/**/*.css' --max-warnings 0",
     "lint:fix": "eslint . --fix && stylelint 'packages/web/src/**/*.css' --fix",
     "typecheck": "pnpm --filter @piflow/protocol run typecheck && pnpm --filter piflow-web run typecheck && pnpm --filter piflow-server run typecheck",
-    "test": "pnpm --filter piflow-server run test",
+    "test": "pnpm --filter piflow-server run test && pnpm --filter piflow-web run test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
