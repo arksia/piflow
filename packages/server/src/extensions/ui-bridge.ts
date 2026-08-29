@@ -24,8 +24,16 @@ interface DialogOptions {
   timeout?: number
 }
 
-export function createUiBridge(sessionKey: string, publish: (message: ServerMessage) => void): UiBridge {
+export function createUiBridge(
+  sessionKey: string,
+  publish: (message: ServerMessage) => void,
+  onPendingChange?: (requests: ExtensionUIRequest[]) => void,
+): UiBridge {
   const pending = new Map<string, PendingDialog>()
+
+  function notifyPending() {
+    onPendingChange?.(Array.from(pending.values(), dialog => dialog.request))
+  }
 
   // Dialogs suspend without an artificial timeout: the browser keeps them in
   // client state and re-syncs from SessionState.extensionRequests after a
@@ -51,7 +59,8 @@ export function createUiBridge(sessionKey: string, publish: (message: ServerMess
         if (timeoutId !== undefined)
           clearTimeout(timeoutId)
         opts?.signal?.removeEventListener('abort', onAbort)
-        pending.delete(request.id)
+        if (pending.delete(request.id))
+          notifyPending()
       }
       opts?.signal?.addEventListener('abort', onAbort, { once: true })
       if (opts?.timeout !== undefined) {
@@ -67,6 +76,7 @@ export function createUiBridge(sessionKey: string, publish: (message: ServerMess
           resolve(parse(response))
         },
       })
+      notifyPending()
       publish({ type: 'extension_ui_request', session: sessionKey, request })
     })
   }

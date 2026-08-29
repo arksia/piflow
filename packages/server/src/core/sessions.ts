@@ -64,18 +64,33 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   const statuses = new Map<string, SessionStatusRecord>()
   const publish = options.publish
 
-  function setStatus(managed: ManagedSession, status: SessionStatus) {
+  function updateStatus(managed: ManagedSession, status: SessionStatus, needsInputAt: string | null) {
+    const existing = statuses.get(managed.key)
     const record: SessionStatusRecord = {
       key: managed.key,
       sessionFile: managed.session.sessionFile ?? null,
       status,
-      updatedAt: new Date().toISOString(),
+      needsInputAt,
+      updatedAt: existing?.status === status ? existing.updatedAt : new Date().toISOString(),
     }
-    const existing = statuses.get(managed.key)
-    if (existing && existing.status === record.status && existing.sessionFile === record.sessionFile)
+    if (existing
+      && existing.status === record.status
+      && existing.sessionFile === record.sessionFile
+      && existing.needsInputAt === record.needsInputAt) {
       return
+    }
     statuses.set(managed.key, record)
     publish({ type: 'status_delta', status: record })
+  }
+
+  function setStatus(managed: ManagedSession, status: SessionStatus) {
+    updateStatus(managed, status, statuses.get(managed.key)?.needsInputAt ?? null)
+  }
+
+  function setNeedsInput(managed: ManagedSession, needsInput: boolean) {
+    const existing = statuses.get(managed.key)
+    const needsInputAt = needsInput ? existing?.needsInputAt ?? new Date().toISOString() : null
+    updateStatus(managed, existing?.status ?? 'idle', needsInputAt)
   }
 
   function setStatusByKey(key: string, status: SessionStatus) {
@@ -146,7 +161,12 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       }),
     })
 
-    managed = { key, cwd, session, uiBridge: createUiBridge(key, publish) }
+    managed = {
+      key,
+      cwd,
+      session,
+      uiBridge: createUiBridge(key, publish, requests => managed && setNeedsInput(managed, requests.length > 0)),
+    }
     pool.set(key, managed)
     if (session.sessionFile)
       pool.set(session.sessionFile, managed)

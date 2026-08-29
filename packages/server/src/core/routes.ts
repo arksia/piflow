@@ -268,6 +268,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
           case 'abort':
             await managed.session.abort()
+            managed.uiBridge.cancelPending()
             return json(res, 200, { ok: true } satisfies ApiOkResponse)
 
           case 'model': {

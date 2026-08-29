@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { createUiBridge } from './ui-bridge'
 
-function createBridge() {
+function createBridge(onPendingChange?: (requests: ExtensionUIRequest[]) => void) {
   const messages: ServerMessage[] = []
-  const bridge = createUiBridge('session-1', message => messages.push(message))
+  const bridge = createUiBridge('session-1', message => messages.push(message), onPendingChange)
   return { bridge, messages }
 }
 
@@ -17,17 +17,20 @@ function uiRequest(messages: ServerMessage[]): ExtensionUIRequest {
 
 describe('extension ui bridge', () => {
   it('publishes select requests and resolves with the chosen value', async () => {
-    const { bridge, messages } = createBridge()
+    const pendingChanges: ExtensionUIRequest[][] = []
+    const { bridge, messages } = createBridge(requests => pendingChanges.push(requests))
     const promise = bridge.context.select('Pick one', ['a', 'b'])
     const request = uiRequest(messages)
     assert.equal(request.method, 'select')
     assert.equal(request.title, 'Pick one')
     assert.deepEqual(request.options, ['a', 'b'])
     assert.deepEqual(bridge.pendingRequests(), [request])
+    assert.deepEqual(pendingChanges, [[request]])
 
     bridge.handleResponse({ id: request.id, session: 'session-1', value: 'b' })
     assert.equal(await promise, 'b')
     assert.deepEqual(bridge.pendingRequests(), [])
+    assert.deepEqual(pendingChanges, [[request], []])
   })
 
   it('resolves confirm with false when cancelled', async () => {
@@ -60,12 +63,14 @@ describe('extension ui bridge', () => {
   })
 
   it('publishes notify without tracking a pending dialog', () => {
-    const { bridge, messages } = createBridge()
+    const pendingChanges: ExtensionUIRequest[][] = []
+    const { bridge, messages } = createBridge(requests => pendingChanges.push(requests))
     bridge.context.notify('heads up', 'warning')
     const request = uiRequest(messages)
     assert.equal(request.method, 'notify')
     assert.equal(request.notifyType, 'warning')
     assert.deepEqual(bridge.pendingRequests(), [])
+    assert.deepEqual(pendingChanges, [])
   })
 
   it('ignores responses for unknown dialog ids', () => {
