@@ -40,6 +40,10 @@
   background: #ff786d;
 }
 
+.status-dot.needs-input {
+  background: #e9ad55;
+}
+
 .status {
   color: var(--c-muted);
   font-size: 0.72rem;

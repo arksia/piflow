@@ -63,6 +63,71 @@
   white-space: nowrap;
 }
 
+.attention {
+  --attention-border: #4a2926;
+  --attention-bg: #211514;
+  --attention-ink: #ffb4ad;
+  --attention-strong: #ffd7d2;
+  --attention-muted: #dba39d;
+
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--attention-border);
+  background: var(--attention-bg);
+  color: var(--attention-ink);
+  font-size: 0.76rem;
+}
+
+.attention > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.attention strong {
+  color: var(--attention-strong);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attention span span {
+  min-width: 0;
+  color: var(--attention-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-action {
+  display: inline-flex;
+  min-height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  color: var(--attention-strong);
+  font-weight: 600;
+}
+
+.attention-action:hover {
+  background: #ffffff0d;
+  color: #fff;
+}
+
+.attention-needs-input {
+  --attention-border: #55401f;
+  --attention-bg: #211a0f;
+  --attention-ink: #e9ad55;
+  --attention-strong: #f4d29b;
+  --attention-muted: #c8a66e;
+}
+
 .add,
 .delete,
 .connect,

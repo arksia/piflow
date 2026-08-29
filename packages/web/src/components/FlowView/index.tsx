@@ -20,9 +20,10 @@ import {
   MiniMap,
   ReactFlow,
 } from '@xyflow/react'
-import { PanelLeft } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, CircleAlert, PanelLeft } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadFlow, saveFlow } from '../../flow/api'
+import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
 import { createBackgroundSession, openSession } from '../../session/actions'
 import { useStore } from '../../session/use-store'
 import FlowSessionNode from '../FlowSessionNode'
@@ -401,14 +402,28 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
   }, [selection])
 
   const availableSessions = store.sessions.filter(session => session.cwd === document?.projectPath && !document.nodes.some(node => node.sessionPath === session.path))
-  const visibleNodes = useMemo(() => nodes.map(node => ({
+  // The store is mutable and keeps a stable identity, so derive status on every notified render.
+  const visibleNodes = nodes.map(node => ({
     ...node,
     data: {
       ...node.data,
-      status: statusFor(node.data.sessionPath, store),
+      status: sessionStatusFor(node.data.sessionPath, store.statuses),
+      needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
       isAnchor: connectMode?.sourceId === node.id,
     },
-  })), [nodes, connectMode, store])
+  }))
+  const attentionItems = flowAttentionItems(document?.nodes ?? [], store.statuses)
+
+  function reviewAttention() {
+    const item = attentionItems[0]
+    const target = item ? visibleNodes.find(node => node.id === item.nodeId) : undefined
+    if (!target)
+      return
+    setNodes(current => current.map(node => ({ ...node, selected: node.id === target.id })))
+    setSelection({ nodes: [target.id], edges: [] })
+    if (instance)
+      void instance.fitView({ nodes: [target], padding: 0.7, maxZoom: 1, duration: reducedMotion ? 0 : 180 })
+  }
 
   const sourceNode = connectMode ? document?.nodes.find(node => node.id === connectMode.sourceId) : undefined
 
@@ -431,6 +446,30 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
         <button className={styles.add} disabled={!document} onClick={() => setPanelOpen(open => !open)}>+ 节点</button>
         <ViewSwitch active="flow" onChange={view => view === 'chat' && onShowChat()} />
       </header>
+
+      {attentionItems.length
+        ? (
+            <div className={`${styles.attention} ${attentionItems[0]!.reason === 'needs_input' ? styles.attentionNeedsInput : ''}`} role="status">
+              <CircleAlert size={15} aria-hidden="true" />
+              <span>
+                <strong>
+                  {attentionItems.length}
+                  {' '}
+                  个会话需要处理
+                </strong>
+                <span>
+                  {attentionItems[0]!.reason === 'needs_input' ? '等待输入' : '执行失败'}
+                  {' · '}
+                  {attentionItems[0]!.name}
+                </span>
+              </span>
+              <button className={styles.attentionAction} type="button" onClick={reviewAttention}>
+                查看
+                <ArrowRight size={14} aria-hidden="true" />
+              </button>
+            </div>
+          )
+        : null}
 
       {panelOpen
         ? (
@@ -508,7 +547,7 @@ function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
     id: node.id,
     type: 'session',
     position: node.position,
-    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, status: 'idle', onOpen },
+    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, status: 'idle', needsInput: false, onOpen },
   }
 }
 
@@ -558,10 +597,6 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
     && a.edges.length === b.edges.length
     && a.nodes.every((id, index) => id === b.nodes[index])
     && a.edges.every((id, index) => id === b.edges[index])
-}
-
-function statusFor(sessionPath: string, store: ReturnType<typeof useStore>): 'idle' | 'running' | 'failed' {
-  return store.statuses[sessionPath]?.status ?? 'idle'
 }
 
 function sessionLabel(session: SessionInfoLite) {
