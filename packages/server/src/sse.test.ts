@@ -27,7 +27,7 @@ function mockResponse(): { res: ServerResponse, chunks: string[] } {
 it('sends a status snapshot after hello on connect', () => {
   const sse = createSseHub('/project')
   const snapshot: SessionStatusRecord[] = [
-    { key: 'session-a', sessionFile: '/project/a.jsonl', status: 'idle', updatedAt: '2024-01-01T00:00:00Z' },
+    { key: 'session-a', sessionFile: '/project/a.jsonl', status: 'idle', needsInputAt: null, updatedAt: '2024-01-01T00:00:00Z' },
   ]
   sse.setStatusSnapshotProvider(() => snapshot)
 
@@ -37,7 +37,7 @@ it('sends a status snapshot after hello on connect', () => {
 
   const body = chunks.join('')
   assert.match(body, /data: \{"type":"hello","cwd":"\/project"\}/)
-  assert.match(body, /data: \{"type":"status_snapshot","statuses":\[\{"key":"session-a","sessionFile":"\/project\/a.jsonl","status":"idle","updatedAt":"2024-01-01T00:00:00Z"\}\]\}/)
+  assert.match(body, /data: \{"type":"status_snapshot","statuses":\[\{"key":"session-a","sessionFile":"\/project\/a.jsonl","status":"idle","needsInputAt":null,"updatedAt":"2024-01-01T00:00:00Z"\}\]\}/)
   req.emit('close')
 })
 
@@ -52,7 +52,7 @@ it('broadcasts delta messages to connected clients', () => {
   sse.open(firstReq, firstRes.res)
   sse.open(secondReq, secondRes.res)
 
-  const delta: SessionStatusRecord = { key: 'session-b', sessionFile: null, status: 'running', updatedAt: '2024-01-02T00:00:00Z' }
+  const delta: SessionStatusRecord = { key: 'session-b', sessionFile: null, status: 'running', needsInputAt: '2024-01-02T00:00:00Z', updatedAt: '2024-01-02T00:00:00Z' }
   sse.broadcast({ type: 'status_delta', status: delta })
 
   assert.match(firstRes.chunks.join(''), /data: \{"type":"status_delta","status":\{"key":"session-b","sessionFile":null,"status":"running"/)

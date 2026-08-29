@@ -186,6 +186,12 @@ export interface SessionStatusRecord {
   key: string
   sessionFile: string | null
   status: SessionStatus
+  /**
+   * Independent attention axis: set while a select/confirm/input dialog is
+   * awaiting a user answer (ISO time of the first pending request), null
+   * otherwise. Never encoded in `status`, which stays a pure run state.
+   */
+  needsInputAt: string | null
   updatedAt: string
 }
 
