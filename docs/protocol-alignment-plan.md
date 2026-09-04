@@ -1,145 +1,211 @@
-# RPC Driver Migration & Protocol Alignment Plan
+# SDK Runtime and Protocol Alignment Plan
 
-Date: 2026-02-10
+Date: 2026-09-05
 
-Status: v2 — supersedes the SDK-alignment-only draft (pi upgrade to 0.84.4
-already landed in `6a83977`).
+Status: accepted -- supersedes the RPC subprocess migration draft.
 
 ## Decision
 
-piflow switches its session driver from in-process SDK embedding
-(`createAgentSession`) to pi's official **RPC subprocess mode** (`RpcClient`,
-one `pi` process per active session).
+piflow embeds pi through its in-process SDK. Each resident piflow session owns
+one pi `AgentSessionRuntime`; `runtime.session` is the sole source of truth for
+agent state.
 
-Rationale: piflow is fundamentally a UI project, and RPC is the embedding
-path pi invests in for UIs — official `JsonAgentSessionEvent` wire events,
-`RpcExtensionUIRequest` frames, typed command API, and process isolation per
-session. pichamber validates the pattern end-to-end.
+piflow does not provide an RPC driver, a dual-driver abstraction, or one pi
+subprocess per session. Server restarts do not preserve running tasks. Ordinary
+agent failures must stay local to their session, while process-level failures
+such as OOM or native crashes may restart the server.
 
-Verified against pi 0.84 sources:
+This matches piflow's role as a Node.js host that needs native custom tools and
+does not require task survival across server restarts. pi-web independently
+validates the in-process SDK approach; pichamber's dual driver serves a
+different IDE integration model.
 
-- `RpcClient`: `prompt`/`steer`/`followUp`/`abort`, `fork(entryId)`,
-  `setSessionName`, `switch_session`, `getState`, `getMessages`,
-  `onEvent(JsonAgentSessionEvent)`.
-- CLI `--extension <path>` loads disk extensions in RPC mode.
-- `before_agent_start` extension hook may return
-  `{ message: { customType, content, display, details } }` — official
-  replacement for `sendCustomMessage` (flow_directory injection).
-- RPC command table has **no** custom-message command, and tools cannot be
-  injected as closures into a subprocess — Flow tools must become a disk
-  extension that calls back to piflow server over loopback HTTP.
+## Native pi boundaries
 
-## Target architecture
+Use pi concepts directly from the package that owns them. Do not rename,
+mirror, or convenience-re-export them through `@piflow/protocol`:
 
-```
-piflow-server (one Node process)
-├── SessionManager (pi SDK, file ops only: list / rename / delete / fork points)
-├── RpcClient pool — one pi subprocess per active session
-│     events: JsonAgentSessionEvent (official, no vendored toJsonEvent)
-│     extension UI: RpcExtensionUIRequest frames, forwarded + sanitized
-├── POST /api/flow/deliver — Flow callback endpoint (loopback, scoped token)
-└── packages/builtin-extensions/flow-bridge  (loaded via --extension)
-      ├── list_flow_connections / search_flow_context / read_flow_context
-      │     → read flow.json + session JSONL files directly from disk
-      ├── send_flow_message → POST /api/flow/deliver → server → target RpcClient.prompt()
-      └── before_agent_start → read flow.json, return flow_directory custom message
-```
+- `AgentMessage`, `AgentToolResult`, and `ThinkingLevel` from pi-agent-core;
+- `ModelInfo`, `AgentSessionRuntime`, `AgentSessionEvent`, `ContextUsage`,
+  `JsonAgentSessionEvent`, `RpcExtensionUIRequest`, and
+  `RpcExtensionUIResponse` from pi-coding-agent.
 
-Per-subprocess env carries `PIFLOW_SERVER` (loopback base URL) and a scoped
-`PIFLOW_FLOW_TOKEN`. Threat note: env is readable by same-user processes;
-loopback-only acceptance, same as today's token model.
+`@piflow/protocol` owns only piflow product data and network routing: Flow
+documents, provider quota reports, session status, ISO-string session-list
+projections, HTTP request/response bodies, and SSE envelopes.
 
-## Phase 1 — RPC driver vertical slice (server + web together)
+The browser model list uses pi's `ModelInfo`. The server explicitly projects
+only `provider`, `id`, `contextWindow`, and `reasoning`; it must not expose a
+full `Model<Api>` because that also carries `baseUrl`, headers, compatibility
+configuration, and other server-only data. The UI displays the model id.
 
-One coherent slice: single-session flows work end-to-end on RPC. Flow tools
-temporarily absent (Flow canvas stays visible, dispatch disabled).
+Dependencies remain `^0.84.4` with the committed `pnpm-lock.yaml`. Upgrades are
+reviewed through lockfile changes rather than exact package.json pins.
 
-Server:
+## Session runtime
 
-- Rewrite `core/sessions.ts` around an `RpcClient` pool: spawn per session
-  (`cliPath`, `cwd`, `args: ['--session', file]` when opening saved),
-  dispose = kill child. Keep the existing pool key semantics
-  (`new:*` vs session-file path).
-- Keep `SessionManager` for file-level ops: `listAll`, `appendSessionInfo`
-  (rename), delete, fork-point listing. Fork itself goes through
-  `client.fork(entryId)`, then spawn a new client for the branched file.
-- Status tracking (`idle/running/failed`, `needsInputAt`) stays, driven by
-  `agent_start`/`agent_settled` + extension-UI pending state.
-- Replace `extensions/ui-bridge.ts` with frame forwarding: RPC delivers
-  `extension_ui_request` frames natively; server sanitizes (TUI formatting →
-  plain text, cf. pichamber `sanitizeUiRequest`) and relays
-  `extension_ui_response` back.
-- `/api/models` keeps using server-side `ModelRuntime` (headless, shared).
+Each pool entry contains an `AgentSessionRuntime` and session-local Extension
+UI state. Runtime creation follows pi's native factory pattern:
 
-Protocol (`@piflow/protocol`):
+1. create cwd-bound `AgentSessionServices`;
+2. create the session from those services with Flow `customTools`;
+3. wrap it in `AgentSessionRuntime`;
+4. bind extensions and subscribe to `runtime.session`;
+5. rebind both whenever the runtime replaces its session.
 
-- `AgentEvent` → `JsonAgentSessionEvent` (type re-export).
-- `ChatMessage`/`MessageBlock`/… → `AgentMessage` from pi-agent-core.
-- `ExtensionUIRequest`/`ExtensionUIResponse` → `RpcExtensionUIRequest` /
-  `RpcExtensionUIResponse`.
-- Keep owned: `Flow*`, `SessionStatusRecord`, `UsageReport`, `ServerMessage`
-  envelope, `SessionInfoLite` (pi's `SessionInfo.created` is a `Date` — keep
-  the ISO-string projection), `ModelInfo`, route constants.
-- pi packages become `devDependencies` of protocol (type-only).
+Services are not shared between sessions. In particular, each runtime owns its
+`ModelRuntime`, `SettingsManager`, and `ResourceLoader`, preventing project
+extensions and provider registration from leaking between cwd values.
 
-Web:
+Use `AgentSessionRuntime.dispose()` for teardown so extensions receive
+`session_shutdown` before the session is invalidated. Browser disconnects do
+not dispose sessions. Sessions are disposed only by deletion, server shutdown,
+or pool eviction.
 
-- Reducer (`session/reducer.ts`) switches to delta mode: `message_update`
-  carries only `assistantMessageEvent`; rebuild `view.live` by applying
-  `text_delta`/`thinking_delta`/`toolcall_*` at `contentIndex`. Reference:
-  pichamber `packages/web/src/composables/useConversationSession.ts`.
-- Drop defensive `if (!event.x) break` checks — the discriminated union
-  narrows.
-- eslint guardrail: ban value imports of `@earendil-works/*` in web
-  (type imports allowed).
+Forking uses `runtime.fork(entryId)`. The resulting runtime is re-keyed to the
+new fork path and returned to the browser; the original session becomes
+non-resident and is reopened on demand. This preserves pi's extension
+lifecycle instead of editing JSONL files behind a live runtime.
 
-Verify: `pnpm typecheck && pnpm test && pnpm lint`; manual smoke — prompt,
-streaming render (text/thinking/tool calls), steer, abort, fork, rename,
-delete, extension dialog round-trip.
+## Session pool
 
-## Phase 2 — Flow restored via bridge extension
+`PIFLOW_SESSION_POOL_SIZE` is a soft total limit and defaults to `16`.
 
-- New `packages/builtin-extensions/flow-bridge` (loaded into every spawned
-  session via `--extension`):
-  - `list_flow_connections` / `read_flow_context` / `search_flow_context`:
-    read `flow.json` + peer session JSONL files from disk (pi persists on
-    `message_end`; searching "prior work" tolerates the in-flight gap).
-  - `send_flow_message`: POST to `/api/flow/deliver` with hop/chain metadata;
-    server validates topology (user-owned edges, MAX_HOPS) and calls the
-    target's `RpcClient.prompt()`.
-  - `before_agent_start`: read `flow.json`, return the flow_directory custom
-    message (replaces `sessions.ts` `injectFlowDirectory` +
-    `flowDirectories` cache; the extension can cache by file mtime).
-- Server: new `POST /api/flow/deliver` endpoint; delete `flow/tools.ts` and
-  the `createFlowTools` wiring in `sessions.ts`.
-- Node identity: env `PIFLOW_SESSION_FILE` per subprocess lets the extension
-  locate its own node in `flow.json`.
+When the pool exceeds the limit, evict least-recently-used entries only when
+all of the following hold:
 
-Verify: Flow e2e — connect two nodes, send A→B, search peer context,
-hop cap enforced, busy-target follow-up behavior.
+- the session is persisted;
+- the agent is not streaming or compacting;
+- no Extension UI dialog is pending.
 
-## Phase 3 — cleanup
+Running, pending-dialog, and unpersisted sessions are never evicted. They may
+temporarily push the pool above the limit. Do not abort work, queue activation,
+or add TTL timers. Concurrent opens of the same session share one creation
+promise.
 
-- Delete vendored SDK session plumbing no longer used; server keeps pi
-  dependency for `SessionManager` + `ModelRuntime` + types only.
-- Update AGENTS.md (`builtin-extensions` now exists; driver architecture
-  section) and `docs/flow-technical-design.md` (tool execution path changed:
-  in-process closures → bridge extension + callback).
-- Optional hardening (separate decision): per-frame `seq` + resync.
+An idle agent loop is not a closed session. `agent_settled` only means the
+current loop completed; the runtime still owns messages, model, thinking
+level, extensions, and queues.
 
-## Non-goals
+## Models
 
-- pi-server / pi-client (CBOR, unix socket) adoption — orthogonal; watch list
-  unchanged.
-- WebSocket transport; runtime schema validation; multi-user auth.
-- Dual-driver mode (pichamber keeps both SDK and RPC) — piflow commits to RPC
-  only.
+There is no process-global `ModelRuntime`. `GET /api/models?key=<session>`
+reads the selected session's `runtime.services.modelRuntime` and returns pi
+`ModelInfo` projections. The Web client refreshes this list when its active
+session changes. Model changes resolve the selected model against that same
+runtime.
 
-## Watch list (re-evaluate on pi upgrades)
+## Flow
 
-- [ ] pi-protocol: custom message channel, fork/delete commands
-- [ ] pi-server: WS/TCP transport, auth story, official `PiServerService` host
-- [ ] pi-coding-agent: `toJsonEvent` exported (would have removed the need
-      for any vendoring had we stayed on SDK)
-- [ ] RPC command table: custom-message command (would simplify
-      flow_directory injection)
+Flow remains an in-process SDK integration:
+
+- register Flow tools through `customTools`;
+- inject `flow_directory` with native `sendCustomMessage()`;
+- use `followUp()` for a busy target and `prompt()` for an idle target;
+- never use `steer()` for messages sent by another agent;
+- keep topology user-owned and enforce edge and hop authorization server-side.
+
+`search_flow_context` and `read_flow_context` must not activate a runtime.
+Read `runtime.session.messages` when resident; otherwise use
+`SessionManager.open(...).buildSessionContext().messages`. Only
+`send_flow_message` activates the target runtime.
+
+Do not create a disk extension, loopback callback, callback token, or
+`flow-bridge`. The hidden `flow_directory` message remains necessary to solve
+tool-discovery startup ordering.
+
+## Extension UI
+
+Replace `ui-bridge.ts` with a thin `extension-ui.ts` that directly implements
+pi's `ExtensionUIContext`. Bind it in `rpc` mode because that is pi's official
+portable headless UI contract; no `RpcClient` is involved.
+
+Use `RpcExtensionUIRequest` and `RpcExtensionUIResponse` as the existing pi
+wire DTOs. Add only the piflow `session` routing field, flat on the frame.
+Do not add aliases, nested request wrappers, ANSI cleaning, or private pi API
+access. The Web theme returns unstyled text and Markdown remains behind
+`rehype-sanitize`.
+
+Portable behavior:
+
+- `select`, `confirm`, `input`, and `editor` suspend until response, timeout,
+  abort, or runtime teardown;
+- `notify` is fire-and-forget and is not replayed;
+- `setStatus` and string-array `setWidget` are retained in the session UI
+  snapshot;
+- `setTitle` and `set_editor_text` are immediate browser commands and are not
+  replayed;
+- `pasteToEditor` follows RPC mode and degrades to `setEditorText`;
+- TUI-only component, raw-input, loader, theme-selection, autocomplete, and
+  editor-component APIs use the same no-op/default behavior as pi RPC mode.
+
+Pending dialogs are suspended extension promises, not messages or prompts.
+The first response wins; duplicate responses are silently ignored. Whenever
+the pending set changes, publish the existing session state snapshot so the
+current browser observes server-side timeout and abort. This is not a separate
+multi-tab settlement protocol.
+
+## Events and Web projection
+
+Subscribe to native `AgentSessionEvent` and send official
+`JsonAgentSessionEvent`. pi 0.84.4 does not export `toJsonEvent()`, so keep one
+small, tested, source-equivalent local conversion and delete it when upstream
+exports the helper.
+
+Do not JSON-serialize native `message_update` directly: its repeated full
+partial message makes streaming transport approach quadratic size. The JSON
+event carries the assistant delta without `partial`. SSE adds only the flat
+session routing envelope.
+
+The Web reducer is a disposable projection, never an authoritative agent
+state. On first connection and reconnect, emit an immediate state snapshot for
+every resident runtime, reading messages, streaming/error state, model,
+thinking level, context usage, queue, and Extension UI state directly from the
+session. Do not add an event log, sequence protocol, server-side message copy,
+or resync state machine.
+
+Session status is derived as follows:
+
+- `running`: `session.isStreaming`;
+- `failed`: `session.errorMessage !== undefined`;
+- `needsInput`: at least one pending Extension UI dialog;
+- a session not resident in this server process is treated as idle.
+
+## Project trust and extension management
+
+Creating services may execute project extensions. Reuse
+`hasTrustRequiringProjectResources()` and `ProjectTrustStore`; piflow and the
+pi CLI share the same trust decisions. Untrusted projects start in restricted
+mode without project resources. The Web UI may explicitly trust a project,
+then recreate its idle runtimes.
+
+Extension management is cwd- and scope-aware and continues to use pi's
+`SettingsManager` and `DefaultPackageManager`. Project-scope changes require a
+trusted project. Before installing or removing an extension, reject with
+`409` if any affected runtime is running or has a pending dialog. Otherwise
+persist the change and reload affected sessions. Global changes affect every
+runtime; project changes affect only matching cwd values. Do not maintain a
+deferred-reload state machine.
+
+## Verification
+
+Focused tests cover:
+
+- source-equivalent JSON event conversion;
+- dialog response, timeout, abort, duplicate response, and reconnect state;
+- status/widget state and immediate title/editor commands;
+- LRU eviction of only persisted safe idle sessions;
+- concurrent session activation;
+- Flow reads without runtime activation and busy-target `followUp`;
+- project trust gating;
+- extension mutation rejection while affected sessions are busy;
+- failure in session A does not prevent prompting session B.
+
+Finish with `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`.
+
+## Watch list
+
+- pi exports `toJsonEvent()`;
+- pi exports its RPC `createExtensionUIContext()`;
+- pi-server gains a host API that preserves in-process custom tools and the
+  required trust/auth semantics.
