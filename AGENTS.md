@@ -26,7 +26,7 @@ packages/
 ├── builtin-extensions/  # (planned) built-in pi extensions
 └── protocol/        # @piflow/protocol — shared TS types (ServerMessage, etc.)
 
-docs/                # PRD, Flow technical design, dogfood plans
+docs/                # Public product requirements
 ```
 
 ## Commands
@@ -46,7 +46,6 @@ pnpm build          # production build (web dist + server tsc)
 - **Tests colocated**: `foo.ts` ↔ `foo.test.ts` in the same directory.
 - **Component style**: `components/Name/index.tsx` + `styles.module.css`.
 - **Protocol changes**: edit `packages/protocol/src/index.ts`; server and web consume it via `@piflow/protocol`.
-- **Flow domain docs**: [docs/flow-technical-design.md](docs/flow-technical-design.md) is authoritative for Flow semantics (peer nodes, user-owned topology, explicit communication).
 - **Product scope**: [docs/PRD.md](docs/PRD.md) defines goals and explicit non-goals (piflow does not replace IDE, terminal, or Git hosting).
 
 ## Key entry points
