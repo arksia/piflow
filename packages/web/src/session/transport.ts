@@ -1,12 +1,10 @@
 import type {
-  ModelsResponse,
   ServerMessage,
   SessionsResponse,
 } from '@piflow/protocol'
 import {
   buildAuthPath,
   API_EVENTS_PATH as eventsPath,
-  API_MODELS_PATH as modelsPath,
   API_SESSIONS_PATH as sessionsPath,
 } from '@piflow/protocol'
 import { openSession } from './actions'
@@ -20,11 +18,7 @@ function restoreSession(path: string) {
 
 async function resync() {
   try {
-    const [sessions, models] = await Promise.all([
-      api<SessionsResponse>(sessionsPath),
-      api<ModelsResponse>(modelsPath),
-    ])
-    store.models = models.models
+    const sessions = await api<SessionsResponse>(sessionsPath)
     route({ type: 'sessions', sessions: sessions.sessions }, restoreSession)
     const key = store.activeKey
     if (key && !key.startsWith('new:'))

@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageBlock, TextBlock } from '@piflow/protocol'
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolState } from '../../session/state'
 import { memo } from 'react'
 import MarkdownView from '../MarkdownView'
@@ -10,10 +10,16 @@ const blockIds = new WeakMap<MessageBlock, number>()
 let nextBlockId = 1
 
 interface Props {
-  message: ChatMessage
+  message: AgentMessage
   toolResults: Record<string, ToolState>
   live?: boolean
 }
+
+type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
+type UserMessage = Extract<AgentMessage, { role: 'user' }>
+type UserBlock = Exclude<UserMessage['content'], string>[number]
+type MessageBlock = AssistantMessage['content'][number] | UserBlock
+type TextBlock = Extract<MessageBlock, { type: 'text' }>
 
 function time(timestamp?: number) {
   if (!timestamp)
@@ -22,7 +28,7 @@ function time(timestamp?: number) {
 }
 
 function MessageItem({ message, toolResults, live = false }: Props) {
-  const content = message.content
+  const content = 'content' in message ? message.content : ''
   const blocks = Array.isArray(content) ? content : []
   const userText = typeof content === 'string'
     ? content
@@ -85,7 +91,7 @@ function MessageItem({ message, toolResults, live = false }: Props) {
         <ToolCallCard
           call={{ name: 'bash', arguments: { command: message.command }, id: `bash-${message.timestamp}` }}
           state={{
-            result: { content: [{ type: 'text', text: message.output ?? '' }] },
+            result: { content: [{ type: 'text', text: message.output ?? '' }], details: {} },
             isError: message.exitCode !== 0,
           }}
         />
@@ -103,7 +109,8 @@ export default memo(MessageItem, (prev, next) => {
     return true
   // toolResults entries are replaced per tool id; only re-render when a
   // state this message actually displays has changed
-  const blocks = Array.isArray(next.message.content) ? next.message.content : []
+  const content = 'content' in next.message ? next.message.content : ''
+  const blocks = Array.isArray(content) ? content : []
   for (const block of blocks) {
     if (block.type === 'toolCall' && prev.toolResults[block.id] !== next.toolResults[block.id])
       return false

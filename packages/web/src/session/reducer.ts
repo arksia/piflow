@@ -1,6 +1,6 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
+import type { JsonAgentSessionEvent, RpcExtensionUIRequest } from '@earendil-works/pi-coding-agent'
 import type {
-  AgentEvent,
-  ChatMessage,
   ServerMessage,
   SessionInfoLite,
   SessionState,
@@ -12,8 +12,76 @@ import { ensureView, notify, store } from './store'
 
 let restored = false
 
-function sameMessage(a: ChatMessage | undefined, b: ChatMessage) {
-  return a && b && a.role === b.role && JSON.stringify(a.content) === JSON.stringify(b.content)
+type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
+type MessageUpdate = Extract<JsonAgentSessionEvent, { type: 'message_update' }>['assistantMessageEvent']
+const toolCallArgumentJson = new Map<string, string>()
+
+function sameMessage(a: AgentMessage | undefined, b: AgentMessage) {
+  return a && a.role === b.role && JSON.stringify(a) === JSON.stringify(b)
+}
+
+export function applyAssistantUpdate(message: AssistantMessage, update: MessageUpdate): AssistantMessage {
+  const content = [...message.content]
+  const current = 'contentIndex' in update ? content[update.contentIndex] : undefined
+
+  switch (update.type) {
+    case 'text_start':
+      content[update.contentIndex] = { type: 'text', text: '' }
+      break
+    case 'text_delta':
+      content[update.contentIndex] = {
+        type: 'text',
+        text: (current?.type === 'text' ? current.text : '') + update.delta,
+      }
+      break
+    case 'text_end':
+      content[update.contentIndex] = { type: 'text', text: update.content }
+      break
+    case 'thinking_start':
+      content[update.contentIndex] = { type: 'thinking', thinking: '' }
+      break
+    case 'thinking_delta':
+      content[update.contentIndex] = {
+        type: 'thinking',
+        thinking: (current?.type === 'thinking' ? current.thinking : '') + update.delta,
+      }
+      break
+    case 'thinking_end':
+      content[update.contentIndex] = { type: 'thinking', thinking: update.content }
+      break
+    case 'toolcall_start':
+      toolCallArgumentJson.set(update.id, '')
+      content[update.contentIndex] = {
+        type: 'toolCall',
+        id: update.id,
+        name: update.toolName,
+        arguments: {},
+      }
+      break
+    case 'toolcall_delta':
+      if (current?.type === 'toolCall') {
+        const json = (toolCallArgumentJson.get(current.id) ?? '') + update.delta
+        toolCallArgumentJson.set(current.id, json)
+        content[update.contentIndex] = { ...current, arguments: parseToolArguments(json) }
+      }
+      break
+    case 'toolcall_end':
+      toolCallArgumentJson.delete(update.toolCall.id)
+      content[update.contentIndex] = update.toolCall
+      break
+  }
+
+  return { ...message, content }
+}
+
+function parseToolArguments(json: string): Record<string, unknown> {
+  try {
+    const value: unknown = JSON.parse(json)
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  }
+  catch {
+    return {}
+  }
 }
 
 export function applySessions(sessions: SessionInfoLite[], restoreSession: (path: string) => void) {
@@ -29,16 +97,19 @@ export function applySessions(sessions: SessionInfoLite[], restoreSession: (path
 
 export function applyState(state: SessionState) {
   const view = ensureView(state.key)
+  view.cwd = state.cwd
   view.sessionFile = state.sessionFile ?? null
   view.messages = state.messages
   view.live = null
   view.isStreaming = state.isStreaming
+  view.isCompacting = state.isCompacting
   view.model = state.model
   view.thinkingLevel = state.thinkingLevel ?? null
   view.thinkingLevels = state.thinkingLevels ?? []
   view.context = state.context ?? null
   view.extensionRequests = state.extensionRequests
-  view.error = null
+  view.queue = state.queue
+  view.error = state.error
 
   const results: Record<string, ToolState> = {}
   for (const message of state.messages) {
@@ -57,7 +128,7 @@ export function applyState(state: SessionState) {
   notify()
 }
 
-export function handleEvent(key: string, event: AgentEvent) {
+export function handleEvent(key: string, event: JsonAgentSessionEvent) {
   const view = ensureView(key)
   view.tick++
 
@@ -73,19 +144,17 @@ export function handleEvent(key: string, event: AgentEvent) {
       break
 
     case 'message_start':
-      if (event.message?.role === 'assistant')
+      if (event.message.role === 'assistant')
         view.live = event.message
       break
 
     case 'message_update':
-      if (event.message?.role === 'assistant')
-        view.live = event.message
+      if (view.live?.role === 'assistant')
+        view.live = applyAssistantUpdate(view.live, event.assistantMessageEvent)
       break
 
     case 'message_end': {
       const message = event.message
-      if (!message)
-        break
       if (message.role === 'assistant') {
         view.live = null
         const last = view.messages[view.messages.length - 1]
@@ -96,8 +165,6 @@ export function handleEvent(key: string, event: AgentEvent) {
     }
 
     case 'tool_execution_start':
-      if (!event.toolCallId)
-        break
       view.toolResults = {
         ...view.toolResults,
         [event.toolCallId]: { running: true, args: event.args },
@@ -105,8 +172,6 @@ export function handleEvent(key: string, event: AgentEvent) {
       break
 
     case 'tool_execution_update': {
-      if (!event.toolCallId)
-        break
       const previous = view.toolResults[event.toolCallId]
       view.toolResults = {
         ...view.toolResults,
@@ -116,8 +181,6 @@ export function handleEvent(key: string, event: AgentEvent) {
     }
 
     case 'tool_execution_end':
-      if (!event.toolCallId)
-        break
       view.toolResults = {
         ...view.toolResults,
         [event.toolCallId]: { result: event.result, isError: event.isError },
@@ -133,7 +196,7 @@ export function handleEvent(key: string, event: AgentEvent) {
       break
 
     case 'queue_update':
-      view.queue = { steering: event.steering ?? [], followUp: event.followUp ?? [] }
+      view.queue = { steering: event.steering, followUp: event.followUp }
       break
   }
 
@@ -186,19 +249,45 @@ export function route(message: ServerMessage, restoreSession: (path: string) => 
       break
 
     case 'extension_ui_request': {
+      const request = message as RpcExtensionUIRequest & { session: string }
       // Notices are fire-and-forget: the server never tracks them as pending,
       // so they live outside view state until the user dismisses them.
-      if (message.request.method === 'notify') {
-        store.extensionNotices = [...store.extensionNotices, { session: message.session, request: message.request }]
+      if (request.method === 'notify') {
+        store.extensionNotices = [...store.extensionNotices, { session: request.session, request }]
         notify()
         break
       }
-      const view = ensureView(message.session)
-      if (!view.extensionRequests.some(request => request.id === message.request.id)) {
-        view.extensionRequests = [...view.extensionRequests, message.request]
-        view.tick++
-        notify()
+      if (request.method === 'setTitle') {
+        document.title = request.title || 'piflow'
+        break
       }
+      if (request.method === 'set_editor_text') {
+        window.dispatchEvent(new CustomEvent('piflow:set-editor-text', { detail: { session: request.session, text: request.text } }))
+        break
+      }
+      if (request.method !== 'select'
+        && request.method !== 'confirm'
+        && request.method !== 'input'
+        && request.method !== 'editor'
+        && request.method !== 'setStatus'
+        && request.method !== 'setWidget') {
+        break
+      }
+      const view = ensureView(request.session)
+      const retained = view.extensionRequests.filter((existing) => {
+        if (request.method === 'setStatus' && existing.method === 'setStatus')
+          return existing.statusKey !== request.statusKey
+        if (request.method === 'setWidget' && existing.method === 'setWidget')
+          return existing.widgetKey !== request.widgetKey
+        return existing.id !== request.id
+      })
+      if ((request.method !== 'setStatus' || request.statusText !== undefined)
+        && (request.method !== 'setWidget' || request.widgetLines !== undefined)) {
+        retained.push(request)
+      }
+      view.extensionRequests = retained
+      view.tick++
+      notify()
       break
     }
 

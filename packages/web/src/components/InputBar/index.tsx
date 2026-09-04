@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { UsageWindow } from '@piflow/protocol'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { SessionView } from '../../session/state'
@@ -46,7 +47,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   const contextPercent = Math.round(view?.context?.percent ?? 0)
   const contextLevel = contextPercent >= 85 ? styles.danger : contextPercent >= 70 ? styles.warning : styles.normal
   const contextTitle = view?.context
-    ? `上下文已用 ${contextPercent}%（${formatTokens(view.context.tokens)} / ${formatTokens(view.context.contextWindow)}）`
+    ? `上下文已用 ${contextPercent}%（${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}）`
     : ''
   const canSend = store.connected && text.trim().length > 0
   const isLive = store.connected && !!view?.isStreaming
@@ -100,8 +101,8 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   function cycleThinking() {
     if (!view)
       return
-    const levels = view.thinkingLevels.length ? view.thinkingLevels : ['off', 'low', 'medium', 'high']
-    const current = levels.indexOf(view.thinkingLevel ?? '')
+    const levels: ThinkingLevel[] = view.thinkingLevels.length ? view.thinkingLevels : ['off', 'low', 'medium', 'high']
+    const current = view.thinkingLevel ? levels.indexOf(view.thinkingLevel) : -1
     const next = levels[(current + 1) % levels.length]
     if (next)
       setThinking(view.key, next)
@@ -188,7 +189,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                       aria-expanded={modelOpen}
                       onClick={toggleModels}
                     >
-                      {view.model.name}
+                      {view.model.id}
                     </button>
                   )
                 : null}
@@ -233,7 +234,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                             className={`${styles.providerItem} ${view?.model?.id === model.id ? styles.current : ''}`}
                             onClick={() => pickModel(model.provider, model.id)}
                           >
-                            {model.name}
+                            {model.id}
                           </button>
                         ))}
                       </div>

@@ -1,4 +1,5 @@
-import type { ExtensionUIRequest } from '@piflow/protocol'
+import type { RpcExtensionUIRequest } from '@earendil-works/pi-coding-agent'
+import type { ExtensionUIResponseBody } from '@piflow/protocol'
 import type { FormEvent } from 'react'
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -6,12 +7,20 @@ import { answerExtensionRequest, dismissExtensionNotice } from '../../session/ac
 import { useStore } from '../../session/use-store'
 import styles from './styles.module.css'
 
-function answer(session: string, request: ExtensionUIRequest, response: { cancelled?: boolean, value?: string, confirmed?: boolean }) {
-  void answerExtensionRequest({ id: request.id, session, ...response })
+type DialogRequest = Extract<RpcExtensionUIRequest, { method: 'select' | 'confirm' | 'input' | 'editor' }>
+type TextDialogRequest = Extract<DialogRequest, { method: 'input' | 'editor' }>
+
+function answer(session: string, request: DialogRequest, response: { cancelled?: boolean, value?: string, confirmed?: boolean }) {
+  const frame: ExtensionUIResponseBody = response.cancelled
+    ? { type: 'extension_ui_response', id: request.id, session, cancelled: true }
+    : response.confirmed !== undefined
+      ? { type: 'extension_ui_response', id: request.id, session, confirmed: response.confirmed }
+      : { type: 'extension_ui_response', id: request.id, session, value: response.value ?? '' }
+  void answerExtensionRequest(frame)
     .catch((error: unknown) => console.error('[piflow]', error))
 }
 
-function SelectDialog({ session, request }: { session: string, request: ExtensionUIRequest }) {
+function SelectDialog({ session, request }: { session: string, request: Extract<DialogRequest, { method: 'select' }> }) {
   return (
     <>
       <h2 className={styles.title}>{request.title ?? '选择一项'}</h2>
@@ -29,7 +38,7 @@ function SelectDialog({ session, request }: { session: string, request: Extensio
   )
 }
 
-function ConfirmDialog({ session, request }: { session: string, request: ExtensionUIRequest }) {
+function ConfirmDialog({ session, request }: { session: string, request: Extract<DialogRequest, { method: 'confirm' }> }) {
   return (
     <>
       <h2 className={styles.title}>{request.title ?? '确认'}</h2>
@@ -42,8 +51,8 @@ function ConfirmDialog({ session, request }: { session: string, request: Extensi
   )
 }
 
-function InputDialog({ session, request }: { session: string, request: ExtensionUIRequest }) {
-  const [value, setValue] = useState('')
+function InputDialog({ session, request }: { session: string, request: TextDialogRequest }) {
+  const [value, setValue] = useState(request.method === 'editor' ? request.prefill ?? '' : '')
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -58,7 +67,7 @@ function InputDialog({ session, request }: { session: string, request: Extension
           autoFocus
           value={value}
           aria-label={request.title ?? '输入'}
-          placeholder={request.placeholder}
+          placeholder={request.method === 'input' ? request.placeholder : undefined}
           onChange={event => setValue(event.target.value)}
         />
       </form>
@@ -73,7 +82,8 @@ function InputDialog({ session, request }: { session: string, request: Extension
 export default function ExtensionDialog() {
   const store = useStore()
   const view = store.activeKey ? store.views[store.activeKey] : undefined
-  const pending = view?.extensionRequests[0]
+  const request = view?.extensionRequests[0]
+  const pending = request && isDialogRequest(request) ? request : undefined
 
   useEffect(() => {
     if (!pending || !store.activeKey)
@@ -95,7 +105,9 @@ export default function ExtensionDialog() {
               <section className={styles.dialog} role="dialog" aria-modal="true" aria-label={pending.title ?? '扩展请求'}>
                 {pending.method === 'select' ? <SelectDialog session={store.activeKey} request={pending} /> : null}
                 {pending.method === 'confirm' ? <ConfirmDialog session={store.activeKey} request={pending} /> : null}
-                {pending.method === 'input' ? <InputDialog session={store.activeKey} request={pending} /> : null}
+                {pending.method === 'input' || pending.method === 'editor'
+                  ? <InputDialog session={store.activeKey} request={pending} />
+                  : null}
               </section>
             </div>
           )
@@ -121,4 +133,11 @@ export default function ExtensionDialog() {
         : null}
     </>
   )
+}
+
+function isDialogRequest(request: RpcExtensionUIRequest): request is DialogRequest {
+  return request.method === 'select'
+    || request.method === 'confirm'
+    || request.method === 'input'
+    || request.method === 'editor'
 }

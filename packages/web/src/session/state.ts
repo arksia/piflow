@@ -1,43 +1,46 @@
+import type { AgentMessage, AgentToolResult, ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type {
-  ChatMessage,
-  ExtensionUIRequest,
+  ContextUsage,
   ModelInfo,
-  SessionContext,
+  RpcExtensionUIRequest,
+} from '@earendil-works/pi-coding-agent'
+import type {
+  ProjectTrustStatus,
   SessionInfoLite,
   SessionStatusRecord,
-  ToolExecutionPayload,
   UsageReport,
 } from '@piflow/protocol'
 
 export interface ToolState {
   running?: boolean
   args?: unknown
-  partial?: ToolExecutionPayload
-  result?: ToolExecutionPayload
+  partial?: AgentToolResult<Record<string, unknown>>
+  result?: AgentToolResult<Record<string, unknown>>
   isError?: boolean
 }
 
 export interface SessionView {
   key: string
+  cwd: string
   sessionFile: string | null
-  messages: ChatMessage[]
-  live: ChatMessage | null
+  messages: AgentMessage[]
+  live: AgentMessage | null
   isStreaming: boolean
   isCompacting: boolean
   model: ModelInfo | null
-  thinkingLevel: string | null
-  thinkingLevels: string[]
-  context: SessionContext | null
+  thinkingLevel: ThinkingLevel | null
+  thinkingLevels: ThinkingLevel[]
+  context: ContextUsage | null
   toolResults: Record<string, ToolState>
   queue: { steering: readonly string[], followUp: readonly string[] }
-  extensionRequests: ExtensionUIRequest[]
+  extensionRequests: RpcExtensionUIRequest[]
   error: string | null
   tick: number
 }
 
 export interface ExtensionNotice {
   session: string
-  request: ExtensionUIRequest
+  request: Extract<RpcExtensionUIRequest, { method: 'notify' }>
 }
 
 export interface StoreState {
@@ -50,5 +53,6 @@ export interface StoreState {
   views: Record<string, SessionView>
   statuses: Record<string, SessionStatusRecord>
   extensionNotices: ExtensionNotice[]
+  projectTrust: Record<string, ProjectTrustStatus>
   sidebarOpen: boolean
 }

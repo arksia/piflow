@@ -1,7 +1,8 @@
-import type { ChatMessage } from '@piflow/protocol'
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { CSSProperties, UIEvent, WheelEvent } from 'react'
 import { PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { trustProject } from '../../session/actions'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import InputBar from '../InputBar'
@@ -12,7 +13,7 @@ import styles from './styles.module.css'
 const SCROLL_KEY = 'piflow.scroll'
 const PRESETS = ['探索这个代码库', '回顾我的改动', '修一个 bug', '做个功能规划']
 const WIDTHS = [860, 1180, 1440] as const
-const messageIds = new WeakMap<ChatMessage, number>()
+const messageIds = new WeakMap<AgentMessage, number>()
 let nextMessageId = 1
 
 function readScrollMap(): Record<string, number> {
@@ -49,6 +50,21 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const [widthIndex, setWidthIndex] = useState(() => Math.min(Number(localStorage.getItem('piflow.chatWidth') ?? 1), 2))
   const session = store.sessions.find(session => session.path === store.activeKey)
   const title = store.activeKey ? session?.name || session?.firstMessage || '新会话' : ''
+  const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
+  const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
+  const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
+
+  useEffect(() => {
+    function setEditorText(event: Event) {
+      const command = (event as CustomEvent<{ session: string, text: string }>).detail
+      if (command.session !== store.activeKey)
+        return
+      setComposerText(command.text)
+      setComposerFocusVersion(version => version + 1)
+    }
+    window.addEventListener('piflow:set-editor-text', setEditorText)
+    return () => window.removeEventListener('piflow:set-editor-text', setEditorText)
+  }, [store.activeKey])
 
   function persist(key: string, top: number) {
     scrollMapRef.current[key] = top
@@ -204,6 +220,14 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
       </header>
 
       <div ref={scrollerRef} className={`${styles.scroll} ${isEmpty ? styles.centered : ''}`} onScroll={onScroll} onWheel={onWheel}>
+        {trust?.requiresTrust && !trust.trusted
+          ? (
+              <div className={styles.trust}>
+                <span>项目资源已停用，确认信任后才会加载扩展与技能。</span>
+                <button onClick={() => void trustProject(trust.cwd)}>信任项目</button>
+              </div>
+            )
+          : null}
         {isEmpty
           ? (
               <div className={styles.hero}>
@@ -240,6 +264,17 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
             )}
       </div>
 
+      {statuses.length || widgets.length
+        ? (
+            <div className={styles.extensionState}>
+              {statuses.map(status => <span key={status.id}>{status.method === 'setStatus' ? status.statusText : ''}</span>)}
+              {widgets.map(widget => (
+                <span key={widget.id}>{widget.method === 'setWidget' ? widget.widgetLines?.join('\n') : ''}</span>
+              ))}
+            </div>
+          )
+        : null}
+
       <InputBar
         view={view}
         text={composerText}
@@ -250,7 +285,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   )
 }
 
-function messageKey(message: ChatMessage) {
+function messageKey(message: AgentMessage) {
   let id = messageIds.get(message)
   if (!id) {
     id = nextMessageId++

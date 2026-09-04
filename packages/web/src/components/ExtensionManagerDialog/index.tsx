@@ -16,6 +16,7 @@ function scopeLabel(scope: ExtensionSourceInfo['scope']) {
 export default function ExtensionManagerDialog({ onClose }: Props) {
   const [extensions, setExtensions] = useState<ExtensionSourceInfo[] | null>(null)
   const [source, setSource] = useState('')
+  const [scope, setScope] = useState<'global' | 'project'>('global')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -67,7 +68,7 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
     if (!trimmed)
       return
     void run(async () => {
-      await installExtension(trimmed)
+      await installExtension(trimmed, scope)
       setSource('')
     })
   }
@@ -84,6 +85,10 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
         </header>
 
         <form className={styles.installForm} onSubmit={submitInstall}>
+          <select value={scope} aria-label="扩展范围" onChange={event => setScope(event.target.value as 'global' | 'project')}>
+            <option value="global">全局</option>
+            <option value="project">项目</option>
+          </select>
           <input
             ref={inputRef}
             value={source}
@@ -110,7 +115,7 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
                       title={`移除 ${extension.source}`}
                       aria-label={`移除 ${extension.source}`}
                       disabled={busy}
-                      onClick={() => void run(() => removeExtension(extension.source))}
+                      onClick={() => void run(() => removeExtension(extension.source, extension.scope === 'project' ? 'project' : 'global'))}
                     >
                       <Trash2 size={13} />
                     </button>
