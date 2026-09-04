@@ -65,7 +65,8 @@ h2 {
   padding: 16px 20px 10px;
 }
 
-.install-form input {
+.install-form input,
+.install-form select {
   min-width: 0;
   flex: 1;
   border: 1px solid var(--c-line);
@@ -76,6 +77,11 @@ h2 {
   color: var(--c-body);
   font-family: var(--font-mono);
   font-size: 0.76rem;
+}
+
+.install-form select {
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
 }
 
 .install-form input:focus {

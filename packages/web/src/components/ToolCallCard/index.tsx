@@ -37,7 +37,7 @@ export default function ToolCallCard({ call, state }: Props) {
     }
   })
   const source = state?.partial ?? state?.result
-  const rawOutput = (source?.content ?? []).map(content => content.text ?? '').join('').trimEnd()
+  const rawOutput = (source?.content ?? []).map(content => content.type === 'text' ? content.text : '').join('').trimEnd()
   const lines = rawOutput.split('\n')
   const truncated = lines.length > 60 && !expanded
   const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput

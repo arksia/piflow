@@ -1,3 +1,4 @@
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type {
   ApiOkResponse,
   DirectoriesResponse,
@@ -5,13 +6,15 @@ import type {
   ExtensionChangeResponse,
   ExtensionSourceInfo,
   ExtensionsResponse,
-  ExtensionUIResponse,
+  ExtensionUIResponseBody,
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,
   InstallExtensionRequest,
+  ModelsResponse,
   NewSessionRequest,
   OpenSessionRequest,
+  ProjectTrustResponse,
   PromptRequest,
   RemoveExtensionRequest,
   RenameSessionRequest,
@@ -19,11 +22,14 @@ import type {
   SessionStateResponse,
   SetModelRequest,
   SetThinkingRequest,
+  TrustProjectRequest,
   UsageReport,
 } from '@piflow/protocol'
 import {
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
+  API_MODELS_PATH,
+  API_PROJECT_TRUST_PATH,
   buildDirectoriesPath,
   buildUsagePath,
   API_SESSIONS_NEW_PATH as newSessionPath,
@@ -40,6 +46,7 @@ async function requestSession(path: string, body: OpenSessionRequest | NewSessio
   store.activeKey = state.key
   saveActiveSessionFile(state.sessionFile)
   notify()
+  await Promise.all([requestModels(state.key), requestProjectTrust(state.cwd)])
   return state
 }
 
@@ -92,7 +99,7 @@ export function setModel(key: string, provider: string, modelId: string) {
   } satisfies SetModelRequest).catch((error: unknown) => console.error('[piflow]', error))
 }
 
-export function setThinking(key: string, level: string) {
+export function setThinking(key: string, level: ThinkingLevel) {
   void post<ApiOkResponse>(sessionUrl(key, 'thinking'), { level } satisfies SetThinkingRequest).catch((error: unknown) => console.error('[piflow]', error))
 }
 
@@ -107,24 +114,54 @@ export function requestUsage(key: string, fresh = false) {
 }
 
 export async function fetchExtensions(): Promise<ExtensionSourceInfo[]> {
-  const { extensions } = await api<ExtensionsResponse>(API_EXTENSIONS_PATH)
+  const cwd = activeCwd()
+  const { extensions } = await api<ExtensionsResponse>(`${API_EXTENSIONS_PATH}?${new URLSearchParams({ cwd })}`)
   return extensions
 }
 
-export function installExtension(source: string): Promise<ExtensionChangeResponse> {
-  return post<ExtensionChangeResponse>(API_EXTENSIONS_PATH, { source } satisfies InstallExtensionRequest)
+export function installExtension(source: string, scope: 'global' | 'project'): Promise<ExtensionChangeResponse> {
+  return post<ExtensionChangeResponse>(API_EXTENSIONS_PATH, { source, scope, cwd: activeCwd() } satisfies InstallExtensionRequest)
 }
 
-export function removeExtension(source: string): Promise<ExtensionChangeResponse> {
+export function removeExtension(source: string, scope: 'global' | 'project'): Promise<ExtensionChangeResponse> {
   return api<ExtensionChangeResponse>(API_EXTENSIONS_PATH, {
     method: 'DELETE',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ source } satisfies RemoveExtensionRequest),
+    body: JSON.stringify({ source, scope, cwd: activeCwd() } satisfies RemoveExtensionRequest),
   })
 }
 
+export async function requestModels(key: string): Promise<void> {
+  const { models } = await api<ModelsResponse>(`${API_MODELS_PATH}?${new URLSearchParams({ key })}`)
+  if (store.activeKey === key) {
+    store.models = models
+    notify()
+  }
+}
+
+export async function requestProjectTrust(cwd: string): Promise<void> {
+  const { status } = await api<ProjectTrustResponse>(`${API_PROJECT_TRUST_PATH}?${new URLSearchParams({ cwd })}`)
+  store.projectTrust[cwd] = status
+  notify()
+}
+
+export async function trustProject(cwd: string): Promise<void> {
+  const { status } = await post<ProjectTrustResponse>(API_PROJECT_TRUST_PATH, { cwd } satisfies TrustProjectRequest)
+  store.projectTrust[cwd] = status
+  const key = store.activeKey
+  const path = key ? store.views[key]?.sessionFile : null
+  if (path)
+    await openSession(path)
+  notify()
+}
+
+function activeCwd(): string {
+  const key = store.activeKey
+  return (key ? store.views[key]?.cwd : undefined) || store.cwd
+}
+
 /** Optimistically drop the dialog locally, then answer the suspended extension call. */
-export async function answerExtensionRequest(response: ExtensionUIResponse): Promise<void> {
+export async function answerExtensionRequest(response: ExtensionUIResponseBody): Promise<void> {
   const view = ensureView(response.session)
   view.extensionRequests = view.extensionRequests.filter(request => request.id !== response.id)
   view.tick++

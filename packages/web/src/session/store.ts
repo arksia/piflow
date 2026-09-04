@@ -29,6 +29,7 @@ export const store: StoreState = {
   views: {},
   statuses: {},
   extensionNotices: [],
+  projectTrust: {},
   sidebarOpen: false,
 }
 
@@ -49,6 +50,7 @@ export function setSidebarOpen(open: boolean) {
 export function ensureView(key: string): SessionView {
   return (store.views[key] ??= {
     key,
+    cwd: '',
     sessionFile: null,
     messages: [],
     live: null,
