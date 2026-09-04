@@ -1,3 +1,5 @@
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
+
 export const AUTH_PATH = '/auth'
 
 export const API_EVENTS_PATH = '/api/events'
@@ -9,6 +11,7 @@ export const API_USAGE_PATH = '/api/usage'
 export const API_FLOW_PATH = '/api/flow'
 export const API_EXTENSIONS_PATH = '/api/extensions'
 export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
+export const API_PROJECT_TRUST_PATH = '/api/project-trust'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 
@@ -35,7 +38,7 @@ export interface SetModelRequest {
 }
 
 export interface SetThinkingRequest {
-  level: string
+  level: ThinkingLevel
 }
 
 export interface RenameSessionRequest {
@@ -59,6 +62,10 @@ export interface ForkPointsResponse {
 
 export interface ApiOkResponse {
   ok: true
+}
+
+export interface TrustProjectRequest {
+  cwd: string
 }
 
 export function buildAuthPath(token?: string): string {

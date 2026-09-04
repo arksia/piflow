@@ -1,15 +1,17 @@
-import type { ServerMessage, SessionStatusRecord } from '@piflow/protocol'
+import type { ServerMessage, SessionState, SessionStatusRecord } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 export interface SseHub {
   open: (req: IncomingMessage, res: ServerResponse) => void
   broadcast: (message: ServerMessage) => void
   setStatusSnapshotProvider: (provider: () => SessionStatusRecord[]) => void
+  setStateSnapshotProvider: (provider: () => SessionState[]) => void
 }
 
 export function createSseHub(cwd: string): SseHub {
   const clients = new Set<ServerResponse>()
   let statusSnapshotProvider: (() => SessionStatusRecord[]) | undefined
+  let stateSnapshotProvider: (() => SessionState[]) | undefined
 
   function write(res: ServerResponse, message: ServerMessage) {
     res.write(`data: ${JSON.stringify(message)}\n\n`)
@@ -30,6 +32,10 @@ export function createSseHub(cwd: string): SseHub {
         const statuses = statusSnapshotProvider()
         write(res, { type: 'status_snapshot', statuses })
       }
+      if (stateSnapshotProvider) {
+        for (const state of stateSnapshotProvider())
+          write(res, { type: 'state', state })
+      }
       const heartbeat = setInterval(() => res.write(': hb\n\n'), 25_000)
       req.on('close', () => {
         clearInterval(heartbeat)
@@ -42,6 +48,9 @@ export function createSseHub(cwd: string): SseHub {
     },
     setStatusSnapshotProvider(provider) {
       statusSnapshotProvider = provider
+    },
+    setStateSnapshotProvider(provider) {
+      stateSnapshotProvider = provider
     },
   }
 }

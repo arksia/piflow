@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
-import { persistBranchedSession, userMessageText } from './core/sessions'
+import { userMessageText } from './core/sessions'
 
 interface FixtureEntry {
   id: string
@@ -125,31 +124,6 @@ it('throws when forking from an unknown entry id', async () => {
     ])
 
     assert.throws(() => SessionManager.open(file).createBranchedSession('nope'), /not found/i)
-  }
-  finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-it('persists a branched session without assistant messages so listAll exposes its parent', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'piflow-manage-'))
-
-  try {
-    const file = await createSessionFile(root, [
-      { id: 'u1', role: 'user', content: 'first' },
-      { id: 'a1', role: 'assistant', content: 'one' },
-    ])
-    const manager = SessionManager.open(file)
-    const branched = manager.createBranchedSession('u1')
-    assert.ok(branched)
-    // The SDK defers writing a branch whose path has no assistant message.
-    assert.equal(existsSync(branched), false)
-
-    await persistBranchedSession(manager, branched)
-
-    const all = await SessionManager.listAll(join(root, 'sessions'))
-    assert.equal(all.find(session => session.path === branched)?.parentSessionPath, file)
-    assert.equal(all.find(session => session.path === file)?.parentSessionPath, undefined)
   }
   finally {
     await rm(root, { recursive: true, force: true })

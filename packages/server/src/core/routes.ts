@@ -3,7 +3,7 @@ import type {
   DirectoriesResponse,
   ExtensionChangeResponse,
   ExtensionsResponse,
-  ExtensionUIResponse,
+  ExtensionUIResponseBody,
   FlowDocumentResponse,
   ForkPointsResponse,
   ForkSessionRequest,
@@ -12,6 +12,7 @@ import type {
   ModelsResponse,
   NewSessionRequest,
   OpenSessionRequest,
+  ProjectTrustResponse,
   PromptRequest,
   RemoveExtensionRequest,
   RenameSessionRequest,
@@ -20,6 +21,7 @@ import type {
   SessionStateResponse,
   SetModelRequest,
   SetThinkingRequest,
+  TrustProjectRequest,
   UsageReport,
   UsageWindow,
 } from '@piflow/protocol'
@@ -38,6 +40,7 @@ import {
   API_FLOW_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
+  API_PROJECT_TRUST_PATH,
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
   API_SESSIONS_PATH,
@@ -77,7 +80,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
   async function handlePrompt(managed: ManagedSession, text: string) {
     try {
-      await sessions.prompt(managed, text, managed.session.isStreaming ? 'steer' : undefined)
+      await sessions.prompt(managed, text, managed.runtime.session.isStreaming ? 'steer' : undefined)
     }
     catch (err) {
       sessions.publishError(managed.key, String(err))
@@ -86,18 +89,9 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     await publishSessions()
   }
 
-  async function reloadAfterExtensionChange(res: ServerResponse) {
-    try {
-      const reloaded = await sessions.reloadExtensions()
-      return json(res, 200, { ok: true, reloaded } satisfies ExtensionChangeResponse)
-    }
-    catch (err) {
-      if (err instanceof SessionsStreamingError) {
-        // The change is already persisted; it takes effect once sessions can reload.
-        return json(res, 409, { error: String(err), sessions: err.keys })
-      }
-      throw err
-    }
+  async function reloadAfterExtensionChange(res: ServerResponse, cwd?: string) {
+    const reloaded = await sessions.reloadExtensions(cwd)
+    return json(res, 200, { ok: true, reloaded } satisfies ExtensionChangeResponse)
   }
 
   async function handleApiRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
@@ -115,8 +109,13 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     if (method === 'GET' && path === API_SESSIONS_PATH)
       return json(res, 200, { sessions: await sessions.listSessions() } satisfies SessionsResponse)
 
-    if (method === 'GET' && path === API_MODELS_PATH)
-      return json(res, 200, { models: await sessions.getAvailableModels() } satisfies ModelsResponse)
+    if (method === 'GET' && path === API_MODELS_PATH) {
+      const key = url.searchParams.get('key')
+      const managed = key ? sessions.get(key) : undefined
+      if (!managed)
+        return json(res, 404, { error: `session not open: ${String(key)}` })
+      return json(res, 200, { models: await sessions.getAvailableModels(managed) } satisfies ModelsResponse)
+    }
 
     if (method === 'GET' && path === API_DIRECTORIES_PATH) {
       return json(res, 200, {
@@ -145,32 +144,66 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       return json(res, 200, { document } satisfies FlowDocumentResponse)
     }
 
-    if (method === 'GET' && path === API_EXTENSIONS_PATH)
-      return json(res, 200, { extensions: extensions.list() } satisfies ExtensionsResponse)
+    if (method === 'GET' && path === API_PROJECT_TRUST_PATH) {
+      const cwd = (await sessions.listDirectories(url.searchParams.get('cwd') ?? config.rootCwd)).path
+      return json(res, 200, { status: sessions.getProjectTrust(cwd) } satisfies ProjectTrustResponse)
+    }
+
+    if (method === 'POST' && path === API_PROJECT_TRUST_PATH) {
+      const body = await readBody<Partial<TrustProjectRequest>>(req)
+      if (typeof body.cwd !== 'string')
+        return json(res, 400, { error: 'cwd required' })
+      const cwd = (await sessions.listDirectories(body.cwd)).path
+      return json(res, 200, { status: await sessions.trustProject(cwd) } satisfies ProjectTrustResponse)
+    }
+
+    if (method === 'GET' && path === API_EXTENSIONS_PATH) {
+      const cwd = (await sessions.listDirectories(url.searchParams.get('cwd') ?? config.rootCwd)).path
+      const trust = sessions.getProjectTrust(cwd)
+      return json(res, 200, { extensions: extensions.list(cwd, trust.trusted) } satisfies ExtensionsResponse)
+    }
 
     if (method === 'POST' && path === API_EXTENSIONS_PATH) {
       const body = await readBody<Partial<InstallExtensionRequest>>(req)
-      if (typeof body.source !== 'string' || !body.source.trim())
-        return json(res, 400, { error: 'source required' })
-      await extensions.install(body.source, body.local === true)
-      return reloadAfterExtensionChange(res)
+      if (typeof body.source !== 'string' || !body.source.trim() || typeof body.cwd !== 'string'
+        || (body.scope !== 'global' && body.scope !== 'project')) {
+        return json(res, 400, { error: 'source, cwd, and scope required' })
+      }
+      const cwd = (await sessions.listDirectories(body.cwd)).path
+      const trust = sessions.getProjectTrust(cwd)
+      if (body.scope === 'project' && !trust.trusted) {
+        return json(res, 403, { error: 'project must be trusted before changing project extensions' })
+      }
+      const affectedCwd = body.scope === 'project' ? cwd : undefined
+      sessions.assertIdle(affectedCwd)
+      await extensions.install(cwd, body.source, body.scope, trust.trusted)
+      return reloadAfterExtensionChange(res, affectedCwd)
     }
 
     if (method === 'DELETE' && path === API_EXTENSIONS_PATH) {
       const body = await readBody<Partial<RemoveExtensionRequest>>(req)
-      if (typeof body.source !== 'string' || !body.source.trim())
-        return json(res, 400, { error: 'source required' })
-      const removed = await extensions.remove(body.source, body.local === true)
+      if (typeof body.source !== 'string' || !body.source.trim() || typeof body.cwd !== 'string'
+        || (body.scope !== 'global' && body.scope !== 'project')) {
+        return json(res, 400, { error: 'source, cwd, and scope required' })
+      }
+      const cwd = (await sessions.listDirectories(body.cwd)).path
+      const trust = sessions.getProjectTrust(cwd)
+      if (body.scope === 'project' && !trust.trusted) {
+        return json(res, 403, { error: 'project must be trusted before changing project extensions' })
+      }
+      const affectedCwd = body.scope === 'project' ? cwd : undefined
+      sessions.assertIdle(affectedCwd)
+      const removed = await extensions.remove(cwd, body.source, body.scope, trust.trusted)
       if (!removed)
         return json(res, 404, { error: `extension not configured: ${body.source}` })
-      return reloadAfterExtensionChange(res)
+      return reloadAfterExtensionChange(res, affectedCwd)
     }
 
     if (method === 'POST' && path === API_EXTENSIONS_UI_RESPONSE_PATH) {
-      const body = await readBody<Partial<ExtensionUIResponse>>(req)
-      if (typeof body.id !== 'string' || typeof body.session !== 'string')
-        return json(res, 400, { error: 'id and session required' })
-      if (!sessions.respondExtensionUi(body as ExtensionUIResponse))
+      const body = await readBody<Partial<ExtensionUIResponseBody>>(req)
+      if (typeof body.id !== 'string' || typeof body.session !== 'string' || body.type !== 'extension_ui_response')
+        return json(res, 400, { error: 'valid extension UI response required' })
+      if (!sessions.respondExtensionUi(body as ExtensionUIResponseBody))
         return json(res, 404, { error: `session not open: ${body.session}` })
       return json(res, 200, { ok: true } satisfies ApiOkResponse)
     }
@@ -178,7 +211,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     if (method === 'GET' && path === API_USAGE_PATH) {
       const key = url.searchParams.get('key')
       const managed = key ? sessions.get(key) : undefined
-      const provider = managed?.session.model?.provider ?? url.searchParams.get('provider')
+      const provider = managed?.runtime.session.model?.provider ?? url.searchParams.get('provider')
       if (!provider)
         return json(res, 200, { provider: null, supported: false, windows: [] } satisfies UsageReport)
       const fresh = url.searchParams.get('fresh') === '1'
@@ -267,31 +300,29 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
           }
 
           case 'abort':
-            await managed.session.abort()
-            managed.uiBridge.cancelPending()
+            await managed.runtime.session.abort()
+            managed.extensionUi.cancelPending()
             return json(res, 200, { ok: true } satisfies ApiOkResponse)
 
           case 'model': {
             const modelRequest = body as Partial<SetModelRequest>
-            const model = sessions.findModel(String(modelRequest.provider), String(modelRequest.modelId))
+            const model = sessions.findModel(managed, String(modelRequest.provider), String(modelRequest.modelId))
             if (!model) {
               return json(res, 404, {
                 error: `model not found: ${String(modelRequest.provider)}/${String(modelRequest.modelId)}`,
               })
             }
-            await managed.session.setModel(model)
+            await managed.runtime.session.setModel(model)
             await publishState(managed)
             return json(res, 200, { ok: true } satisfies ApiOkResponse)
           }
 
           case 'thinking': {
             const thinkingRequest = body as Partial<SetThinkingRequest>
-            const level = managed.session
-              .getAvailableThinkingLevels()
-              .find(candidate => candidate === thinkingRequest.level)
+            const level = managed.runtime.session.getAvailableThinkingLevels().find(candidate => candidate === thinkingRequest.level)
             if (!level)
               return json(res, 400, { error: 'unknown thinking level' })
-            managed.session.setThinkingLevel(level)
+            managed.runtime.session.setThinkingLevel(level)
             await publishState(managed)
             return json(res, 200, { ok: true } satisfies ApiOkResponse)
           }
@@ -357,6 +388,8 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         catch (err) {
           if (res.headersSent)
             res.end()
+          else if (err instanceof SessionsStreamingError)
+            json(res, 409, { error: String(err), sessions: err.keys })
           else
             json(res, 500, { error: String(err) })
         }

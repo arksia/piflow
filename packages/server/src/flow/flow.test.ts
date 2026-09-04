@@ -1,4 +1,5 @@
-import type { ChatMessage, FlowTopology } from '@piflow/protocol'
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
+import type { FlowTopology } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -83,12 +84,12 @@ it('rejects a second edge between the same peers', async () => {
 })
 
 it('searches messages by exact text and returns newest matches first', () => {
-  const messages: ChatMessage[] = [
+  const messages = [
     { role: 'user', content: 'Context corruption decision from yesterday' },
     { role: 'assistant', content: '上下文已经腐化' },
     { role: 'assistant', content: 'Context changed before unrelated corruption appeared' },
     { role: 'assistant', content: 'Latest CONTEXT CORRUPTION decision' },
-  ]
+  ] as unknown as AgentMessage[]
 
   const results = searchMessages(messages, 'context corruption')
 

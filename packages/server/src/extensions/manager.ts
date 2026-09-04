@@ -3,9 +3,9 @@ import type { ExtensionSourceInfo } from '@piflow/protocol'
 import { DefaultPackageManager, getAgentDir, SettingsManager } from '@earendil-works/pi-coding-agent'
 
 export interface ExtensionManager {
-  list: () => ExtensionSourceInfo[]
-  install: (source: string, local?: boolean) => Promise<void>
-  remove: (source: string, local?: boolean) => Promise<boolean>
+  list: (cwd: string, projectTrusted: boolean) => ExtensionSourceInfo[]
+  install: (cwd: string, source: string, scope: 'global' | 'project', projectTrusted: boolean) => Promise<void>
+  remove: (cwd: string, source: string, scope: 'global' | 'project', projectTrusted: boolean) => Promise<boolean>
 }
 
 /**
@@ -13,23 +13,21 @@ export interface ExtensionManager {
  * settings live in agentDir (global) and cwd/.pi (project), so listing and
  * configuring sources works before the first session exists.
  */
-export function createExtensionManager(cwd: string, agentDir = getAgentDir()): ExtensionManager {
-  const settingsManager = SettingsManager.create(cwd, agentDir)
-  const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager })
-  return wrapPackageManager(packageManager)
-}
-
-function wrapPackageManager(packageManager: PackageManager): ExtensionManager {
+export function createExtensionManager(agentDir = getAgentDir()): ExtensionManager {
+  function packageManager(cwd: string, projectTrusted: boolean): PackageManager {
+    const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted })
+    return new DefaultPackageManager({ cwd, agentDir, settingsManager })
+  }
   return {
-    list: () => packageManager.listConfiguredPackages().map(pkg => ({
+    list: (cwd, projectTrusted) => packageManager(cwd, projectTrusted).listConfiguredPackages().map(pkg => ({
       source: pkg.source,
       scope: pkg.scope,
       filtered: pkg.filtered,
       ...(pkg.installedPath !== undefined ? { installedPath: pkg.installedPath } : {}),
     })),
-    install: async (source, local) => {
-      await packageManager.installAndPersist(source, { local })
+    install: async (cwd, source, scope, projectTrusted) => {
+      await packageManager(cwd, projectTrusted).installAndPersist(source, { local: scope === 'project' })
     },
-    remove: (source, local) => packageManager.removeAndPersist(source, { local }),
+    remove: (cwd, source, scope, projectTrusted) => packageManager(cwd, projectTrusted).removeAndPersist(source, { local: scope === 'project' }),
   }
 }
