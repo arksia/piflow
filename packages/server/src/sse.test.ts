@@ -1,4 +1,4 @@
-import type { SessionStatusRecord } from '@piflow/protocol'
+import type { SessionState, SessionStatusRecord } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import assert from 'node:assert/strict'
 import { Readable, Writable } from 'node:stream'
@@ -59,4 +59,30 @@ it('broadcasts delta messages to connected clients', () => {
   assert.match(secondRes.chunks.join(''), /data: \{"type":"status_delta","status":\{"key":"session-b","sessionFile":null,"status":"running"/)
   firstReq.emit('close')
   secondReq.emit('close')
+})
+
+it('sends every resident session state on connect', () => {
+  const sse = createSseHub('/project')
+  const state = {
+    key: 'session-a',
+    cwd: '/project',
+    messages: [],
+    isStreaming: false,
+    isCompacting: false,
+    model: null,
+    thinkingLevel: null,
+    thinkingLevels: [],
+    context: null,
+    queue: { steering: [], followUp: [] },
+    extensionRequests: [],
+    error: null,
+  } satisfies SessionState
+  sse.setStateSnapshotProvider(() => [state])
+
+  const req = mockRequest()
+  const { res, chunks } = mockResponse()
+  sse.open(req, res)
+
+  assert.match(chunks.join(''), /data: \{"type":"state","state":\{"key":"session-a"/)
+  req.emit('close')
 })

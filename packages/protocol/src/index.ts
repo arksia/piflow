@@ -1,3 +1,12 @@
+import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
+import type {
+  ContextUsage,
+  JsonAgentSessionEvent,
+  ModelInfo,
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
+} from '@earendil-works/pi-coding-agent'
+
 export {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
@@ -6,6 +15,7 @@ export {
   API_FLOW_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
+  API_PROJECT_TRUST_PATH,
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
   API_SESSIONS_PATH,
@@ -31,7 +41,11 @@ export type {
   SessionAction,
   SetModelRequest,
   SetThinkingRequest,
+  TrustProjectRequest,
 } from './http'
+
+/** POST body for the extension-UI response route: the official RPC frame plus the target session key. */
+export type ExtensionUIResponseBody = { session: string } & RpcExtensionUIResponse
 
 export interface SessionInfoLite {
   path: string
@@ -116,49 +130,6 @@ export interface DirectoryListing {
   directories: DirectoryEntry[]
 }
 
-export interface ModelInfo {
-  id: string
-  name: string
-  provider: string
-}
-
-export interface TextBlock {
-  type: 'text'
-  text: string
-}
-
-export interface ImageBlock {
-  type: 'image'
-}
-
-export interface ThinkingBlock {
-  type: 'thinking'
-  thinking: string
-}
-
-export interface ToolCallBlock {
-  type: 'toolCall'
-  id: string
-  name: string
-  arguments?: Record<string, unknown>
-}
-
-export type MessageBlock = TextBlock | ImageBlock | ThinkingBlock | ToolCallBlock
-
-export interface ChatMessage {
-  role: string
-  content?: string | MessageBlock[]
-  timestamp?: number
-  stopReason?: string
-  errorMessage?: string
-  command?: string
-  output?: string
-  exitCode?: number
-  toolCallId?: string
-  details?: Record<string, unknown>
-  isError?: boolean
-}
-
 export interface UsageWindow {
   minutes: number
   limit: number
@@ -172,12 +143,6 @@ export interface UsageReport {
   supported: boolean
   plan?: string
   windows: UsageWindow[]
-}
-
-export interface SessionContext {
-  tokens: number
-  contextWindow: number
-  percent: number
 }
 
 export type SessionStatus = 'idle' | 'running' | 'failed'
@@ -195,41 +160,11 @@ export interface SessionStatusRecord {
   updatedAt: string
 }
 
-export interface ToolContentPart {
-  type: string
-  text?: string
-}
-
-export interface ToolExecutionPayload {
-  content?: ToolContentPart[]
-  details?: Record<string, unknown>
-}
-
 export interface ExtensionSourceInfo {
   source: string
   scope: 'user' | 'project'
   filtered: boolean
   installedPath?: string
-}
-
-export type ExtensionUIMethod = 'select' | 'confirm' | 'input' | 'notify'
-
-export interface ExtensionUIRequest {
-  id: string
-  method: ExtensionUIMethod
-  title?: string
-  message?: string
-  options?: string[]
-  placeholder?: string
-  notifyType?: 'info' | 'warning' | 'error'
-}
-
-export interface ExtensionUIResponse {
-  id: string
-  session: string
-  cancelled?: boolean
-  value?: string
-  confirmed?: boolean
 }
 
 export interface ExtensionsResponse {
@@ -238,12 +173,14 @@ export interface ExtensionsResponse {
 
 export interface InstallExtensionRequest {
   source: string
-  local?: boolean
+  cwd: string
+  scope: 'global' | 'project'
 }
 
 export interface RemoveExtensionRequest {
   source: string
-  local?: boolean
+  cwd: string
+  scope: 'global' | 'project'
 }
 
 export interface ExtensionChangeResponse {
@@ -251,29 +188,31 @@ export interface ExtensionChangeResponse {
   reloaded: number
 }
 
-export interface SessionState {
-  key: string
-  sessionId?: string
-  sessionFile?: string | null
-  messages: ChatMessage[]
-  isStreaming: boolean
-  model: ModelInfo | null
-  thinkingLevel?: string | null
-  thinkingLevels?: string[]
-  context?: SessionContext | null
-  extensionRequests: ExtensionUIRequest[]
+export interface ProjectTrustStatus {
+  cwd: string
+  requiresTrust: boolean
+  trusted: boolean
 }
 
-export interface AgentEvent {
-  type: string
-  message?: ChatMessage
-  toolCallId?: string
-  args?: unknown
-  partialResult?: ToolExecutionPayload
-  result?: ToolExecutionPayload
-  isError?: boolean
-  steering?: readonly string[]
-  followUp?: readonly string[]
+export interface ProjectTrustResponse {
+  status: ProjectTrustStatus
+}
+
+export interface SessionState {
+  key: string
+  cwd: string
+  sessionId?: string
+  sessionFile?: string | null
+  messages: AgentMessage[]
+  isStreaming: boolean
+  isCompacting: boolean
+  model: ModelInfo | null
+  thinkingLevel: ThinkingLevel | null
+  thinkingLevels: ThinkingLevel[]
+  context: ContextUsage | null
+  queue: { steering: string[], followUp: string[] }
+  extensionRequests: RpcExtensionUIRequest[]
+  error: string | null
 }
 
 export type ServerMessage
@@ -281,10 +220,10 @@ export type ServerMessage
     | { type: 'sessions', sessions: SessionInfoLite[] }
     | { type: 'models', models: ModelInfo[] }
     | { type: 'state', state: SessionState }
-    | { type: 'event', session: string, event: AgentEvent, context?: SessionContext | null }
+    | { type: 'event', session: string, event: JsonAgentSessionEvent, context?: ContextUsage | null }
     | { type: 'status_snapshot', statuses: SessionStatusRecord[] }
     | { type: 'status_delta', status: SessionStatusRecord }
-    | { type: 'extension_ui_request', session: string, request: ExtensionUIRequest }
+    | ({ session: string } & RpcExtensionUIRequest)
     | { type: 'error', error: string, session?: string }
 
 export interface HelloResponse {

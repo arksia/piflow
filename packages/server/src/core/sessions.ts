@@ -1,29 +1,55 @@
-import type { ModelRuntime, SessionEntry } from '@earendil-works/pi-coding-agent'
-import type { AgentEvent, ChatMessage, DirectoryListing, ExtensionUIResponse, FlowNode, ForkPoint, ModelInfo, ServerMessage, SessionContext, SessionInfoLite, SessionState, SessionStatus, SessionStatusRecord } from '@piflow/protocol'
-import type { UiBridge } from '../extensions/ui-bridge'
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
+import type {
+  AgentSession,
+  AgentSessionRuntime,
+  ModelInfo,
+  SessionEntry,
+} from '@earendil-works/pi-coding-agent'
+import type {
+  DirectoryListing,
+  ExtensionUIResponseBody,
+  ForkPoint,
+  ProjectTrustStatus,
+  ServerMessage,
+  SessionInfoLite,
+  SessionState,
+  SessionStatus,
+  SessionStatusRecord,
+} from '@piflow/protocol'
 import type { FlowStore } from '../flow/store'
 import { existsSync } from 'node:fs'
 import { readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { createAgentSession, SessionManager } from '@earendil-works/pi-coding-agent'
-import { createUiBridge } from '../extensions/ui-bridge'
+import {
+  createAgentSessionFromServices,
+  createAgentSessionRuntime,
+  createAgentSessionServices,
+  getAgentDir,
+  hasTrustRequiringProjectResources,
+  ProjectTrustStore,
+  SessionManager,
+  SettingsManager,
+} from '@earendil-works/pi-coding-agent'
+import { createExtensionUIContext } from '../extensions/extension-ui'
 import { createFlowTools, formatFlowDirectory } from '../flow/tools'
+import { toJsonEvent } from './json-event'
 
-type ModelRuntimeInstance = Awaited<ReturnType<typeof ModelRuntime.create>>
-type AgentSession = Awaited<ReturnType<typeof createAgentSession>>['session']
-type AvailableModel = ReturnType<ModelRuntimeInstance['getAvailableSnapshot']>[number]
+type ExtensionUI = ReturnType<typeof createExtensionUIContext>
+type AvailableModel = ReturnType<ManagedSession['runtime']['services']['modelRuntime']['getAvailableSnapshot']>[number]
 
 export interface ManagedSession {
   key: string
   cwd: string
-  session: AgentSession
-  uiBridge: UiBridge
+  runtime: AgentSessionRuntime
+  extensionUi: ExtensionUI
+  unsubscribe?: () => void
+  lastUsed: number
 }
 
-/** Thrown when a session-level mutation is rejected because sessions are streaming. */
+/** Thrown when a session mutation would invalidate active work or a dialog. */
 export class SessionsStreamingError extends Error {
   constructor(public readonly keys: string[]) {
-    super(`sessions are streaming: ${keys.join(', ')}`)
+    super(`sessions are busy: ${keys.join(', ')}`)
     this.name = 'SessionsStreamingError'
   }
 }
@@ -35,42 +61,78 @@ export interface SessionStore {
   get: (key: string) => ManagedSession | undefined
   listDirectories: (path: string) => Promise<DirectoryListing>
   listSessions: () => Promise<SessionInfoLite[]>
-  getAvailableModels: () => Promise<ModelInfo[]>
-  findModel: (provider: string, modelId: string) => AvailableModel | undefined
+  getAvailableModels: (managed: ManagedSession) => Promise<ModelInfo[]>
+  findModel: (managed: ManagedSession, provider: string, modelId: string) => AvailableModel | undefined
   getState: (managed: ManagedSession) => SessionState
+  getStateSnapshot: () => SessionState[]
   getStatusSnapshot: () => SessionStatusRecord[]
   publishError: (key: string, error: string) => void
-  reloadExtensions: () => Promise<number>
-  respondExtensionUi: (response: ExtensionUIResponse) => boolean
+  reloadExtensions: (cwd?: string) => Promise<number>
+  assertIdle: (cwd?: string) => void
+  respondExtensionUi: (response: ExtensionUIResponseBody) => boolean
   renameSession: (path: string, name: string) => Promise<boolean>
   listForkPoints: (path: string) => Promise<ForkPoint[] | null>
   forkSession: (path: string, entryId: string) => Promise<ManagedSession | null>
   deleteSession: (path: string) => Promise<'deleted' | 'missing' | 'streaming'>
+  getProjectTrust: (cwd: string) => ProjectTrustStatus
+  trustProject: (cwd: string) => Promise<ProjectTrustStatus>
+  disposeAll: () => Promise<void>
 }
 
 interface CreateSessionStoreOptions {
   rootCwd: string
-  modelRuntime: ModelRuntimeInstance
   flow: FlowStore
+  poolSize: number
   publish: (message: ServerMessage) => void
+  agentDir?: string
 }
 
-const CONTEXT_EVENTS = new Set(['message_end', 'compaction_end', 'agent_settled'])
-
 export function createSessionStore(options: CreateSessionStoreOptions): SessionStore {
-  const { rootCwd, modelRuntime, flow } = options
+  const { rootCwd, flow, poolSize } = options
+  const agentDir = options.agentDir ?? getAgentDir()
+  const trustStore = new ProjectTrustStore(agentDir)
   const pool = new Map<string, ManagedSession>()
-  const flowDirectories = new Map<string, string>()
+  const opening = new Map<string, Promise<ManagedSession>>()
   const statuses = new Map<string, SessionStatusRecord>()
   const publish = options.publish
 
-  function updateStatus(managed: ManagedSession, status: SessionStatus, needsInputAt: string | null) {
+  function activeSessions(): ManagedSession[] {
+    return [...new Set(pool.values())]
+  }
+
+  function aliases(managed: ManagedSession): string[] {
+    return [...pool].flatMap(([key, value]) => value === managed ? [key] : [])
+  }
+
+  function remove(managed: ManagedSession) {
+    for (const key of aliases(managed))
+      pool.delete(key)
+    statuses.delete(managed.key)
+  }
+
+  function touch(managed: ManagedSession) {
+    managed.lastUsed = Date.now()
+    const sessionFile = managed.runtime.session.sessionFile
+    if (sessionFile)
+      pool.set(sessionFile, managed)
+  }
+
+  function getRunStatus(session: AgentSession): SessionStatus {
+    if (session.isStreaming)
+      return 'running'
+    return session.state.errorMessage === undefined ? 'idle' : 'failed'
+  }
+
+  function updateStatus(managed: ManagedSession) {
+    const session = managed.runtime.session
+    const status = getRunStatus(session)
+    const needsInput = managed.extensionUi.hasPendingDialogs()
     const existing = statuses.get(managed.key)
     const record: SessionStatusRecord = {
       key: managed.key,
-      sessionFile: managed.session.sessionFile ?? null,
+      sessionFile: session.sessionFile ?? null,
       status,
-      needsInputAt,
+      needsInputAt: needsInput ? existing?.needsInputAt ?? new Date().toISOString() : null,
       updatedAt: existing?.status === status ? existing.updatedAt : new Date().toISOString(),
     }
     if (existing
@@ -83,150 +145,239 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     publish({ type: 'status_delta', status: record })
   }
 
-  function setStatus(managed: ManagedSession, status: SessionStatus) {
-    updateStatus(managed, status, statuses.get(managed.key)?.needsInputAt ?? null)
-  }
-
-  function setNeedsInput(managed: ManagedSession, needsInput: boolean) {
-    const existing = statuses.get(managed.key)
-    const needsInputAt = needsInput ? existing?.needsInputAt ?? new Date().toISOString() : null
-    updateStatus(managed, existing?.status ?? 'idle', needsInputAt)
-  }
-
-  function setStatusByKey(key: string, status: SessionStatus) {
-    const managed = pool.get(key)
-    if (!managed)
-      return
-    setStatus(managed, status)
-  }
-
   function getStatusSnapshot(): SessionStatusRecord[] {
-    return Array.from(statuses.values())
+    return [...statuses.values()]
   }
 
   function publishError(key: string, error: string) {
-    setStatusByKey(key, 'failed')
+    const managed = pool.get(key)
+    if (managed)
+      updateStatus(managed)
     publish({ type: 'error', error, session: key })
   }
 
-  function toModelInfo(session: AgentSession): ModelInfo | null {
-    const model = session.model
-    return model ? { id: model.id, name: model.name, provider: model.provider } : null
-  }
-
   function getState(managed: ManagedSession): SessionState {
+    const session = managed.runtime.session
+    const model = session.model
     return {
       key: managed.key,
-      sessionId: managed.session.sessionId,
-      sessionFile: managed.session.sessionFile ?? null,
-      isStreaming: managed.session.isStreaming,
-      model: toModelInfo(managed.session),
-      thinkingLevel: managed.session.thinkingLevel,
-      thinkingLevels: managed.session.getAvailableThinkingLevels(),
-      context: (managed.session.getContextUsage() ?? null) as SessionContext | null,
-      messages: managed.session.messages as ChatMessage[],
-      extensionRequests: managed.uiBridge.pendingRequests(),
+      cwd: managed.cwd,
+      sessionId: session.sessionId,
+      sessionFile: session.sessionFile ?? null,
+      messages: session.messages,
+      isStreaming: session.isStreaming,
+      isCompacting: session.isCompacting,
+      model: model
+        ? {
+            provider: model.provider,
+            id: model.id,
+            contextWindow: model.contextWindow,
+            reasoning: model.reasoning,
+          }
+        : null,
+      thinkingLevel: session.thinkingLevel,
+      thinkingLevels: session.getAvailableThinkingLevels(),
+      context: session.getContextUsage() ?? null,
+      queue: {
+        steering: [...session.getSteeringMessages()],
+        followUp: [...session.getFollowUpMessages()],
+      },
+      extensionRequests: managed.extensionUi.snapshot(),
+      error: session.state.errorMessage ?? null,
     }
   }
 
-  async function openSession(opts: { path?: string, cwd?: string, fresh?: boolean }): Promise<ManagedSession> {
-    const key = opts.path ?? (opts.fresh ? `new:${crypto.randomUUID()}` : `new:${opts.cwd ?? rootCwd}`)
+  function getStateSnapshot(): SessionState[] {
+    return activeSessions().map(getState)
+  }
+
+  function bind(managed: ManagedSession, session: AgentSession) {
+    const extensionUi = createExtensionUIContext(
+      request => publish({ ...request, session: managed.key }),
+      () => {
+        updateStatus(managed)
+        publish({ type: 'state', state: getState(managed) })
+      },
+    )
+    managed.extensionUi = extensionUi
+    managed.unsubscribe = session.subscribe((event) => {
+      touch(managed)
+      updateStatus(managed)
+      publish({ type: 'event', session: managed.key, event: toJsonEvent(event), context: session.getContextUsage() ?? null })
+      if (event.type === 'agent_settled')
+        publish({ type: 'state', state: getState(managed) })
+    })
+    return session.bindExtensions({
+      uiContext: extensionUi,
+      mode: 'rpc',
+      onError: error => publishError(managed.key, String(error)),
+    })
+  }
+
+  function unbind(managed: ManagedSession) {
+    managed.extensionUi.cancelPending()
+    managed.unsubscribe?.()
+    managed.unsubscribe = undefined
+  }
+
+  async function readMessages(path: string, cwd: string): Promise<AgentMessage[]> {
+    const resident = pool.get(path)
+    if (resident) {
+      if (resident.cwd !== cwd)
+        throw new Error('Flow session is not part of this project')
+      return resident.runtime.session.messages
+    }
+    const manager = SessionManager.open(path)
+    if (manager.getCwd() !== cwd)
+      throw new Error('Flow session is not part of this project')
+    return manager.buildSessionContext().messages
+  }
+
+  async function openSession(opts: { path?: string, cwd: string, key?: string }): Promise<ManagedSession> {
+    const key = opts.key ?? opts.path ?? `new:${crypto.randomUUID()}`
     const existing = pool.get(key)
-    if (existing)
+    if (existing) {
+      touch(existing)
       return existing
-
-    const cwd = opts.cwd ?? rootCwd
-    const sessionManager = opts.path
-      ? SessionManager.open(opts.path)
-      : SessionManager.create(cwd)
-
-    let managed: ManagedSession | undefined
-    const { session } = await createAgentSession({
-      cwd,
-      sessionManager,
-      modelRuntime,
-      customTools: createFlowTools({
-        flow,
-        source: () => managed && toToolSession(managed),
-        resolveTarget: async (node, projectPath) => {
-          const target = await resolveFlowTarget(node, projectPath)
-          return toToolSession(target)
-        },
-        onDispatchError: (target, error) => {
-          if (target.sessionPath)
-            publishError(target.sessionPath, String(error))
-          else
-            publish({ type: 'error', error: String(error) })
-        },
-      }),
-    })
-
-    managed = {
-      key,
-      cwd,
-      session,
-      uiBridge: createUiBridge(key, publish, requests => managed && setNeedsInput(managed, requests.length > 0)),
     }
-    pool.set(key, managed)
-    if (session.sessionFile)
-      pool.set(session.sessionFile, managed)
-    await session.bindExtensions({ uiContext: managed.uiBridge.context, mode: 'rpc' })
-    setStatus(managed, 'idle')
+    const pending = opening.get(key)
+    if (pending)
+      return pending
 
-    session.subscribe((event) => {
-      if (event.type === 'agent_start' && managed)
-        setStatus(managed, 'running')
-      if (event.type === 'agent_settled' && managed) {
-        const settledStatus = settledStatusFromMessages(managed.session.messages as ChatMessage[])
-        setStatus(managed, settledStatus)
+    const promise = (async () => {
+      let managed: ManagedSession | undefined
+      const createRuntime = async ({
+        cwd,
+        agentDir: runtimeAgentDir,
+        sessionManager,
+        sessionStartEvent,
+      }: Parameters<typeof createAgentSessionRuntime>[0] extends (options: infer T) => unknown ? T : never) => {
+        const requiresTrust = hasTrustRequiringProjectResources(cwd)
+        const projectTrusted = !requiresTrust || trustStore.get(cwd) === true
+        const settingsManager = SettingsManager.create(cwd, runtimeAgentDir, { projectTrusted })
+        const services = await createAgentSessionServices({
+          cwd,
+          agentDir: runtimeAgentDir,
+          settingsManager,
+          resourceLoaderReloadOptions: requiresTrust
+            ? { resolveProjectTrust: async () => projectTrusted }
+            : undefined,
+        })
+        const created = await createAgentSessionFromServices({
+          services,
+          sessionManager,
+          sessionStartEvent,
+          customTools: createFlowTools({
+            flow,
+            source: () => managed ? toolSession(managed) : undefined,
+            resolveTarget: async (node, projectPath) => {
+              const target = await openSavedSession(node.sessionPath)
+              if (!target || target.cwd !== projectPath)
+                throw new Error('target Flow session is not part of this project')
+              return toolSession(target)
+            },
+            readMessages: (node, projectPath) => readMessages(node.sessionPath, projectPath),
+            onDispatchError: (target, error) => publishError(target.sessionPath ?? target.cwd, String(error)),
+          }),
+        })
+        return { ...created, services, diagnostics: services.diagnostics }
       }
-      const context = CONTEXT_EVENTS.has(event.type)
-        ? (session.getContextUsage() ?? null) as SessionContext | null
-        : undefined
-      publish({ type: 'event', session: key, event: event as AgentEvent, context })
-    })
 
-    return managed
+      const sessionManager = opts.path ? SessionManager.open(opts.path) : SessionManager.create(opts.cwd)
+      const runtime = await createAgentSessionRuntime(createRuntime, {
+        cwd: opts.cwd,
+        agentDir,
+        sessionManager,
+      })
+      managed = {
+        key,
+        cwd: runtime.cwd,
+        runtime,
+        extensionUi: undefined as unknown as ExtensionUI,
+        lastUsed: Date.now(),
+      }
+      pool.set(key, managed)
+      touch(managed)
+      runtime.setBeforeSessionInvalidate(() => unbind(managed!))
+      runtime.setRebindSession(async (session) => {
+        managed!.cwd = runtime.cwd
+        await bind(managed!, session)
+        touch(managed!)
+      })
+      try {
+        await bind(managed, runtime.session)
+        updateStatus(managed)
+        await evictIfNeeded(managed)
+        return managed
+      }
+      catch (error) {
+        remove(managed)
+        await runtime.dispose()
+        throw error
+      }
+    })()
+
+    opening.set(key, promise)
+    try {
+      return await promise
+    }
+    finally {
+      opening.delete(key)
+    }
   }
 
-  function toToolSession(managed: ManagedSession) {
+  function toolSession(managed: ManagedSession) {
+    const session = managed.runtime.session
     return {
       cwd: managed.cwd,
-      sessionPath: managed.session.sessionFile ?? null,
-      messages: managed.session.messages as ChatMessage[],
-      isStreaming: managed.session.isStreaming,
-      prompt: async (text: string, followUp: boolean) => {
-        await prompt(managed, text, followUp ? 'followUp' : undefined)
-      },
+      sessionPath: session.sessionFile ?? null,
+      messages: session.messages,
+      isStreaming: session.isStreaming,
+      prompt: (text: string, followUp: boolean) => prompt(managed, text, followUp ? 'followUp' : undefined),
+    }
+  }
+
+  async function evictIfNeeded(exclude?: ManagedSession) {
+    while (activeSessions().length > poolSize) {
+      const candidate = activeSessions()
+        .filter(managed => managed !== exclude
+          && managed.runtime.session.isIdle
+          && !!managed.runtime.session.sessionFile
+          && existsSync(managed.runtime.session.sessionFile)
+          && !managed.extensionUi.hasPendingDialogs())
+        .sort((a, b) => a.lastUsed - b.lastUsed)[0]
+      if (!candidate)
+        return
+      remove(candidate)
+      unbind(candidate)
+      await candidate.runtime.dispose()
+    }
+  }
+
+  async function injectFlowDirectory(managed: ManagedSession) {
+    const session = managed.runtime.session
+    if (!session.sessionFile)
+      return
+    const directory = formatFlowDirectory(await flow.read(managed.cwd), session.sessionFile)
+    if (directory) {
+      await session.sendCustomMessage({
+        customType: 'flow_directory',
+        content: directory,
+        display: false,
+      })
     }
   }
 
   async function prompt(managed: ManagedSession, text: string, streamingBehavior?: 'steer' | 'followUp') {
+    touch(managed)
     await injectFlowDirectory(managed)
-    await managed.session.prompt(text, { streamingBehavior })
-  }
-
-  async function injectFlowDirectory(managed: ManagedSession) {
-    const sessionPath = managed.session.sessionFile
-    if (!sessionPath)
-      return
-    const directory = formatFlowDirectory(await flow.read(managed.cwd), sessionPath)
-    if (directory === null || flowDirectories.get(sessionPath) === directory)
-      return
-    await managed.session.sendCustomMessage({
-      customType: 'flow_directory',
-      content: directory,
-      display: false,
-      details: {},
-    }, managed.session.isStreaming ? { deliverAs: 'nextTurn' } : undefined)
-    flowDirectories.set(sessionPath, directory)
-  }
-
-  async function resolveFlowTarget(node: FlowNode, projectPath: string): Promise<ManagedSession> {
-    const target = await openSavedSession(node.sessionPath)
-    if (!target || target.cwd !== projectPath)
-      throw new Error('Flow target session is unavailable in this project')
-    return target
+    const session = managed.runtime.session
+    if (streamingBehavior === 'steer')
+      await session.steer(text)
+    else if (streamingBehavior === 'followUp')
+      await session.followUp(text)
+    else
+      await session.prompt(text)
   }
 
   async function listSessions(): Promise<SessionInfoLite[]> {
@@ -257,132 +408,118 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       .map(entry => ({ name: entry.name, path: join(directory, entry.name) }))
       .sort((a, b) => a.name.localeCompare(b.name))
     const parent = dirname(directory)
-    return {
-      path: directory,
-      parent: parent === directory ? null : parent,
-      directories,
-    }
+    return { path: directory, parent: parent === directory ? null : parent, directories }
   }
 
   async function openSavedSession(path: string): Promise<ManagedSession | null> {
-    const active = pool.get(path)
-    if (active)
-      return active
+    const resident = pool.get(path)
+    if (resident) {
+      touch(resident)
+      return resident
+    }
     const known = (await SessionManager.listAll()).find(session => session.path === path)
-    if (!known)
-      return null
-    return openSession({ path: known.path, cwd: known.cwd })
+    return known ? openSession({ path: known.path, cwd: known.cwd }) : null
   }
 
   async function createFreshSession(cwd?: string, persist = false): Promise<ManagedSession> {
     const resolvedCwd = typeof cwd === 'string' ? (await listDirectories(cwd)).path : rootCwd
-    const managed = await openSession({ cwd: resolvedCwd, fresh: true })
-    if (persist) {
-      await persistEmptySession(managed.session.sessionManager)
-      const sessionFile = managed.session.sessionFile
-      if (sessionFile)
-        pool.set(sessionFile, managed)
-      setStatusByKey(managed.key, 'idle')
-    }
-    return managed
+    const manager = SessionManager.create(resolvedCwd)
+    if (persist)
+      await persistEmptySession(manager)
+    return openSession({ path: persist ? manager.getSessionFile() : undefined, cwd: resolvedCwd })
   }
 
-  async function getAvailableModels(): Promise<ModelInfo[]> {
-    return (await modelRuntime.getAvailable()).map(model => ({
-      id: model.id,
-      name: model.name,
+  async function getAvailableModels(managed: ManagedSession): Promise<ModelInfo[]> {
+    touch(managed)
+    return (await managed.runtime.services.modelRuntime.getAvailable()).map(model => ({
       provider: model.provider,
+      id: model.id,
+      contextWindow: model.contextWindow,
+      reasoning: model.reasoning,
     }))
   }
 
-  function findModel(provider: string, modelId: string): AvailableModel | undefined {
-    return modelRuntime
-      .getAvailableSnapshot()
+  function findModel(managed: ManagedSession, provider: string, modelId: string) {
+    return managed.runtime.services.modelRuntime.getAvailableSnapshot()
       .find(model => model.provider === provider && model.id === modelId)
   }
 
-  function activeSessions(): ManagedSession[] {
-    return Array.from(new Set(pool.values()))
-  }
-
-  async function reloadExtensions(): Promise<number> {
-    const active = activeSessions()
-    const streaming = active.filter(managed => managed.session.isStreaming).map(managed => managed.key)
-    if (streaming.length > 0)
-      throw new SessionsStreamingError(streaming)
-    for (const managed of active) {
-      // reload() tears down the extension runtime; suspended dialogs are dead afterwards.
-      managed.uiBridge.cancelPending()
-      await managed.session.reload()
-      await managed.session.bindExtensions({ uiContext: managed.uiBridge.context, mode: 'rpc' })
+  async function reloadExtensions(cwd?: string): Promise<number> {
+    const affected = activeSessions().filter(managed => cwd === undefined || managed.cwd === cwd)
+    assertIdle(cwd)
+    for (const managed of affected) {
+      managed.extensionUi.reset()
+      await managed.runtime.session.reload()
       publish({ type: 'state', state: getState(managed) })
     }
-    return active.length
+    return affected.length
   }
 
-  function respondExtensionUi(response: ExtensionUIResponse): boolean {
+  function assertIdle(cwd?: string) {
+    const busy = activeSessions().filter(managed => (cwd === undefined || managed.cwd === cwd)
+      && (!managed.runtime.session.isIdle || managed.extensionUi.hasPendingDialogs()))
+    if (busy.length)
+      throw new SessionsStreamingError(busy.map(managed => managed.key))
+  }
+
+  function respondExtensionUi(response: ExtensionUIResponseBody): boolean {
     const managed = pool.get(response.session)
-    if (!managed)
-      return false
-    managed.uiBridge.handleResponse(response)
-    return true
-  }
-
-  function managerFor(path: string): SessionManager | null {
-    const managed = pool.get(path)
-    if (managed)
-      return managed.session.sessionManager
-    return existsSync(path) ? SessionManager.open(path) : null
+    return managed?.extensionUi.respond(response) ?? false
   }
 
   async function renameSession(path: string, name: string): Promise<boolean> {
-    const manager = managerFor(path)
-    if (!manager)
+    const managed = pool.get(path)
+    if (managed) {
+      managed.runtime.session.setSessionName(name)
+      return true
+    }
+    if (!existsSync(path))
       return false
-    manager.appendSessionInfo(name)
+    SessionManager.open(path).appendSessionInfo(name)
     return true
   }
 
   async function listForkPoints(path: string): Promise<ForkPoint[] | null> {
-    const manager = managerFor(path)
-    if (!manager)
+    const managed = pool.get(path)
+    if (!managed && !existsSync(path))
       return null
-    const points: ForkPoint[] = []
-    for (const entry of manager.getEntries()) {
+    const manager = managed?.runtime.session.sessionManager ?? SessionManager.open(path)
+    return manager.getEntries().flatMap((entry) => {
       const text = userMessageText(entry)
-      if (text)
-        points.push({ entryId: entry.id, text: text.slice(0, 120) })
-    }
-    return points
+      return text ? [{ entryId: entry.id, text: text.slice(0, 120) }] : []
+    })
   }
 
   async function forkSession(path: string, entryId: string): Promise<ManagedSession | null> {
-    if (!existsSync(path))
+    const managed = await openSavedSession(path)
+    if (!managed)
       return null
-    // Branch from a fresh on-disk instance: createBranchedSession mutates the
-    // manager in place, so forking a pooled live manager would hijack the
-    // source session's file/entry state.
-    const manager = SessionManager.open(path)
-    const branchedPath = manager.createBranchedSession(entryId)
+    if (!managed.runtime.session.isIdle || managed.extensionUi.hasPendingDialogs())
+      throw new SessionsStreamingError([managed.key])
+    const previousKey = managed.key
+    const result = await managed.runtime.fork(entryId)
+    if (result.cancelled)
+      return null
+    const branchedPath = managed.runtime.session.sessionFile
     if (!branchedPath)
-      return null
-    await persistBranchedSession(manager, branchedPath)
-    return openSavedSession(branchedPath)
+      throw new Error('fork did not create a persisted session')
+    remove(managed)
+    managed.key = branchedPath
+    pool.set(branchedPath, managed)
+    updateStatus(managed)
+    statuses.delete(previousKey)
+    publish({ type: 'state', state: getState(managed) })
+    return managed
   }
 
   async function deleteSession(path: string): Promise<'deleted' | 'missing' | 'streaming'> {
     const managed = pool.get(path)
     if (managed) {
-      if (managed.session.isStreaming)
+      if (!managed.runtime.session.isIdle || managed.extensionUi.hasPendingDialogs())
         return 'streaming'
-      // Dispose before unlinking so the agent stops appending to the file.
-      managed.uiBridge.cancelPending()
-      managed.session.dispose()
-      for (const [key, value] of pool) {
-        if (value === managed)
-          pool.delete(key)
-      }
-      statuses.delete(managed.key)
+      remove(managed)
+      unbind(managed)
+      await managed.runtime.dispose()
     }
     if (!existsSync(path))
       return managed ? 'deleted' : 'missing'
@@ -390,41 +527,70 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return 'deleted'
   }
 
+  function getProjectTrust(cwd: string): ProjectTrustStatus {
+    const requiresTrust = hasTrustRequiringProjectResources(cwd)
+    return { cwd, requiresTrust, trusted: !requiresTrust || trustStore.get(cwd) === true }
+  }
+
+  async function trustProject(cwd: string): Promise<ProjectTrustStatus> {
+    const busy = activeSessions().filter(managed => managed.cwd === cwd
+      && (!managed.runtime.session.isIdle || managed.extensionUi.hasPendingDialogs()))
+    if (busy.length)
+      throw new SessionsStreamingError(busy.map(managed => managed.key))
+    trustStore.set(cwd, true)
+    for (const managed of activeSessions().filter(managed => managed.cwd === cwd)) {
+      const sessionFile = managed.runtime.session.sessionFile
+      const key = managed.key
+      remove(managed)
+      unbind(managed)
+      await managed.runtime.dispose()
+      if (sessionFile && existsSync(sessionFile))
+        await openSession({ path: sessionFile, cwd, key })
+      else
+        await openSession({ cwd, key })
+    }
+    return getProjectTrust(cwd)
+  }
+
+  async function disposeAll() {
+    const active = activeSessions()
+    pool.clear()
+    statuses.clear()
+    await Promise.all(active.map(async (managed) => {
+      unbind(managed)
+      await managed.runtime.dispose()
+    }))
+  }
+
   return {
     createFreshSession,
     openSavedSession,
     prompt,
-    get: key => pool.get(key),
+    get: (key) => {
+      const managed = pool.get(key)
+      if (managed)
+        touch(managed)
+      return managed
+    },
     listDirectories,
     listSessions,
     getAvailableModels,
     findModel,
     getState,
+    getStateSnapshot,
     getStatusSnapshot,
     publishError,
     reloadExtensions,
+    assertIdle,
     respondExtensionUi,
     renameSession,
     listForkPoints,
     forkSession,
     deleteSession,
+    getProjectTrust,
+    trustProject,
+    disposeAll,
   }
-}
-
-/**
- * The SDK defers persisting a branched session until its first assistant
- * message; write eagerly so the fork is immediately listable and openable.
- * The manager must be the instance createBranchedSession just ran on — it
- * holds the branched entries in memory.
- *
- * Exported for testing.
- */
-export async function persistBranchedSession(manager: SessionManager, branchedPath: string): Promise<void> {
-  if (existsSync(branchedPath))
-    return
-  const header = manager.getHeader()
-  const entries = [header, ...manager.getEntries()].filter(entry => entry !== null)
-  await writeFile(branchedPath, `${entries.map(entry => JSON.stringify(entry)).join('\n')}\n`)
 }
 
 export function userMessageText(entry: SessionEntry): string | null {
@@ -437,7 +603,7 @@ export function userMessageText(entry: SessionEntry): string | null {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-export function settledStatusFromMessages(messages: ChatMessage[]): 'idle' | 'failed' {
+export function settledStatusFromMessages(messages: AgentMessage[]): 'idle' | 'failed' {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
     if (message?.role === 'assistant')

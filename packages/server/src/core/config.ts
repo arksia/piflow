@@ -13,6 +13,7 @@ export interface ServerConfig {
   authHeader: string
   webDist: string
   dataDir: string
+  sessionPoolSize: number
 }
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -24,11 +25,14 @@ export function loadConfig(env = process.env): ServerConfig {
   const rootCwd = resolve(env.INIT_CWD ?? process.cwd())
   const isLoopback = isLoopbackHost(host)
   const configuredToken = env.PIFLOW_TOKEN
+  const sessionPoolSize = Number(env.PIFLOW_SESSION_POOL_SIZE ?? 16)
 
   if (!isLoopback && !configuredToken)
     throw new Error('PIFLOW_TOKEN is required when HOST is not a loopback address')
   if (configuredToken && !isValidAccessToken(configuredToken))
     throw new Error('PIFLOW_TOKEN must contain at least 24 URL-safe characters')
+  if (!Number.isInteger(sessionPoolSize) || sessionPoolSize < 1)
+    throw new Error('PIFLOW_SESSION_POOL_SIZE must be a positive integer')
 
   const authToken = configuredToken ?? crypto.randomUUID()
 
@@ -41,5 +45,6 @@ export function loadConfig(env = process.env): ServerConfig {
     authHeader: `${AUTH_COOKIE}=${authToken}; HttpOnly; SameSite=Strict; Path=/`,
     webDist: DEFAULT_WEB_DIST,
     dataDir: resolve(env.PIFLOW_DATA_DIR ?? resolve(homedir(), '.piflow')),
+    sessionPoolSize,
   }
 }

@@ -27,7 +27,7 @@ async function seedPackage(cwd: string, agentDir: string, source: string, local?
 describe('extension manager', () => {
   it('lists nothing when no packages are configured', () => {
     const { cwd, agentDir } = createFixture()
-    assert.deepEqual(createExtensionManager(cwd, agentDir).list(), [])
+    assert.deepEqual(createExtensionManager(agentDir).list(cwd, true), [])
   })
 
   it('maps configured packages to source info with scope', async () => {
@@ -36,7 +36,7 @@ describe('extension manager', () => {
     await seedPackage(cwd, agentDir, 'npm:@foo/bar')
     await seedPackage(cwd, agentDir, 'npm:@foo/baz', true)
 
-    const extensions = createExtensionManager(cwd, agentDir).list()
+    const extensions = createExtensionManager(agentDir).list(cwd, true)
     assert.equal(extensions.length, 2)
 
     const userScoped = extensions.find(extension => extension.scope === 'user')

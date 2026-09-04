@@ -1,5 +1,6 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { ChatMessage, FlowNode } from '@piflow/protocol'
+import type { FlowNode } from '@piflow/protocol'
 import type { FlowStore } from './store'
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
@@ -12,7 +13,7 @@ const FLOW_META = /<!-- piflow:chain=([\w-]+);hop=(\d+) -->/
 interface ToolSession {
   cwd: string
   sessionPath: string | null
-  messages: ChatMessage[]
+  messages: AgentMessage[]
   isStreaming: boolean
   prompt: (text: string, followUp: boolean) => Promise<void>
 }
@@ -21,6 +22,7 @@ interface CreateFlowToolsOptions {
   flow: FlowStore
   source: () => ToolSession | undefined
   resolveTarget: (node: FlowNode, projectPath: string) => Promise<ToolSession>
+  readMessages: (node: FlowNode, projectPath: string) => Promise<AgentMessage[]>
   onDispatchError: (target: ToolSession, error: unknown) => void
 }
 
@@ -116,8 +118,8 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
       const sourceNode = document.nodes.find(node => node.id === params.sourceNodeId)
       if (!sourceNode)
         throw new Error('source Flow node not found')
-      const source = await options.resolveTarget(sourceNode, document.projectPath)
-      const results = searchMessages(source.messages, params.query)
+      const messages = await options.readMessages(sourceNode, document.projectPath)
+      const results = searchMessages(messages, params.query)
       return textResult(JSON.stringify({ source: publicNode(sourceNode), results }, null, 2))
     },
   })
@@ -139,13 +141,13 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
       const sourceNode = document.nodes.find(node => node.id === params.sourceNodeId)
       if (!sourceNode)
         throw new Error('source Flow node not found')
-      const source = await options.resolveTarget(sourceNode, document.projectPath)
-      if (params.messageIndex >= source.messages.length)
+      const sourceMessages = await options.readMessages(sourceNode, document.projectPath)
+      if (params.messageIndex >= sourceMessages.length)
         throw new Error('message index is outside the source session')
       const radius = params.radius ?? 1
       const start = Math.max(0, params.messageIndex - radius)
-      const end = Math.min(source.messages.length, params.messageIndex + radius + 1)
-      const messages = source.messages.slice(start, end).map((message, offset) => ({
+      const end = Math.min(sourceMessages.length, params.messageIndex + radius + 1)
+      const messages = sourceMessages.slice(start, end).map((message, offset) => ({
         messageIndex: start + offset,
         role: message.role,
         text: messageText(message).slice(0, 12_000),
@@ -199,7 +201,7 @@ function directoryLines(nodes: FlowNode[]) {
     : ['- None']
 }
 
-function readChain(messages: ChatMessage[]): { id: string, hop: number } {
+function readChain(messages: AgentMessage[]): { id: string, hop: number } {
   for (let index = messages.length - 1; index >= 0; index--) {
     const match = messageText(messages[index]!).match(FLOW_META)
     if (match?.[1] && match[2])
@@ -210,7 +212,7 @@ function readChain(messages: ChatMessage[]): { id: string, hop: number } {
   return { id: crypto.randomUUID(), hop: 0 }
 }
 
-export function searchMessages(messages: ChatMessage[], query: string) {
+export function searchMessages(messages: AgentMessage[], query: string) {
   const needle = query.trim().toLocaleLowerCase()
   if (!needle)
     return []
@@ -234,10 +236,10 @@ export function searchMessages(messages: ChatMessage[], query: string) {
     .slice(0, MAX_RESULTS)
 }
 
-function messageText(message: ChatMessage): string {
-  if (typeof message.content === 'string')
+function messageText(message: AgentMessage): string {
+  if ('content' in message && typeof message.content === 'string')
     return message.content
-  if (Array.isArray(message.content)) {
+  if ('content' in message && Array.isArray(message.content)) {
     return message.content.flatMap((block) => {
       if (block.type === 'text')
         return block.text
@@ -246,7 +248,11 @@ function messageText(message: ChatMessage): string {
       return []
     }).join('\n')
   }
-  return [message.command, message.output, message.errorMessage].filter(Boolean).join('\n')
+  if (message.role === 'bashExecution')
+    return [message.command, message.output].filter(Boolean).join('\n')
+  if (message.role === 'branchSummary' || message.role === 'compactionSummary')
+    return message.summary
+  return ''
 }
 
 function textResult(text: string) {
