@@ -80,9 +80,9 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     sse.broadcast({ type: 'sessions', sessions: await sessions.listSessions() })
   }
 
-  async function handlePrompt(managed: ManagedSession, text: string, images?: PromptRequest['images']) {
+  async function handlePrompt(managed: ManagedSession, prompt: PromptRequest) {
     try {
-      await sessions.prompt(managed, text, images, managed.runtime.session.isStreaming ? 'steer' : undefined)
+      await sessions.prompt(managed, prompt.text, prompt.images, prompt.streamingBehavior)
     }
     catch (err) {
       sessions.publishError(managed.key, String(err))
@@ -299,8 +299,10 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
             const imageError = validatePromptImages(prompt.images)
             if (imageError)
               return json(res, 400, { error: imageError })
+            if (prompt.streamingBehavior !== undefined && prompt.streamingBehavior !== 'steer' && prompt.streamingBehavior !== 'followUp')
+              return json(res, 400, { error: 'unknown streaming behavior' })
             json(res, 202, { ok: true } satisfies ApiOkResponse)
-            void handlePrompt(managed, prompt.text, prompt.images)
+            void handlePrompt(managed, prompt as PromptRequest)
             return
           }
 

@@ -111,15 +111,26 @@
   min-width: 0;
 }
 
-.steer {
+.streaming-mode {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: var(--c-signal);
+  gap: 3px;
   font-size: 0.75rem;
 }
 
+.streaming-mode button {
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: var(--c-faint);
+}
+
+.streaming-mode button.active {
+  background: #ffffff0d;
+  color: var(--c-signal);
+}
+
 .dot {
+  margin-right: 4px;
   width: 6px;
   height: 6px;
   border-radius: 50%;

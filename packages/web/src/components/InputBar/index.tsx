@@ -35,6 +35,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
+  const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'followUp'>('steer')
   const [images, setImages] = useState<DraftImage[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
@@ -130,7 +131,11 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     if (!canSend)
       return
     try {
-      await sendPrompt(text.trim(), images.map(image => ({ type: image.type, data: image.data, mimeType: image.mimeType })))
+      await sendPrompt(
+        text.trim(),
+        images.map(image => ({ type: image.type, data: image.data, mimeType: image.mimeType })),
+        isLive ? streamingBehavior : undefined,
+      )
       onTextChange('')
       clearDraft(draftKey)
       clearDraft(store.activeKey)
@@ -241,10 +246,11 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             <div className={styles.left}>
               {isLive
                 ? (
-                    <span className={styles.steer}>
+                    <div className={styles.streamingMode} aria-label="运行中消息发送方式">
                       <span className={styles.dot} />
-                      回复中 · 发送将插队传达
-                    </span>
+                      <button className={streamingBehavior === 'steer' ? styles.active : ''} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
+                      <button className={streamingBehavior === 'followUp' ? styles.active : ''} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
+                    </div>
                   )
                 : view?.thinkingLevels.length
                   ? (
