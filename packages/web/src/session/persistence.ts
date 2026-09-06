@@ -1,26 +1,56 @@
 const ACTIVE_KEY = 'piflow.active'
-const DRAFT_PREFIX = 'piflow.draft:'
 
-export function readDraft(key: string | null): string {
-  return key ? localStorage.getItem(`${DRAFT_PREFIX}${key}`) ?? '' : ''
+export interface DraftImage {
+  id: string
+  type: 'image'
+  data: string
+  mimeType: string
+  previewUrl: string
 }
 
-export function saveDraft(key: string | null, text: string) {
+interface Draft {
+  text: string
+  images: DraftImage[]
+}
+
+const drafts = new Map<string, Draft>()
+
+export function readDraft(key: string | null): Draft {
+  const draft = key ? drafts.get(key) : undefined
+  return draft ? { text: draft.text, images: [...draft.images] } : { text: '', images: [] }
+}
+
+export function saveDraftText(key: string | null, text: string) {
   if (!key)
     return
-  const storageKey = `${DRAFT_PREFIX}${key}`
-  if (text)
-    localStorage.setItem(storageKey, text)
+  const images = drafts.get(key)?.images ?? []
+  if (text || images.length)
+    drafts.set(key, { text, images })
   else
-    localStorage.removeItem(storageKey)
+    drafts.delete(key)
+}
+
+export function saveDraftImages(key: string | null, images: DraftImage[]) {
+  if (!key)
+    return
+  const text = drafts.get(key)?.text ?? ''
+  if (text || images.length)
+    drafts.set(key, { text, images: [...images] })
+  else
+    drafts.delete(key)
+}
+
+export function clearDraft(key: string | null) {
+  if (key)
+    drafts.delete(key)
 }
 
 export function migrateDraft(from: string, to: string) {
-  const draft = readDraft(from)
-  if (draft) {
-    saveDraft(to, draft)
-    saveDraft(from, '')
-  }
+  const draft = drafts.get(from)
+  if (!draft)
+    return
+  drafts.set(to, draft)
+  drafts.delete(from)
 }
 
 export function saveActiveSessionFile(sessionFile?: string | null) {
