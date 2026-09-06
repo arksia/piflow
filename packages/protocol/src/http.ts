@@ -1,5 +1,12 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 
+/** pi-native ImageContent wire shape; kept structural so protocol stays dependency-light. */
+export interface ImageContent {
+  type: 'image'
+  data: string
+  mimeType: string
+}
+
 export const AUTH_PATH = '/auth'
 
 export const API_EVENTS_PATH = '/api/events'
@@ -30,6 +37,7 @@ export interface NewSessionRequest {
 
 export interface PromptRequest {
   text: string
+  images?: ImageContent[]
 }
 
 export interface SetModelRequest {

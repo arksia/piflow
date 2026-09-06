@@ -78,9 +78,9 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     sse.broadcast({ type: 'sessions', sessions: await sessions.listSessions() })
   }
 
-  async function handlePrompt(managed: ManagedSession, text: string) {
+  async function handlePrompt(managed: ManagedSession, text: string, images?: PromptRequest['images']) {
     try {
-      await sessions.prompt(managed, text, managed.runtime.session.isStreaming ? 'steer' : undefined)
+      await sessions.prompt(managed, text, images, managed.runtime.session.isStreaming ? 'steer' : undefined)
     }
     catch (err) {
       sessions.publishError(managed.key, String(err))
@@ -294,8 +294,10 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
             const prompt = body as Partial<PromptRequest>
             if (typeof prompt.text !== 'string' || !prompt.text.trim())
               return json(res, 400, { error: 'text required' })
+            if (prompt.images !== undefined && (!Array.isArray(prompt.images) || prompt.images.length > 10))
+              return json(res, 400, { error: 'at most 10 images are supported' })
             json(res, 202, { ok: true } satisfies ApiOkResponse)
-            void handlePrompt(managed, prompt.text)
+            void handlePrompt(managed, prompt.text, prompt.images)
             return
           }
 
