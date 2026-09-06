@@ -15,6 +15,14 @@ export function saveDraft(key: string | null, text: string) {
     localStorage.removeItem(storageKey)
 }
 
+export function migrateDraft(from: string, to: string) {
+  const draft = readDraft(from)
+  if (draft) {
+    saveDraft(to, draft)
+    saveDraft(from, '')
+  }
+}
+
 export function saveActiveSessionFile(sessionFile?: string | null) {
   if (sessionFile)
     localStorage.setItem(ACTIVE_KEY, JSON.stringify({ path: sessionFile }))
