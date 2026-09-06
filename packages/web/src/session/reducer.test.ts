@@ -2,7 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { JsonAgentSessionEvent } from '@earendil-works/pi-coding-agent'
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { applyAssistantUpdate, applyStatusDelta, clearSessionUnread } from './reducer'
+import { applyAssistantUpdate, applyStatusDelta, clearSessionUnread, handleEvent, route } from './reducer'
 import { store } from './store'
 
 type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
@@ -68,4 +68,21 @@ it('tracks completion attention per background session and clears it on open', (
   assert.equal(store.statuses['/project/other.jsonl']?.status, 'failed')
   clearSessionUnread('/project/background.jsonl')
   assert.deepEqual([...store.unreadSessions], [])
+})
+
+it('keeps provider errors scoped to their session', () => {
+  store.views = {}
+  route({ type: 'error', session: 'session-a', error: 'provider failed' }, () => {})
+  route({ type: 'error', session: 'session-b', error: 'tool failed' }, () => {})
+  assert.equal(store.views['session-a']?.error, 'provider failed')
+  assert.equal(store.views['session-b']?.error, 'tool failed')
+})
+
+it('replaces tool results on replay instead of duplicating them', () => {
+  store.views = {}
+  handleEvent('session-a', { type: 'tool_execution_end', toolCallId: 'call-1', toolName: 'read', result: { content: 'failed' }, isError: true })
+  handleEvent('session-a', { type: 'tool_execution_end', toolCallId: 'call-1', toolName: 'read', result: { content: 'replayed' }, isError: false })
+  assert.deepEqual(store.views['session-a']?.toolResults, {
+    'call-1': { result: { content: 'replayed' }, isError: false },
+  })
 })
