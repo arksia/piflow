@@ -106,6 +106,12 @@ export async function abort(key: string): Promise<SessionState> {
   return state
 }
 
+export async function clearQueue(key: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(key, 'clear-queue'))
+  applyState(state)
+  return state
+}
+
 export async function setModel(key: string, provider: string, modelId: string): Promise<SessionState> {
   const { state } = await post<SessionStateResponse>(sessionUrl(key, 'model'), {
     provider,

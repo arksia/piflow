@@ -311,6 +311,11 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
             managed.extensionUi.cancelPending()
             return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
 
+          case 'clear-queue':
+            managed.runtime.session.clearQueue()
+            await publishState(managed)
+            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
+
           case 'model': {
             const modelRequest = body as Partial<SetModelRequest>
             const model = sessions.findModel(managed, String(modelRequest.provider), String(modelRequest.modelId))

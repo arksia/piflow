@@ -4,9 +4,9 @@ import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from 'react
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
-import { ArrowUp, Square } from 'lucide-react'
+import { ArrowUp, ListX, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
+import { abort, clearQueue, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
 import styles from './styles.module.css'
@@ -36,6 +36,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
   const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'followUp'>('steer')
+  const [clearingQueue, setClearingQueue] = useState(false)
   const [images, setImages] = useState<DraftImage[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
@@ -184,6 +185,16 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     })
   }
 
+  function clearPendingMessages() {
+    if (!view || clearingQueue)
+      return
+    setOperationError(null)
+    setClearingQueue(true)
+    void clearQueue(view.key)
+      .catch(error => setOperationError(errorMessage(error)))
+      .finally(() => setClearingQueue(false))
+  }
+
   function dropImages(event: DragEvent<HTMLTextAreaElement>) {
     event.preventDefault()
     addFiles([...event.dataTransfer.files])
@@ -209,11 +220,15 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
         {view && (view.queue.steering.length || view.queue.followUp.length)
           ? (
               <div className={styles.queue}>
-                队列中
-                {' '}
-                {view.queue.steering.length + view.queue.followUp.length}
-                {' '}
-                条 · 将在合适的时机送达
+                <div className={styles.queueGroups}>
+                  {view.queue.steering.length
+                    ? <QueueGroup label="立即引导" messages={view.queue.steering} />
+                    : null}
+                  {view.queue.followUp.length
+                    ? <QueueGroup label="完成后继续" messages={view.queue.followUp} />
+                    : null}
+                </div>
+                <button className={styles.clearQueue} title="清空全部队列" aria-label="清空全部队列" disabled={clearingQueue} onClick={clearPendingMessages}><ListX size={14} /></button>
               </div>
             )
           : null}
@@ -248,8 +263,8 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                 ? (
                     <div className={styles.streamingMode} aria-label="运行中消息发送方式">
                       <span className={styles.dot} />
-                      <button className={streamingBehavior === 'steer' ? styles.active : ''} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
-                      <button className={streamingBehavior === 'followUp' ? styles.active : ''} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
+                      <button className={streamingBehavior === 'steer' ? styles.active : ''} aria-pressed={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
+                      <button className={streamingBehavior === 'followUp' ? styles.active : ''} aria-pressed={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
                     </div>
                   )
                 : view?.thinkingLevels.length
@@ -355,6 +370,21 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
 
 function errorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : '操作失败，请重试'
+}
+
+function QueueGroup({ label, messages }: { label: string, messages: readonly string[] }) {
+  return (
+    <div className={styles.queueGroup}>
+      <span>{label}</span>
+      <div className={styles.queueMessages}>
+        {messages.map((message, index) => (
+          // pi exposes queue entries as strings without stable ids.
+          // eslint-disable-next-line react/no-array-index-key
+          <div key={index} title={message}>{message}</div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function formatTokens(value: number) {

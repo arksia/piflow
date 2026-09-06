@@ -14,9 +14,54 @@
 }
 
 .queue {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--c-muted);
   font-size: 0.78rem;
   padding: 0 4px 8px;
+}
+
+.queue-groups {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.queue-group {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 3px 8px;
+}
+
+.queue-group > span {
+  color: var(--c-faint);
+}
+
+.queue-messages {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.queue-messages > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clear-queue {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--c-faint);
+}
+
+.clear-queue:hover {
+  color: var(--c-ink);
 }
 
 .error {
