@@ -41,8 +41,14 @@ import { applyState, clearSessionUnread } from './reducer'
 import { ensureView, notify, store } from './store'
 
 async function requestSession(path: string, body: OpenSessionRequest | NewSessionRequest): Promise<SessionState> {
-  const { state } = await post<SessionStateResponse>(path, body)
-  applyState(state)
+  const request = post<SessionStateResponse>(path, body).then(({ state }) => {
+    applyState(state)
+    return state
+  })
+  const state = await Promise.race([
+    request,
+    new Promise<SessionState>((_, reject) => window.setTimeout(() => reject(new Error('操作超时，请重试')), 10_000)),
+  ])
   store.activeKey = state.key
   clearSessionUnread(state.sessionFile ?? state.key)
   saveActiveSessionFile(state.sessionFile)

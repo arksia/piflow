@@ -217,6 +217,17 @@
   font-weight: 600;
 }
 
+.loading { color: var(--c-faint); }
+
+.action-error {
+  margin: 10px 6px 0;
+  padding: 7px 8px;
+  border: 1px solid #6e3734;
+  border-radius: 4px;
+  color: #f08a83;
+  font-size: 0.76rem;
+}
+
 .needsInput { color: #f0b35a; }
 .failed { color: #f08a83; }
 .running { color: var(--c-signal); }
