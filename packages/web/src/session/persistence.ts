@@ -1,4 +1,19 @@
 const ACTIVE_KEY = 'piflow.active'
+const DRAFT_PREFIX = 'piflow.draft:'
+
+export function readDraft(key: string | null): string {
+  return key ? localStorage.getItem(`${DRAFT_PREFIX}${key}`) ?? '' : ''
+}
+
+export function saveDraft(key: string | null, text: string) {
+  if (!key)
+    return
+  const storageKey = `${DRAFT_PREFIX}${key}`
+  if (text)
+    localStorage.setItem(storageKey, text)
+  else
+    localStorage.removeItem(storageKey)
+}
 
 export function saveActiveSessionFile(sessionFile?: string | null) {
   if (sessionFile)

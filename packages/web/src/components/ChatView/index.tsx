@@ -3,6 +3,7 @@ import type { CSSProperties, UIEvent, WheelEvent } from 'react'
 import { PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { trustProject } from '../../session/actions'
+import { readDraft, saveDraft } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import InputBar from '../InputBar'
@@ -54,6 +55,10 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
   const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
   const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
+
+  useEffect(() => {
+    setComposerText(readDraft(store.activeKey))
+  }, [store.activeKey])
 
   useEffect(() => {
     function setEditorText(event: Event) {
@@ -194,6 +199,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
 
   function applyPreset(preset: string) {
     setComposerText(preset)
+    saveDraft(store.activeKey, preset)
     setComposerFocusVersion(version => version + 1)
   }
 
