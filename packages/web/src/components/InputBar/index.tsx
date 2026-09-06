@@ -17,6 +17,16 @@ interface Props {
   draftKey: string
 }
 
+const MAX_IMAGES = 10
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+interface AttachedImage {
+  type: 'image'
+  data: string
+  mimeType: string
+  previewUrl: string
+}
+
 function formatWindow(window: UsageWindow) {
   const reset = window.resetTime ? new Date(window.resetTime) : null
   const when = reset
@@ -33,6 +43,8 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
+  const [images, setImages] = useState<AttachedImage[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const modelButtonRef = useRef<HTMLButtonElement>(null)
   const previousStreamingRef = useRef(view?.isStreaming)
@@ -53,7 +65,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const contextTitle = view?.context
     ? `上下文已用 ${contextPercent}%（${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}）`
     : ''
-  const canSend = store.connected && text.trim().length > 0
+  const canSend = store.connected && (text.trim().length > 0 || images.length > 0)
   const isLive = store.connected && !!view?.isStreaming
   const ringStyle = { '--p': contextPercent } as CSSProperties
 
@@ -120,13 +132,29 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     if (!canSend)
       return
     try {
-      await sendPrompt(text.trim())
+      await sendPrompt(text.trim(), images.map(({ previewUrl: _previewUrl, ...image }) => image))
       onTextChange('')
       saveDraft(draftKey, '')
+      setImages([])
       requestAnimationFrame(() => areaRef.current?.focus())
     }
     catch (error) {
       setOperationError(errorMessage(error))
+    }
+  }
+
+  function addFiles(files: FileList | File[]) {
+    const accepted = [...files].filter(file => file.type.startsWith('image/') && file.size <= MAX_IMAGE_BYTES).slice(0, MAX_IMAGES - images.length)
+    for (const file of accepted) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : ''
+        const comma = dataUrl.indexOf(',')
+        if (comma < 0)
+          return
+        setImages(current => current.length >= MAX_IMAGES ? current : [...current, { type: 'image', data: dataUrl.slice(comma + 1), mimeType: file.type, previewUrl: dataUrl }])
+      }
+      reader.readAsDataURL(file)
     }
   }
 
@@ -174,7 +202,12 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
               saveDraft(draftKey, event.target.value)
             }}
             onKeyDown={onKeyDown}
+            onPaste={event => addFiles([...event.clipboardData.files])}
+            onDragOver={event => event.preventDefault()}
+            onDrop={event => { event.preventDefault(); addFiles([...event.dataTransfer.files]) }}
           />
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = '' }} />
+          {images.length ? <div className={styles.images}>{images.map((image, index) => <button key={`${image.mimeType}:${index}`} type="button" title="移除图片" onClick={() => setImages(current => current.filter((_, i) => i !== index))}><img src={image.previewUrl} alt={`待发送图片 ${index + 1}`} /></button>)}</div> : null}
           <div className={styles.footer}>
             <div className={styles.left}>
               {isLive
@@ -216,6 +249,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                     </button>
                   )
                 : null}
+              <button className={styles.attach} type="button" title="添加图片" aria-label="添加图片" onClick={() => fileRef.current?.click()}>＋</button>
               {isLive
                 ? (
                     <button

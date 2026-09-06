@@ -57,7 +57,7 @@ export class SessionsStreamingError extends Error {
 export interface SessionStore {
   createFreshSession: (cwd?: string, persist?: boolean) => Promise<ManagedSession>
   openSavedSession: (path: string) => Promise<ManagedSession | null>
-  prompt: (managed: ManagedSession, text: string, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
+  prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
   get: (key: string) => ManagedSession | undefined
   listDirectories: (path: string) => Promise<DirectoryListing>
   listSessions: () => Promise<SessionInfoLite[]>
@@ -333,7 +333,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       sessionPath: session.sessionFile ?? null,
       messages: session.messages,
       isStreaming: session.isStreaming,
-      prompt: (text: string, followUp: boolean) => prompt(managed, text, followUp ? 'followUp' : undefined),
+      prompt: (text: string, followUp: boolean) => prompt(managed, text, undefined, followUp ? 'followUp' : undefined),
     }
   }
 
@@ -368,16 +368,16 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     }
   }
 
-  async function prompt(managed: ManagedSession, text: string, streamingBehavior?: 'steer' | 'followUp') {
+  async function prompt(managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') {
     touch(managed)
     await injectFlowDirectory(managed)
     const session = managed.runtime.session
     if (streamingBehavior === 'steer')
-      await session.steer(text)
+      await session.steer(text, images)
     else if (streamingBehavior === 'followUp')
-      await session.followUp(text)
+      await session.followUp(text, images)
     else
-      await session.prompt(text)
+      await session.prompt(text, images ? { images } : undefined)
   }
 
   async function listSessions(): Promise<SessionInfoLite[]> {
