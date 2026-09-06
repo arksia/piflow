@@ -30,6 +30,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
+  const [aborting, setAborting] = useState(false)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const modelButtonRef = useRef<HTMLButtonElement>(null)
   const previousStreamingRef = useRef(view?.isStreaming)
@@ -127,10 +128,13 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   }
 
   function stop() {
-    if (!view)
+    if (!view || aborting)
       return
     setOperationError(null)
-    void abort(view.key).catch(error => setOperationError(errorMessage(error)))
+    setAborting(true)
+    void abort(view.key)
+      .catch(error => setOperationError(errorMessage(error)))
+      .finally(() => setAborting(false))
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -211,8 +215,9 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                     <button
                       className={`${styles.button} ${styles.ring} ${styles.stop} ${contextLevel}`}
                       style={ringStyle}
-                      title={`中断回复 · ${contextTitle}`}
-                      aria-label="中断回复"
+                      title={aborting ? '正在中断…' : `中断回复 · ${contextTitle}`}
+                      aria-label={aborting ? '正在中断回复' : '中断回复'}
+                      disabled={aborting}
                       onClick={stop}
                     >
                       <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
