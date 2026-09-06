@@ -3,7 +3,7 @@ import type { CSSProperties, UIEvent, WheelEvent } from 'react'
 import { PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { trustProject } from '../../session/actions'
-import { readDraft, saveDraft } from '../../session/persistence'
+import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import InputBar from '../InputBar'
@@ -58,7 +58,9 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const draftKey = store.activeKey ?? `new:${store.cwd}`
 
   useEffect(() => {
-    setComposerText(readDraft(draftKey))
+    // Session changes replace the controlled composer with that session's draft.
+    // eslint-disable-next-line react/set-state-in-effect
+    setComposerText(readDraft(draftKey).text)
   }, [draftKey])
 
   useEffect(() => {
@@ -200,7 +202,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
 
   function applyPreset(preset: string) {
     setComposerText(preset)
-    saveDraft(draftKey, preset)
+    saveDraftText(draftKey, preset)
     setComposerFocusVersion(version => version + 1)
   }
 

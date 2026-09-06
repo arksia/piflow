@@ -1,11 +1,12 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { UsageWindow } from '@piflow/protocol'
-import type { CSSProperties, KeyboardEvent } from 'react'
+import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from 'react'
+import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
 import { ArrowUp, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
-import { saveDraft } from '../../session/persistence'
+import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
 import styles from './styles.module.css'
 
@@ -19,13 +20,6 @@ interface Props {
 
 const MAX_IMAGES = 10
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
-
-interface AttachedImage {
-  type: 'image'
-  data: string
-  mimeType: string
-  previewUrl: string
-}
 
 function formatWindow(window: UsageWindow) {
   const reset = window.resetTime ? new Date(window.resetTime) : null
@@ -43,7 +37,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
-  const [images, setImages] = useState<AttachedImage[]>([])
+  const [images, setImages] = useState<DraftImage[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const modelButtonRef = useRef<HTMLButtonElement>(null)
@@ -90,6 +84,12 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   }, [focusVersion])
 
   useEffect(() => {
+    // Session changes replace attachments with that session's draft.
+    // eslint-disable-next-line react/set-state-in-effect
+    setImages(readDraft(draftKey).images)
+  }, [draftKey])
+
+  useEffect(() => {
     if (!modelOpen)
       return
     function onKey(event: globalThis.KeyboardEvent) {
@@ -132,9 +132,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     if (!canSend)
       return
     try {
-      await sendPrompt(text.trim(), images.map(({ previewUrl: _previewUrl, ...image }) => image))
+      await sendPrompt(text.trim(), images.map(image => ({ type: image.type, data: image.data, mimeType: image.mimeType })))
       onTextChange('')
-      saveDraft(draftKey, '')
+      clearDraft(draftKey)
+      clearDraft(store.activeKey)
       setImages([])
       requestAnimationFrame(() => areaRef.current?.focus())
     }
@@ -152,7 +153,11 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
         const comma = dataUrl.indexOf(',')
         if (comma < 0)
           return
-        setImages(current => current.length >= MAX_IMAGES ? current : [...current, { type: 'image', data: dataUrl.slice(comma + 1), mimeType: file.type, previewUrl: dataUrl }])
+        setImages((current) => {
+          const next = current.length >= MAX_IMAGES ? current : [...current, { id: crypto.randomUUID(), type: 'image', data: dataUrl.slice(comma + 1), mimeType: file.type, previewUrl: dataUrl } satisfies DraftImage]
+          saveDraftImages(draftKey, next)
+          return next
+        })
       }
       reader.readAsDataURL(file)
     }
@@ -166,6 +171,25 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     void abort(view.key)
       .catch(error => setOperationError(errorMessage(error)))
       .finally(() => setAborting(false))
+  }
+
+  function removeImage(id: string) {
+    setImages((current) => {
+      const next = current.filter(image => image.id !== id)
+      saveDraftImages(draftKey, next)
+      return next
+    })
+  }
+
+  function dropImages(event: DragEvent<HTMLTextAreaElement>) {
+    event.preventDefault()
+    addFiles([...event.dataTransfer.files])
+  }
+
+  function pickImages(event: ChangeEvent<HTMLInputElement>) {
+    if (event.target.files)
+      addFiles(event.target.files)
+    event.currentTarget.value = ''
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -197,17 +221,24 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             value={text}
             rows={2}
             placeholder="和 pi 说点什么…"
-            onChange={event => {
+            onChange={(event) => {
               onTextChange(event.target.value)
-              saveDraft(draftKey, event.target.value)
+              saveDraftText(draftKey, event.target.value)
             }}
             onKeyDown={onKeyDown}
             onPaste={event => addFiles([...event.clipboardData.files])}
             onDragOver={event => event.preventDefault()}
-            onDrop={event => { event.preventDefault(); addFiles([...event.dataTransfer.files]) }}
+            onDrop={dropImages}
           />
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = '' }} />
-          {images.length ? <div className={styles.images}>{images.map((image, index) => <button key={`${image.mimeType}:${index}`} type="button" title="移除图片" onClick={() => setImages(current => current.filter((_, i) => i !== index))}><img src={image.previewUrl} alt={`待发送图片 ${index + 1}`} /></button>)}</div> : null}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={pickImages}
+          />
+          {images.length ? <div className={styles.images}>{images.map((image, index) => <button key={image.id} type="button" title="移除图片" onClick={() => removeImage(image.id)}><img src={image.previewUrl} alt={`待发送图片 ${index + 1}`} /></button>)}</div> : null}
           <div className={styles.footer}>
             <div className={styles.left}>
               {isLive

@@ -228,7 +228,7 @@
   font-size: 0.76rem;
 }
 
-.needsInput { color: #f0b35a; }
+.needs-input { color: #f0b35a; }
 .failed { color: #f08a83; }
 .running { color: var(--c-signal); }
 .unread { color: var(--c-mid); }

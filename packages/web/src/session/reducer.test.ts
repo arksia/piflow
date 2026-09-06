@@ -50,7 +50,10 @@ it('tracks completion attention per background session and clears it on open', (
   const values = new Map<string, string>()
   Object.assign(globalThis, {
     document: { hidden: false },
-    requestAnimationFrame: (callback: () => void) => { callback(); return 1 },
+    requestAnimationFrame: (callback: () => void) => {
+      callback()
+      return 1
+    },
     localStorage: {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
