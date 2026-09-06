@@ -302,7 +302,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
           case 'abort':
             await managed.runtime.session.abort()
             managed.extensionUi.cancelPending()
-            return json(res, 200, { ok: true } satisfies ApiOkResponse)
+            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
 
           case 'model': {
             const modelRequest = body as Partial<SetModelRequest>
@@ -314,7 +314,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
             }
             await managed.runtime.session.setModel(model)
             await publishState(managed)
-            return json(res, 200, { ok: true } satisfies ApiOkResponse)
+            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
           }
 
           case 'thinking': {
@@ -324,7 +324,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
               return json(res, 400, { error: 'unknown thinking level' })
             managed.runtime.session.setThinkingLevel(level)
             await publishState(managed)
-            return json(res, 200, { ok: true } satisfies ApiOkResponse)
+            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
           }
         }
       }

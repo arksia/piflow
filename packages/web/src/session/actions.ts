@@ -95,19 +95,25 @@ export async function sendPrompt(text: string): Promise<void> {
   notify()
 }
 
-export function abort(key: string): Promise<ApiOkResponse> {
-  return post<ApiOkResponse>(sessionUrl(key, 'abort'))
+export async function abort(key: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(key, 'abort'))
+  applyState(state)
+  return state
 }
 
-export function setModel(key: string, provider: string, modelId: string): Promise<ApiOkResponse> {
-  return post<ApiOkResponse>(sessionUrl(key, 'model'), {
+export async function setModel(key: string, provider: string, modelId: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(key, 'model'), {
     provider,
     modelId,
   } satisfies SetModelRequest)
+  applyState(state)
+  return state
 }
 
-export function setThinking(key: string, level: ThinkingLevel): Promise<ApiOkResponse> {
-  return post<ApiOkResponse>(sessionUrl(key, 'thinking'), { level } satisfies SetThinkingRequest)
+export async function setThinking(key: string, level: ThinkingLevel): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(key, 'thinking'), { level } satisfies SetThinkingRequest)
+  applyState(state)
+  return state
 }
 
 export function requestUsage(key: string, fresh = false) {
