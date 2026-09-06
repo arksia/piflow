@@ -46,6 +46,8 @@ import {
   API_SESSIONS_PATH,
   API_USAGE_PATH,
   AUTH_PATH,
+  MAX_PROMPT_IMAGE_BYTES,
+  MAX_PROMPT_IMAGES,
   parseSessionActionPath,
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
@@ -287,15 +289,16 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         if (!managed)
           return json(res, 404, { error: `session not open: ${action.key}` })
 
-        const body = await readBody(req)
+        const body = await readBody(req, action.action === 'prompt' ? 140 * 1024 * 1024 : undefined)
 
         switch (action.action) {
           case 'prompt': {
             const prompt = body as Partial<PromptRequest>
-            if (typeof prompt.text !== 'string' || !prompt.text.trim())
-              return json(res, 400, { error: 'text required' })
-            if (prompt.images !== undefined && (!Array.isArray(prompt.images) || prompt.images.length > 10))
-              return json(res, 400, { error: 'at most 10 images are supported' })
+            if (typeof prompt.text !== 'string' || (!prompt.text.trim() && !prompt.images?.length))
+              return json(res, 400, { error: 'text or image required' })
+            const imageError = validatePromptImages(prompt.images)
+            if (imageError)
+              return json(res, 400, { error: imageError })
             json(res, 202, { ok: true } satisfies ApiOkResponse)
             void handlePrompt(managed, prompt.text, prompt.images)
             return
@@ -401,4 +404,22 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       await serveStatic(res, path)
     })()
   }
+}
+
+export function validatePromptImages(images: unknown): string | null {
+  if (images === undefined)
+    return null
+  if (!Array.isArray(images) || images.length > MAX_PROMPT_IMAGES)
+    return `at most ${MAX_PROMPT_IMAGES} images are supported`
+  for (const image of images) {
+    if (!image || typeof image !== 'object')
+      return 'invalid image content'
+    const { type, data, mimeType } = image as Record<string, unknown>
+    if (type !== 'image' || typeof data !== 'string' || typeof mimeType !== 'string' || !mimeType.startsWith('image/'))
+      return 'invalid image content'
+    const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0
+    if (data.length % 4 !== 0 || !/^[a-z0-9+/]*={0,2}$/i.test(data) || data.length / 4 * 3 - padding > MAX_PROMPT_IMAGE_BYTES)
+      return `each image must be valid base64 data no larger than ${MAX_PROMPT_IMAGE_BYTES / 1024 / 1024} MB`
+  }
+  return null
 }

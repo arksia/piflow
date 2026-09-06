@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolState } from '../../session/state'
 import { memo } from 'react'
+import ContentImage from '../ContentImage'
 import MarkdownView from '../MarkdownView'
 import StreamingMarkdownView from '../StreamingMarkdownView'
 import ToolCallCard from '../ToolCallCard'
@@ -47,7 +48,7 @@ function MessageItem({ message, toolResults, live = false }: Props) {
                 if (block.type === 'text')
                   return <span key={blockKey(block)} className={styles.userText}>{block.text}</span>
                 if (block.type === 'image')
-                  return <span key={blockKey(block)} className={styles.userImage}>[图片]</span>
+                  return <ContentImage key={blockKey(block)} image={block} alt="用户图片" />
                 return null
               })}
         </div>
@@ -76,6 +77,8 @@ function MessageItem({ message, toolResults, live = false }: Props) {
           }
           if (block.type === 'toolCall')
             return <ToolCallCard key={block.id} call={block} state={toolResults[block.id]} />
+          if (block.type === 'image')
+            return <ContentImage key={key} image={block} alt="助手图片" />
           return null
         })}
         {message.stopReason === 'error'

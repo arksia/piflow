@@ -15,6 +15,8 @@
 }
 
 .user-bubble {
+  display: grid;
+  gap: 8px;
   max-width: 78%;
   padding: 8px 14px;
   background: #a160fc14;
@@ -27,11 +29,6 @@
   color: var(--c-ink);
   white-space: pre-wrap;
   overflow-wrap: break-word;
-}
-
-.user-image {
-  color: var(--c-muted);
-  font-size: 0.85rem;
 }
 
 .time {

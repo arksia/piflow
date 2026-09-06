@@ -129,6 +129,12 @@
   font-size: 0.8rem;
 }
 
+.images {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .actions {
   display: flex;
   gap: 12px;

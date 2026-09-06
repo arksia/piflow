@@ -92,7 +92,10 @@ export async function sendPrompt(text: string, images?: PromptRequest['images'])
     return
   await post<ApiOkResponse>(sessionUrl(key, 'prompt'), { text, images } satisfies PromptRequest)
   const view = ensureView(key)
-  view.messages.push({ role: 'user', content: text, timestamp: Date.now() })
+  const content = images?.length
+    ? [...(text ? [{ type: 'text' as const, text }] : []), ...images]
+    : text
+  view.messages.push({ role: 'user', content, timestamp: Date.now() })
   view.tick++
   notify()
 }

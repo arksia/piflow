@@ -1,5 +1,6 @@
 import type { ToolState } from '../../session/state'
 import { useState } from 'react'
+import ContentImage from '../ContentImage'
 import styles from './styles.module.css'
 
 interface Props {
@@ -38,11 +39,12 @@ export default function ToolCallCard({ call, state }: Props) {
   })
   const source = state?.partial ?? state?.result
   const rawOutput = (source?.content ?? []).map(content => content.type === 'text' ? content.text : '').join('').trimEnd()
+  const images = (source?.content ?? []).filter(content => content.type === 'image')
   const lines = rawOutput.split('\n')
   const truncated = lines.length > 60 && !expanded
   const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput
   const status = state?.running ? 'running' : state?.isError ? 'error' : state?.result ? 'done' : 'pending'
-  const expandable = Boolean(diff || rawOutput)
+  const expandable = Boolean(diff || rawOutput || images.length)
 
   function copyOutput() {
     void navigator.clipboard.writeText(rawOutput)
@@ -97,7 +99,18 @@ export default function ToolCallCard({ call, state }: Props) {
                         </div>
                       </>
                     )
-                  : <div className={styles.none}>无输出</div>}
+                  : images.length ? null : <div className={styles.none}>无输出</div>}
+              {images.length
+                ? (
+                    <div className={styles.images}>
+                      {images.map((image, index) => (
+                        // Tool result content is immutable; its index is stable.
+                        // eslint-disable-next-line react/no-array-index-key
+                        <ContentImage key={index} image={image} alt={`工具输出图片 ${index + 1}`} />
+                      ))}
+                    </div>
+                  )
+                : null}
             </div>
           )
         : null}

@@ -1,0 +1,9 @@
+.image {
+  display: block;
+  width: auto;
+  max-width: min(100%, 640px);
+  max-height: 480px;
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  object-fit: contain;
+}

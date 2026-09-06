@@ -21,11 +21,11 @@ export function json(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data))
 }
 
-export async function readBody<T extends object = Record<string, unknown>>(req: IncomingMessage): Promise<T> {
+export async function readBody<T extends object = Record<string, unknown>>(req: IncomingMessage, maxLength = 1_000_000): Promise<T> {
   let body = ''
   for await (const chunk of req) {
     body += chunk
-    if (body.length > 1_000_000)
+    if (body.length > maxLength)
       throw new Error('request body too large')
   }
   return (body ? JSON.parse(body) : {}) as T

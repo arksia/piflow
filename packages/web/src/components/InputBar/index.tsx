@@ -3,6 +3,7 @@ import type { UsageWindow } from '@piflow/protocol'
 import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from 'react'
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
+import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
 import { ArrowUp, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
@@ -17,9 +18,6 @@ interface Props {
   onTextChange: (text: string) => void
   draftKey: string
 }
-
-const MAX_IMAGES = 10
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 function formatWindow(window: UsageWindow) {
   const reset = window.resetTime ? new Date(window.resetTime) : null
