@@ -14,6 +14,7 @@ interface Props {
   text: string
   focusVersion: number
   onTextChange: (text: string) => void
+  draftKey: string
 }
 
 function formatWindow(window: UsageWindow) {
@@ -27,7 +28,7 @@ function formatWindow(window: UsageWindow) {
   return `${label} · 剩 ${window.remaining}% · ${when} 重置`
 }
 
-export default function InputBar({ view, text, focusVersion, onTextChange }: Props) {
+export default function InputBar({ view, text, focusVersion, onTextChange, draftKey }: Props) {
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
@@ -121,7 +122,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
     try {
       await sendPrompt(text.trim())
       onTextChange('')
-      saveDraft(store.activeKey, '')
+      saveDraft(draftKey, '')
       requestAnimationFrame(() => areaRef.current?.focus())
     }
     catch (error) {
@@ -170,7 +171,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
             placeholder="和 pi 说点什么…"
             onChange={event => {
               onTextChange(event.target.value)
-              saveDraft(store.activeKey, event.target.value)
+              saveDraft(draftKey, event.target.value)
             }}
             onKeyDown={onKeyDown}
           />

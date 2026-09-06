@@ -36,11 +36,12 @@ import {
   API_SESSIONS_OPEN_PATH as openSessionPath,
 } from '@piflow/protocol'
 import { api, post, sessionUrl } from './api'
-import { clearActiveSessionFile, saveActiveSessionFile } from './persistence'
+import { clearActiveSessionFile, migrateDraft, saveActiveSessionFile } from './persistence'
 import { applyState, clearSessionUnread } from './reducer'
 import { ensureView, notify, store } from './store'
 
 async function requestSession(path: string, body: OpenSessionRequest | NewSessionRequest): Promise<SessionState> {
+  const draftKey = store.activeKey ?? `new:${store.cwd}`
   const request = post<SessionStateResponse>(path, body).then(({ state }) => {
     applyState(state)
     return state
@@ -50,6 +51,7 @@ async function requestSession(path: string, body: OpenSessionRequest | NewSessio
     new Promise<SessionState>((_, reject) => window.setTimeout(() => reject(new Error('操作超时，请重试')), 10_000)),
   ])
   store.activeKey = state.key
+  migrateDraft(draftKey, state.key)
   clearSessionUnread(state.sessionFile ?? state.key)
   saveActiveSessionFile(state.sessionFile)
   notify()

@@ -55,10 +55,11 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
   const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
   const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
+  const draftKey = store.activeKey ?? `new:${store.cwd}`
 
   useEffect(() => {
-    setComposerText(readDraft(store.activeKey))
-  }, [store.activeKey])
+    setComposerText(readDraft(draftKey))
+  }, [draftKey])
 
   useEffect(() => {
     function setEditorText(event: Event) {
@@ -199,7 +200,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
 
   function applyPreset(preset: string) {
     setComposerText(preset)
-    saveDraft(store.activeKey, preset)
+    saveDraft(draftKey, preset)
     setComposerFocusVersion(version => version + 1)
   }
 
@@ -295,6 +296,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
         text={composerText}
         focusVersion={composerFocusVersion}
         onTextChange={setComposerText}
+        draftKey={draftKey}
       />
     </div>
   )
