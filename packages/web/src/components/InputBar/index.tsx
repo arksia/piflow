@@ -5,6 +5,7 @@ import type { SessionView } from '../../session/state'
 import { ArrowUp, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { abort, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
+import { saveDraft } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
 import styles from './styles.module.css'
 
@@ -120,6 +121,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
     try {
       await sendPrompt(text.trim())
       onTextChange('')
+      saveDraft(store.activeKey, '')
       requestAnimationFrame(() => areaRef.current?.focus())
     }
     catch (error) {
@@ -166,7 +168,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
             value={text}
             rows={2}
             placeholder="和 pi 说点什么…"
-            onChange={event => onTextChange(event.target.value)}
+            onChange={event => {
+              onTextChange(event.target.value)
+              saveDraft(store.activeKey, event.target.value)
+            }}
             onKeyDown={onKeyDown}
           />
           <div className={styles.footer}>
