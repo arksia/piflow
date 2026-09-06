@@ -82,7 +82,7 @@ export async function requestDirectories(path: string): Promise<DirectoryListing
   return listing
 }
 
-export async function sendPrompt(text: string, images?: PromptRequest['images']): Promise<void> {
+export async function sendPrompt(text: string, images?: PromptRequest['images'], streamingBehavior?: PromptRequest['streamingBehavior']): Promise<void> {
   if (!store.connected)
     throw new Error('not connected')
   if (!store.activeKey)
@@ -90,7 +90,7 @@ export async function sendPrompt(text: string, images?: PromptRequest['images'])
   const key = store.activeKey
   if (!key)
     return
-  await post<ApiOkResponse>(sessionUrl(key, 'prompt'), { text, images } satisfies PromptRequest)
+  await post<ApiOkResponse>(sessionUrl(key, 'prompt'), { text, images, streamingBehavior } satisfies PromptRequest)
   const view = ensureView(key)
   const content = images?.length
     ? [...(text ? [{ type: 'text' as const, text }] : []), ...images]

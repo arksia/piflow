@@ -371,13 +371,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   async function prompt(managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') {
     touch(managed)
     await injectFlowDirectory(managed)
-    const session = managed.runtime.session
-    if (streamingBehavior === 'steer')
-      await session.steer(text, images)
-    else if (streamingBehavior === 'followUp')
-      await session.followUp(text, images)
-    else
-      await session.prompt(text, images ? { images } : undefined)
+    await managed.runtime.session.prompt(text, { images, streamingBehavior })
   }
 
   async function listSessions(): Promise<SessionInfoLite[]> {

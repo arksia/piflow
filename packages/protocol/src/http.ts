@@ -34,6 +34,7 @@ export interface NewSessionRequest {
 export interface PromptRequest {
   text: string
   images?: ImageContent[]
+  streamingBehavior?: 'steer' | 'followUp'
 }
 
 export interface SetModelRequest {
