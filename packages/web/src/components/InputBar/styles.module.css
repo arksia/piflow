@@ -19,6 +19,12 @@
   padding: 0 4px 8px;
 }
 
+.error {
+  padding: 0 4px 8px;
+  color: #ffa198;
+  font-size: 0.78rem;
+}
+
 .box {
   position: relative;
   display: flex;

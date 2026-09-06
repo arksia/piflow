@@ -117,6 +117,11 @@
   font-weight: 600;
 }
 
+.trustError {
+  color: #ffa198;
+  font-size: 0.75rem;
+}
+
 .extension-state {
   display: flex;
   width: min(calc(100% - 48px), var(--chat-w));
