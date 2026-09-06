@@ -1,4 +1,4 @@
-import type { SessionInfoLite } from '@piflow/protocol'
+import type { SessionInfoLite, SessionStatusRecord } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
 import { ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
@@ -33,6 +33,18 @@ function relativeTime(timestamp: string) {
 
 function label(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
+}
+
+function attentionFor(session: SessionInfoLite, status: SessionStatusRecord | undefined, unread: ReadonlySet<string>) {
+  if (status?.needsInputAt)
+    return { label: '待回答', className: styles.needsInput }
+  if (status?.status === 'failed')
+    return { label: '失败', className: styles.failed }
+  if (status?.status === 'running')
+    return { label: '运行中', className: styles.running }
+  if (unread.has(session.path))
+    return { label: '已完成', className: styles.unread }
+  return null
 }
 
 function projectName(cwd: string) {
@@ -167,6 +179,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                   session={session}
                   active={store.activeKey === session.path}
                   streaming={store.statuses[session.path]?.status === 'running'}
+                  attention={attentionFor(session, store.statuses[session.path], store.unreadSessions)}
                   connected={store.connected}
                   editing={editingPath === session.path}
                   indent={indent}
@@ -215,6 +228,7 @@ interface SessionRowProps {
   session: SessionInfoLite
   active: boolean
   streaming: boolean
+  attention: { label: string, className?: string } | null
   connected: boolean
   editing: boolean
   indent: number
@@ -227,7 +241,7 @@ interface SessionRowProps {
   onToggle: () => void
 }
 
-function SessionRow({ session, active, streaming, connected, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
+function SessionRow({ session, active, streaming, attention, connected, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
   if (editing)
     return <RenameRow session={session} indent={indent} onDone={onRenameEnd} />
   const title = lineage ? `${label(session)}\nfork 自：${lineage}` : label(session)
@@ -257,6 +271,7 @@ function SessionRow({ session, active, streaming, connected, editing, indent, ha
             {session.messageCount}
             {' '}
             条
+            {attention ? <span className={`${styles.attention} ${attention.className}`}>{attention.label}</span> : null}
           </span>
         </button>
       </div>

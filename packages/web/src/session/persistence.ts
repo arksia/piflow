@@ -21,6 +21,25 @@ export function readSavedActivePath(): string | null {
 
 const COLLAPSED_KEY = 'piflow.collapsed-sessions'
 
+const UNREAD_KEY = 'piflow.unread-sessions'
+
+export function readUnreadSessions(): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(UNREAD_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(saved) ? saved.filter((path): path is string => typeof path === 'string') : [])
+  }
+  catch {
+    return new Set()
+  }
+}
+
+export function saveUnreadSessions(unread: ReadonlySet<string>) {
+  if (unread.size)
+    localStorage.setItem(UNREAD_KEY, JSON.stringify([...unread]))
+  else
+    localStorage.removeItem(UNREAD_KEY)
+}
+
 export function readCollapsedSessions(): Set<string> {
   try {
     const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as unknown

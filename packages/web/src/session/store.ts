@@ -28,6 +28,7 @@ export const store: StoreState = {
   activeKey: null,
   views: {},
   statuses: {},
+  unreadSessions: new Set(),
   extensionNotices: [],
   projectTrust: {},
   sidebarOpen: false,
