@@ -1,11 +1,5 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
-
-/** pi-native ImageContent wire shape; kept structural so protocol stays dependency-light. */
-export interface ImageContent {
-  type: 'image'
-  data: string
-  mimeType: string
-}
+import type { ImageContent } from '@earendil-works/pi-ai'
 
 export const AUTH_PATH = '/auth'
 
@@ -21,6 +15,8 @@ export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
 export const API_PROJECT_TRUST_PATH = '/api/project-trust'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
+export const MAX_PROMPT_IMAGES = 10
+export const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024
 
 export const SESSION_ACTIONS = ['prompt', 'abort', 'model', 'thinking', 'rename', 'fork', 'delete'] as const
 

@@ -26,6 +26,8 @@ export {
   buildFlowPath,
   buildSessionActionPath,
   buildUsagePath,
+  MAX_PROMPT_IMAGE_BYTES,
+  MAX_PROMPT_IMAGES,
   parseSessionActionPath,
   SESSION_ACTIONS,
 } from './http'
@@ -43,6 +45,7 @@ export type {
   SetThinkingRequest,
   TrustProjectRequest,
 } from './http'
+export type { ImageContent } from '@earendil-works/pi-ai'
 
 /** POST body for the extension-UI response route: the official RPC frame plus the target session key. */
 export type ExtensionUIResponseBody = { session: string } & RpcExtensionUIResponse
