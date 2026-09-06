@@ -51,9 +51,7 @@ async function connect() {
   const source = new EventSource(eventsPath)
 
   source.onopen = () => {
-    store.connected = true
-    store.connectionState = 'connected'
-    notify()
+    markConnected()
     void resync()
   }
 
@@ -62,10 +60,20 @@ async function connect() {
   }
 
   source.onerror = () => {
-    store.connected = false
-    store.connectionState = 'reconnecting'
-    notify()
+    markReconnecting()
   }
+}
+
+export function markConnected() {
+  store.connected = true
+  store.connectionState = 'connected'
+  notify()
+}
+
+export function markReconnecting() {
+  store.connected = false
+  store.connectionState = 'reconnecting'
+  notify()
 }
 
 export function initClient() {
