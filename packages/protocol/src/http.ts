@@ -18,7 +18,7 @@ export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 export const MAX_PROMPT_IMAGES = 10
 export const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024
 
-export const SESSION_ACTIONS = ['prompt', 'abort', 'model', 'thinking', 'rename', 'fork', 'delete'] as const
+export const SESSION_ACTIONS = ['prompt', 'abort', 'clear-queue', 'model', 'thinking', 'rename', 'fork', 'delete'] as const
 
 export type SessionAction = (typeof SESSION_ACTIONS)[number]
 
