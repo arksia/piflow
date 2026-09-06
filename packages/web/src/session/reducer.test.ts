@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { JsonAgentSessionEvent } from '@earendil-works/pi-coding-agent'
+import type { SessionState } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
 import { applyAssistantUpdate, applyStatusDelta, clearSessionUnread, handleEvent, route } from './reducer'
@@ -88,4 +89,26 @@ it('replaces tool results on replay instead of duplicating them', () => {
   assert.deepEqual(store.views['session-a']?.toolResults, {
     'call-1': { result: { content: 'replayed' }, isError: false },
   })
+})
+
+it('replaces queues from authoritative state after abort or reconnect', () => {
+  store.views = {}
+  const state: SessionState = {
+    key: 'session-a',
+    cwd: '/project',
+    messages: [],
+    isStreaming: false,
+    isCompacting: false,
+    model: null,
+    thinkingLevel: null,
+    thinkingLevels: [],
+    context: null,
+    queue: { steering: ['now'], followUp: ['later'] },
+    extensionRequests: [],
+    error: null,
+  }
+  route({ type: 'state', state }, () => {})
+  assert.deepEqual(store.views['session-a']?.queue, { steering: ['now'], followUp: ['later'] })
+  route({ type: 'state', state: { ...state, queue: { steering: [], followUp: ['later'] } } }, () => {})
+  assert.deepEqual(store.views['session-a']?.queue, { steering: [], followUp: ['later'] })
 })
