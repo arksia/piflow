@@ -47,6 +47,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const [column, setColumn] = useState<HTMLDivElement | null>(null)
   const [composerText, setComposerText] = useState('')
   const [composerFocusVersion, setComposerFocusVersion] = useState(0)
+  const [trustError, setTrustError] = useState<string | null>(null)
   const [widthIndex, setWidthIndex] = useState(() => Math.min(Number(localStorage.getItem('piflow.chatWidth') ?? 1), 2))
   const session = store.sessions.find(session => session.path === store.activeKey)
   const title = store.activeKey ? session?.name || session?.firstMessage || '新会话' : ''
@@ -204,6 +205,13 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
     })
   }
 
+  function trustProjectNow() {
+    if (!view?.cwd)
+      return
+    setTrustError(null)
+    void trustProject(view.cwd).catch(error => setTrustError(error instanceof Error && error.message ? error.message : '操作失败，请重试'))
+  }
+
   return (
     <div className={styles.chat} style={chatStyle}>
       <header className={styles.bar}>
@@ -224,7 +232,8 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
           ? (
               <div className={styles.trust}>
                 <span>项目资源已停用，确认信任后才会加载扩展与技能。</span>
-                <button onClick={() => void trustProject(trust.cwd)}>信任项目</button>
+                <button onClick={trustProjectNow}>信任项目</button>
+                {trustError ? <span className={styles.trustError} role="alert">{trustError}</span> : null}
               </div>
             )
           : null}

@@ -95,19 +95,19 @@ export async function sendPrompt(text: string): Promise<void> {
   notify()
 }
 
-export function abort(key: string) {
-  void post<ApiOkResponse>(sessionUrl(key, 'abort')).catch((error: unknown) => console.error('[piflow]', error))
+export function abort(key: string): Promise<ApiOkResponse> {
+  return post<ApiOkResponse>(sessionUrl(key, 'abort'))
 }
 
-export function setModel(key: string, provider: string, modelId: string) {
-  void post<ApiOkResponse>(sessionUrl(key, 'model'), {
+export function setModel(key: string, provider: string, modelId: string): Promise<ApiOkResponse> {
+  return post<ApiOkResponse>(sessionUrl(key, 'model'), {
     provider,
     modelId,
-  } satisfies SetModelRequest).catch((error: unknown) => console.error('[piflow]', error))
+  } satisfies SetModelRequest)
 }
 
-export function setThinking(key: string, level: ThinkingLevel) {
-  void post<ApiOkResponse>(sessionUrl(key, 'thinking'), { level } satisfies SetThinkingRequest).catch((error: unknown) => console.error('[piflow]', error))
+export function setThinking(key: string, level: ThinkingLevel): Promise<ApiOkResponse> {
+  return post<ApiOkResponse>(sessionUrl(key, 'thinking'), { level } satisfies SetThinkingRequest)
 }
 
 export function requestUsage(key: string, fresh = false) {

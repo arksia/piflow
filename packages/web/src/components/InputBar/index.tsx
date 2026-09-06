@@ -29,6 +29,7 @@ function formatWindow(window: UsageWindow) {
 export default function InputBar({ view, text, focusVersion, onTextChange }: Props) {
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
+  const [operationError, setOperationError] = useState<string | null>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const modelButtonRef = useRef<HTMLButtonElement>(null)
   const previousStreamingRef = useRef(view?.isStreaming)
@@ -87,8 +88,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   }, [modelOpen])
 
   function pickModel(selectedProvider: string, modelId: string) {
-    if (view)
-      setModel(view.key, selectedProvider, modelId)
+    if (!view)
+      return
+    setOperationError(null)
+    void setModel(view.key, selectedProvider, modelId).catch(error => setOperationError(errorMessage(error)))
     setModelOpen(false)
   }
 
@@ -104,8 +107,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
     const levels: ThinkingLevel[] = view.thinkingLevels.length ? view.thinkingLevels : ['off', 'low', 'medium', 'high']
     const current = view.thinkingLevel ? levels.indexOf(view.thinkingLevel) : -1
     const next = levels[(current + 1) % levels.length]
-    if (next)
-      setThinking(view.key, next)
+    if (!next)
+      return
+    setOperationError(null)
+    void setThinking(view.key, next).catch(error => setOperationError(errorMessage(error)))
   }
 
   async function submit() {
@@ -117,8 +122,15 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
       requestAnimationFrame(() => areaRef.current?.focus())
     }
     catch (error) {
-      console.error('[piflow]', error)
+      setOperationError(errorMessage(error))
     }
+  }
+
+  function stop() {
+    if (!view)
+      return
+    setOperationError(null)
+    void abort(view.key).catch(error => setOperationError(errorMessage(error)))
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -131,6 +143,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
   return (
     <div className={styles.bar}>
       <div className={styles.column}>
+        {operationError ? <div className={styles.error} role="alert">{operationError}</div> : null}
         {view && (view.queue.steering.length || view.queue.followUp.length)
           ? (
               <div className={styles.queue}>
@@ -200,7 +213,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
                       style={ringStyle}
                       title={`中断回复 · ${contextTitle}`}
                       aria-label="中断回复"
-                      onClick={() => abort(view.key)}
+                      onClick={stop}
                     >
                       <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
                     </button>
@@ -258,6 +271,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange }: Pro
       </div>
     </div>
   )
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '操作失败，请重试'
 }
 
 function formatTokens(value: number) {
