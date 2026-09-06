@@ -52,6 +52,7 @@ export interface StoreState {
   activeKey: string | null
   views: Record<string, SessionView>
   statuses: Record<string, SessionStatusRecord>
+  unreadSessions: ReadonlySet<string>
   extensionNotices: ExtensionNotice[]
   projectTrust: Record<string, ProjectTrustStatus>
   sidebarOpen: boolean

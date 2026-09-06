@@ -37,13 +37,14 @@ import {
 } from '@piflow/protocol'
 import { api, post, sessionUrl } from './api'
 import { clearActiveSessionFile, saveActiveSessionFile } from './persistence'
-import { applyState } from './reducer'
+import { applyState, clearSessionUnread } from './reducer'
 import { ensureView, notify, store } from './store'
 
 async function requestSession(path: string, body: OpenSessionRequest | NewSessionRequest): Promise<SessionState> {
   const { state } = await post<SessionStateResponse>(path, body)
   applyState(state)
   store.activeKey = state.key
+  clearSessionUnread(state.sessionFile ?? state.key)
   saveActiveSessionFile(state.sessionFile)
   notify()
   await Promise.all([requestModels(state.key), requestProjectTrust(state.cwd)])

@@ -7,7 +7,7 @@ import type {
   SessionStatusRecord,
 } from '@piflow/protocol'
 import type { ToolState } from './state'
-import { readSavedActivePath, saveActiveSessionFile } from './persistence'
+import { readSavedActivePath, readUnreadSessions, saveActiveSessionFile, saveUnreadSessions } from './persistence'
 import { ensureView, notify, store } from './store'
 
 let restored = false
@@ -86,6 +86,8 @@ function parseToolArguments(json: string): Record<string, unknown> {
 
 export function applySessions(sessions: SessionInfoLite[], restoreSession: (path: string) => void) {
   store.sessions = sessions
+  if (store.unreadSessions.size === 0)
+    store.unreadSessions = readUnreadSessions()
   notify()
   if (!restored && !store.activeKey) {
     restored = true
@@ -215,9 +217,25 @@ export function applyStatusDelta(status: SessionStatusRecord) {
   const key = status.sessionFile ?? status.key
   const current = store.statuses[key]
   if (!current || status.updatedAt >= current.updatedAt) {
+    if (current?.status === 'running' && status.status === 'idle' && key !== store.activeKey) {
+      const unread = new Set(store.unreadSessions)
+      unread.add(key)
+      store.unreadSessions = unread
+      saveUnreadSessions(unread)
+    }
     store.statuses[key] = status
     notify()
   }
+}
+
+export function clearSessionUnread(key: string) {
+  if (!store.unreadSessions.has(key))
+    return
+  const unread = new Set(store.unreadSessions)
+  unread.delete(key)
+  store.unreadSessions = unread
+  saveUnreadSessions(unread)
+  notify()
 }
 
 export function route(message: ServerMessage, restoreSession: (path: string) => void) {

@@ -210,6 +210,18 @@
   font-size: 0.75rem;
 }
 
+.attention {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.needsInput { color: #f0b35a; }
+.failed { color: #f08a83; }
+.running { color: var(--c-signal); }
+.unread { color: var(--c-mid); }
+
 /* Row menu trigger — hover/focus reveal on fine pointers, always on touch */
 .menu {
   opacity: 0;
