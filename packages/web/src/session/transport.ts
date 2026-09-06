@@ -52,6 +52,7 @@ async function connect() {
 
   source.onopen = () => {
     store.connected = true
+    store.connectionState = 'connected'
     notify()
     void resync()
   }
@@ -61,10 +62,9 @@ async function connect() {
   }
 
   source.onerror = () => {
-    if (store.connected) {
-      store.connected = false
-      notify()
-    }
+    store.connected = false
+    store.connectionState = 'reconnecting'
+    notify()
   }
 }
 

@@ -21,6 +21,7 @@ export function notify() {
 
 export const store: StoreState = {
   connected: false,
+  connectionState: 'connecting',
   cwd: '',
   sessions: [],
   models: [],

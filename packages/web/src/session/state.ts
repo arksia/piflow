@@ -45,6 +45,7 @@ export interface ExtensionNotice {
 
 export interface StoreState {
   connected: boolean
+  connectionState: 'connecting' | 'connected' | 'reconnecting'
   cwd: string
   sessions: SessionInfoLite[]
   models: ModelInfo[]

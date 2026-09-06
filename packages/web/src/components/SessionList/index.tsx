@@ -206,7 +206,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
           </div>
         ))}
 
-        {!store.connected ? <div className={styles.offline}>连接中…</div> : null}
+        {!store.connected ? <div className={styles.offline}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</div> : null}
         <div className={styles.footer}>
           <span>
             {projectCount}

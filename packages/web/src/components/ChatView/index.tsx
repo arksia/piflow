@@ -184,8 +184,8 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const isEmpty = !view || view.messages.length === 0
   const chatStyle = { '--chat-w': `${WIDTHS[widthIndex] ?? WIDTHS[1]}px` } as CSSProperties
   const isLive = store.connected && !!view?.isStreaming
-  const statusLabel = !store.connected
-    ? '连接中…'
+  const statusLabel = store.connectionState !== 'connected'
+    ? store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'
     : view?.isCompacting
       ? '压缩上下文'
       : isLive
