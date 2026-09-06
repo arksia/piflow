@@ -62,6 +62,8 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
   const [extensionsOpen, setExtensionsOpen] = useState(false)
   const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
   const [editingPath, setEditingPath] = useState<string | null>(null)
+  const [openingPath, setOpeningPath] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => readCollapsedSessions())
   const byCwd = useMemo(() => {
     const map = new Map<string, SessionInfoLite[]>()
@@ -111,27 +113,33 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
   }
 
   async function pick(session: SessionInfoLite) {
-    if (!store.connected)
+    if (!store.connected || openingPath)
       return
+    setOpeningPath(session.path)
+    setActionError(null)
     try {
       await openSession(session.path)
       setSidebarOpen(false)
     }
     catch (error) {
-      console.error('[piflow]', error)
+      setActionError(error instanceof Error ? error.message : '无法打开会话')
+    }
+    finally {
+      setOpeningPath(null)
     }
   }
 
   async function createIn(cwd: string) {
-    if (!store.connected || creatingCwd)
+    if (!store.connected || creatingCwd || openingPath)
       return
     setCreatingCwd(cwd)
+    setActionError(null)
     try {
       await newSessionIn(cwd)
       setSidebarOpen(false)
     }
     catch (error) {
-      console.error('[piflow]', error)
+      setActionError(error instanceof Error ? error.message : '无法创建会话')
     }
     finally {
       setCreatingCwd(null)
@@ -153,6 +161,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}><PanelLeftClose size={15} /></button>
           </div>
         </div>
+        {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
 
         {[...byCwd.entries()].map(([cwd]) => (
           <div key={cwd} className={styles.group}>
@@ -181,6 +190,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                   streaming={store.statuses[session.path]?.status === 'running'}
                   attention={attentionFor(session, store.statuses[session.path], store.unreadSessions)}
                   connected={store.connected}
+                  opening={openingPath === session.path}
                   editing={editingPath === session.path}
                   indent={indent}
                   hasChildren={hasChildren}
@@ -230,6 +240,7 @@ interface SessionRowProps {
   streaming: boolean
   attention: { label: string, className?: string } | null
   connected: boolean
+  opening: boolean
   editing: boolean
   indent: number
   hasChildren: boolean
@@ -241,7 +252,7 @@ interface SessionRowProps {
   onToggle: () => void
 }
 
-function SessionRow({ session, active, streaming, attention, connected, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
+function SessionRow({ session, active, streaming, attention, connected, opening, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
   if (editing)
     return <RenameRow session={session} indent={indent} onDone={onRenameEnd} />
   const title = lineage ? `${label(session)}\nfork 自：${lineage}` : label(session)
@@ -261,7 +272,7 @@ function SessionRow({ session, active, streaming, attention, connected, editing,
               </button>
             )
           : <span className={styles.chevronPlaceholder} />}
-        <button className={styles.itemMain} disabled={!connected} onClick={onPick}>
+        <button className={styles.itemMain} disabled={!connected || opening} onClick={onPick}>
           <span className={styles.label}>{label(session)}</span>
           <span className={styles.meta}>
             {relativeTime(session.modified)}
@@ -272,6 +283,7 @@ function SessionRow({ session, active, streaming, attention, connected, editing,
             {' '}
             条
             {attention ? <span className={`${styles.attention} ${attention.className}`}>{attention.label}</span> : null}
+            {opening ? <span className={styles.loading}>读取中…</span> : null}
           </span>
         </button>
       </div>
