@@ -27,6 +27,8 @@ export interface SessionView {
   live: AgentMessage | null
   isStreaming: boolean
   isCompacting: boolean
+  autoCompactionEnabled: boolean
+  compactionNotice: { status: 'success', tokensBefore: number, tokensAfter?: number } | { status: 'aborted' | 'error', message?: string } | null
   model: ModelInfo | null
   thinkingLevel: ThinkingLevel | null
   thinkingLevels: ThinkingLevel[]

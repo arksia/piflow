@@ -58,6 +58,9 @@ export interface SessionStore {
   createFreshSession: (cwd?: string, persist?: boolean) => Promise<ManagedSession>
   openSavedSession: (path: string) => Promise<ManagedSession | null>
   prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
+  compact: (managed: ManagedSession, instructions?: string) => Promise<void>
+  abortCompaction: (managed: ManagedSession) => void
+  setAutoCompaction: (managed: ManagedSession, enabled: boolean) => void
   get: (key: string) => ManagedSession | undefined
   listDirectories: (path: string) => Promise<DirectoryListing>
   listSessions: () => Promise<SessionInfoLite[]>
@@ -167,6 +170,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       messages: session.messages,
       isStreaming: session.isStreaming,
       isCompacting: session.isCompacting,
+      autoCompactionEnabled: session.autoCompactionEnabled,
       model: model
         ? {
             provider: model.provider,
@@ -204,7 +208,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       touch(managed)
       updateStatus(managed)
       publish({ type: 'event', session: managed.key, event: toJsonEvent(event), context: session.getContextUsage() ?? null })
-      if (event.type === 'agent_settled')
+      if (event.type === 'agent_settled' || event.type === 'compaction_end')
         publish({ type: 'state', state: getState(managed) })
     })
     return session.bindExtensions({
@@ -372,6 +376,22 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     touch(managed)
     await injectFlowDirectory(managed)
     await managed.runtime.session.prompt(text, { images, streamingBehavior })
+  }
+
+  async function compact(managed: ManagedSession, instructions?: string) {
+    const session = managed.runtime.session
+    if (!session.isIdle)
+      throw new SessionsStreamingError([managed.key])
+    await session.compact(instructions?.trim() || undefined)
+  }
+
+  function abortCompaction(managed: ManagedSession) {
+    managed.runtime.session.abortCompaction()
+  }
+
+  function setAutoCompaction(managed: ManagedSession, enabled: boolean) {
+    managed.runtime.session.setAutoCompactionEnabled(enabled)
+    publish({ type: 'state', state: getState(managed) })
   }
 
   async function listSessions(): Promise<SessionInfoLite[]> {
@@ -560,6 +580,9 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     createFreshSession,
     openSavedSession,
     prompt,
+    compact,
+    abortCompaction,
+    setAutoCompaction,
     get: (key) => {
       const managed = pool.get(key)
       if (managed)

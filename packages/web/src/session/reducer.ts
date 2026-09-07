@@ -105,6 +105,7 @@ export function applyState(state: SessionState) {
   view.live = null
   view.isStreaming = state.isStreaming
   view.isCompacting = state.isCompacting
+  view.autoCompactionEnabled = state.autoCompactionEnabled
   view.model = state.model
   view.thinkingLevel = state.thinkingLevel ?? null
   view.thinkingLevels = state.thinkingLevels ?? []
@@ -191,10 +192,18 @@ export function handleEvent(key: string, event: JsonAgentSessionEvent) {
 
     case 'compaction_start':
       view.isCompacting = true
+      view.compactionNotice = null
       break
 
     case 'compaction_end':
       view.isCompacting = false
+      view.compactionNotice = event.aborted
+        ? { status: 'aborted' }
+        : event.errorMessage
+          ? { status: 'error', message: event.errorMessage }
+          : event.result
+            ? { status: 'success', tokensBefore: event.result.tokensBefore, tokensAfter: event.result.estimatedTokensAfter }
+            : null
       break
 
     case 'queue_update':

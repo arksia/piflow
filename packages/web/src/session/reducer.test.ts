@@ -99,6 +99,7 @@ it('replaces queues from authoritative state after abort or reconnect', () => {
     messages: [],
     isStreaming: false,
     isCompacting: false,
+    autoCompactionEnabled: true,
     model: null,
     thinkingLevel: null,
     thinkingLevels: [],
@@ -111,4 +112,33 @@ it('replaces queues from authoritative state after abort or reconnect', () => {
   assert.deepEqual(store.views['session-a']?.queue, { steering: ['now'], followUp: ['later'] })
   route({ type: 'state', state: { ...state, queue: { steering: [], followUp: ['later'] } } }, () => {})
   assert.deepEqual(store.views['session-a']?.queue, { steering: [], followUp: ['later'] })
+})
+
+it('keeps compaction feedback when the authoritative state follows the event', () => {
+  store.views = {}
+  const state: SessionState = {
+    key: 'session-a',
+    cwd: '/project',
+    messages: [],
+    isStreaming: false,
+    isCompacting: false,
+    autoCompactionEnabled: true,
+    model: null,
+    thinkingLevel: null,
+    thinkingLevels: [],
+    context: null,
+    queue: { steering: [], followUp: [] },
+    extensionRequests: [],
+    error: null,
+  }
+  route({ type: 'state', state }, () => {})
+  handleEvent('session-a', {
+    type: 'compaction_end',
+    reason: 'manual',
+    result: { summary: 'summary', firstKeptEntryId: 'entry-1', tokensBefore: 12000, estimatedTokensAfter: 3000 },
+    aborted: false,
+    willRetry: false,
+  })
+  route({ type: 'state', state }, () => {})
+  assert.deepEqual(store.views['session-a']?.compactionNotice, { status: 'success', tokensBefore: 12000, tokensAfter: 3000 })
 })

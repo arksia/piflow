@@ -4,9 +4,9 @@ import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from 'react
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
-import { ArrowUp, ListX, Square } from 'lucide-react'
+import { ArrowUp, ListX, Minimize2, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { abort, clearQueue, requestUsage, sendPrompt, setModel, setThinking } from '../../session/actions'
+import { abort, abortCompaction, clearQueue, compact, requestUsage, sendPrompt, setAutoCompaction, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
 import styles from './styles.module.css'
@@ -37,6 +37,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const [aborting, setAborting] = useState(false)
   const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'followUp'>('steer')
   const [clearingQueue, setClearingQueue] = useState(false)
+  const [compacting, setCompacting] = useState(false)
   const [images, setImages] = useState<DraftImage[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
@@ -195,6 +196,32 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
       .finally(() => setClearingQueue(false))
   }
 
+  function runCompact() {
+    if (!view || compacting)
+      return
+    // eslint-disable-next-line no-alert
+    const instructions = window.prompt('压缩指令（可留空）')
+    if (instructions === null)
+      return
+    setOperationError(null)
+    setCompacting(true)
+    void compact(view.key, instructions).catch(error => setOperationError(errorMessage(error))).finally(() => setCompacting(false))
+  }
+
+  function stopCompaction() {
+    if (!view)
+      return
+    setOperationError(null)
+    void abortCompaction(view.key).catch(error => setOperationError(errorMessage(error)))
+  }
+
+  function toggleAutoCompaction() {
+    if (!view)
+      return
+    setOperationError(null)
+    void setAutoCompaction(view.key, !view.autoCompactionEnabled).catch(error => setOperationError(errorMessage(error)))
+  }
+
   function dropImages(event: DragEvent<HTMLTextAreaElement>) {
     event.preventDefault()
     addFiles([...event.dataTransfer.files])
@@ -300,6 +327,14 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                   )
                 : null}
               <button className={styles.attach} type="button" title="添加图片" aria-label="添加图片" onClick={() => fileRef.current?.click()}>＋</button>
+              {view && !isLive
+                ? <button className={styles.attach} type="button" title={view.autoCompactionEnabled ? '关闭自动压缩' : '开启自动压缩'} aria-label={view.autoCompactionEnabled ? '关闭自动压缩' : '开启自动压缩'} onClick={toggleAutoCompaction}><Minimize2 size={14} /></button>
+                : null}
+              {view && view.isCompacting
+                ? <button className={`${styles.button} ${styles.stop}`} title="中止压缩" aria-label="中止压缩" onClick={stopCompaction}><Square size={10} fill="currentColor" strokeWidth={0} /></button>
+                : view && !isLive
+                  ? <button className={styles.attach} type="button" title="压缩上下文" aria-label="压缩上下文" disabled={compacting} onClick={runCompact}><Minimize2 size={14} /></button>
+                  : null}
               {isLive
                 ? (
                     <button

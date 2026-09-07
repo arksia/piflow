@@ -58,6 +58,8 @@ export function ensureView(key: string): SessionView {
     live: null,
     isStreaming: false,
     isCompacting: false,
+    autoCompactionEnabled: true,
+    compactionNotice: null,
     model: null,
     thinkingLevel: null,
     thinkingLevels: [],

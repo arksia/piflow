@@ -277,6 +277,11 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                     )
                   : null}
                 {store.connected && view.isCompacting ? <div className={styles.note}>正在压缩上下文…</div> : null}
+                {view.compactionNotice && (
+                  <div className={styles.note}>
+                    {compactionNoticeLabel(view.compactionNotice)}
+                  </div>
+                )}
                 {view.error ? <div className={styles.error}>{view.error}</div> : null}
               </div>
             )}
@@ -311,4 +316,16 @@ function messageKey(message: AgentMessage) {
     messageIds.set(message, id)
   }
   return `${message.role}:${message.timestamp ?? 'untimed'}:${id}`
+}
+
+function formatTokens(value: number) {
+  return value >= 1000 ? `${Math.round(value / 1000)}k` : `${value}`
+}
+
+function compactionNoticeLabel(notice: NonNullable<import('../../session/state').SessionView['compactionNotice']>) {
+  if (notice.status === 'success')
+    return `已压缩 ${formatTokens(notice.tokensBefore)} → ${formatTokens(notice.tokensAfter ?? 0)} tokens`
+  if (notice.status === 'aborted')
+    return '压缩已中止'
+  return `压缩失败：${notice.message ?? '未知错误'}`
 }
