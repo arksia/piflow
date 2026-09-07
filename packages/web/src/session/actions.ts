@@ -1,6 +1,7 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type {
   ApiOkResponse,
+  CompactRequest,
   DirectoriesResponse,
   DirectoryListing,
   ExtensionChangeResponse,
@@ -20,6 +21,7 @@ import type {
   RenameSessionRequest,
   SessionState,
   SessionStateResponse,
+  SetAutoCompactionRequest,
   SetModelRequest,
   SetThinkingRequest,
   TrustProjectRequest,
@@ -123,6 +125,22 @@ export async function setModel(key: string, provider: string, modelId: string): 
 
 export async function setThinking(key: string, level: ThinkingLevel): Promise<SessionState> {
   const { state } = await post<SessionStateResponse>(sessionUrl(key, 'thinking'), { level } satisfies SetThinkingRequest)
+  applyState(state)
+  return state
+}
+
+export async function compact(key: string, instructions?: string): Promise<void> {
+  await post<ApiOkResponse>(sessionUrl(key, 'compact'), { instructions } satisfies CompactRequest)
+}
+
+export async function abortCompaction(key: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(key, 'abort-compaction'))
+  applyState(state)
+  return state
+}
+
+export async function setAutoCompaction(key: string, enabled: boolean): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(key, 'auto-compaction'), { enabled } satisfies SetAutoCompactionRequest)
   applyState(state)
   return state
 }

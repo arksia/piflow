@@ -1,5 +1,6 @@
 import type {
   ApiOkResponse,
+  CompactRequest,
   DirectoriesResponse,
   ExtensionChangeResponse,
   ExtensionsResponse,
@@ -19,6 +20,7 @@ import type {
   ReplaceFlowRequest,
   SessionsResponse,
   SessionStateResponse,
+  SetAutoCompactionRequest,
   SetModelRequest,
   SetThinkingRequest,
   TrustProjectRequest,
@@ -336,6 +338,29 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
               return json(res, 400, { error: 'unknown thinking level' })
             managed.runtime.session.setThinkingLevel(level)
             await publishState(managed)
+            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
+          }
+
+          case 'compact': {
+            const compactRequest = body as Partial<CompactRequest>
+            if (compactRequest.instructions !== undefined && typeof compactRequest.instructions !== 'string')
+              return json(res, 400, { error: 'instructions must be a string' })
+            if (!managed.runtime.session.isIdle || managed.runtime.session.isCompacting)
+              return json(res, 409, { error: 'session is busy' })
+            json(res, 202, { ok: true } satisfies ApiOkResponse)
+            void sessions.compact(managed, compactRequest.instructions).catch(error => sessions.publishError(managed.key, String(error)))
+            return
+          }
+
+          case 'abort-compaction':
+            sessions.abortCompaction(managed)
+            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
+
+          case 'auto-compaction': {
+            const request = body as Partial<SetAutoCompactionRequest>
+            if (typeof request.enabled !== 'boolean')
+              return json(res, 400, { error: 'enabled must be a boolean' })
+            sessions.setAutoCompaction(managed, request.enabled)
             return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
           }
         }

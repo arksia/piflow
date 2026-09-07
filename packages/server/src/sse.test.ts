@@ -69,6 +69,7 @@ it('sends every resident session state on connect', () => {
     messages: [],
     isStreaming: false,
     isCompacting: false,
+    autoCompactionEnabled: true,
     model: null,
     thinkingLevel: null,
     thinkingLevels: [],

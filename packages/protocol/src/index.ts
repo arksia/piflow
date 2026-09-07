@@ -33,6 +33,7 @@ export {
 } from './http'
 export type {
   ApiOkResponse,
+  CompactRequest,
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,
@@ -41,6 +42,7 @@ export type {
   PromptRequest,
   RenameSessionRequest,
   SessionAction,
+  SetAutoCompactionRequest,
   SetModelRequest,
   SetThinkingRequest,
   TrustProjectRequest,
@@ -209,6 +211,8 @@ export interface SessionState {
   messages: AgentMessage[]
   isStreaming: boolean
   isCompacting: boolean
+  /** Whether pi auto-compaction is enabled (persisted in pi settings). */
+  autoCompactionEnabled: boolean
   model: ModelInfo | null
   thinkingLevel: ThinkingLevel | null
   thinkingLevels: ThinkingLevel[]
