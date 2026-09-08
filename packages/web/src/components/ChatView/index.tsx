@@ -7,6 +7,7 @@ import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import InputBar from '../InputBar'
+import BranchNavigator from '../BranchNavigator'
 import MessageItem from '../MessageItem'
 import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
@@ -228,6 +229,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
         <button className={styles.mobileMenu} title="会话列表" aria-label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}><PanelLeft size={15} /></button>
         <div className={styles.identity}>
           {title ? <div className={styles.title} title={title}>{title}</div> : null}
+          {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
         </div>
         <div className={styles.actions}>
           <span className={`${styles.status} ${statusLabel ? styles.on : ''}`}>{statusLabel}</span>

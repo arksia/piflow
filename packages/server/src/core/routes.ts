@@ -8,6 +8,7 @@ import type {
   FlowDocumentResponse,
   ForkPointsResponse,
   ForkSessionRequest,
+  NavigateSessionRequest,
   HelloResponse,
   InstallExtensionRequest,
   ModelsResponse,
@@ -20,6 +21,7 @@ import type {
   ReplaceFlowRequest,
   SessionsResponse,
   SessionStateResponse,
+  SessionTreeResponse,
   SetAutoCompactionRequest,
   SetModelRequest,
   SetThinkingRequest,
@@ -273,6 +275,23 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         if (!managed)
           return json(res, 404, { error: `session not found: ${action.key}` })
         await publishSessions()
+        return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
+      }
+
+      if (action.action === 'tree' && method === 'GET') {
+        const tree = await sessions.getSessionTree(action.key)
+        if (!tree)
+          return json(res, 404, { error: `session not found: ${action.key}` })
+        return json(res, 200, tree satisfies SessionTreeResponse)
+      }
+
+      if (action.action === 'navigate' && method === 'POST') {
+        const body = await readBody<Partial<NavigateSessionRequest>>(req)
+        if (typeof body.targetId !== 'string' || !body.targetId)
+          return json(res, 400, { error: 'targetId required' })
+        const managed = await sessions.navigateTree(action.key, body.targetId)
+        if (!managed)
+          return json(res, 404, { error: `session not found: ${action.key}` })
         return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
       }
 

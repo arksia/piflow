@@ -11,6 +11,8 @@ import type {
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,
+  NavigateSessionRequest,
+  SessionTreeResponse,
   InstallExtensionRequest,
   ModelsResponse,
   NewSessionRequest,
@@ -232,6 +234,17 @@ export async function forkSession(path: string, entryId: string): Promise<Sessio
   applyState(state)
   store.activeKey = state.key
   saveActiveSessionFile(state.sessionFile)
+  notify()
+  return state
+}
+
+export function fetchSessionTree(path: string): Promise<SessionTreeResponse> {
+  return api<SessionTreeResponse>(sessionUrl(path, 'tree'))
+}
+
+export async function navigateSessionTree(path: string, targetId: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(sessionUrl(path, 'navigate'), { targetId } satisfies NavigateSessionRequest)
+  applyState(state)
   notify()
   return state
 }

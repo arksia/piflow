@@ -76,6 +76,8 @@ export interface SessionStore {
   renameSession: (path: string, name: string) => Promise<boolean>
   listForkPoints: (path: string) => Promise<ForkPoint[] | null>
   forkSession: (path: string, entryId: string) => Promise<ManagedSession | null>
+  getSessionTree: (path: string) => Promise<import('@piflow/protocol').SessionTreeResponse | null>
+  navigateTree: (path: string, targetId: string) => Promise<ManagedSession | null>
   deleteSession: (path: string) => Promise<'deleted' | 'missing' | 'streaming'>
   getProjectTrust: (cwd: string) => ProjectTrustStatus
   trustProject: (cwd: string) => Promise<ProjectTrustStatus>
@@ -526,6 +528,28 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return managed
   }
 
+  async function getSessionTree(path: string) {
+    const managed = await openSavedSession(path)
+    if (!managed)
+      return null
+    const manager = managed.runtime.session.sessionManager
+    return { tree: manager.getTree(), leafId: manager.getLeafId() }
+  }
+
+  async function navigateTree(path: string, targetId: string) {
+    const managed = await openSavedSession(path)
+    if (!managed)
+      return null
+    if (managed.runtime.session.isStreaming || managed.extensionUi.hasPendingDialogs())
+      throw new SessionsStreamingError([managed.key])
+    const result = await managed.runtime.session.navigateTree(targetId, { summarize: false })
+    if (result.cancelled)
+      return managed
+    publish({ type: 'state', state: getState(managed) })
+    updateStatus(managed)
+    return managed
+  }
+
   async function deleteSession(path: string): Promise<'deleted' | 'missing' | 'streaming'> {
     const managed = pool.get(path)
     if (managed) {
@@ -603,6 +627,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     renameSession,
     listForkPoints,
     forkSession,
+    getSessionTree,
+    navigateTree,
     deleteSession,
     getProjectTrust,
     trustProject,
