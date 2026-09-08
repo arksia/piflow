@@ -1,0 +1,8 @@
+.root { position: relative; }
+.toggle, .node { border-radius: 4px; color: var(--c-muted); }
+.toggle { display: grid; width: 27px; height: 27px; place-items: center; }
+.toggle:hover, .node:hover { background: var(--c-raise); color: var(--c-ink); }
+.menu { position: absolute; z-index: 2; top: 32px; right: 0; width: 240px; max-height: 360px; overflow: auto; padding: 5px; border: 1px solid var(--c-line); border-radius: 4px; background: var(--c-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); }
+.node { display: block; width: 100%; overflow: hidden; padding: 6px 8px; text-align: left; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; }
+.node + div { padding-left: 12px; }
+.active { color: var(--c-ink); background: var(--c-raise); }

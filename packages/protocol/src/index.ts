@@ -37,6 +37,7 @@ export type {
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,
+  NavigateSessionRequest,
   NewSessionRequest,
   OpenSessionRequest,
   PromptRequest,
@@ -251,4 +252,9 @@ export interface DirectoriesResponse {
 
 export interface SessionStateResponse {
   state: SessionState
+}
+
+export interface SessionTreeResponse {
+  tree: import('@earendil-works/pi-coding-agent').SessionTreeNode[]
+  leafId: string | null
 }
