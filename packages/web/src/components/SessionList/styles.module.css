@@ -60,6 +60,42 @@
   gap: 6px;
 }
 
+.search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 2px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--c-line);
+  border-radius: 4px;
+  color: var(--c-faint);
+}
+
+.search:focus-within {
+  border-color: var(--c-faint);
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+}
+
+.search input::placeholder {
+  color: var(--c-faint);
+}
+
+.empty {
+  padding: 18px 8px;
+  color: var(--c-faint);
+  text-align: center;
+  font-size: 0.8rem;
+}
+
 .collapse {
   display: grid;
   width: 27px;
