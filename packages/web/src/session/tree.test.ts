@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   buildSessionForest,
+  filterSessions,
   flattenSessionForest,
   MAX_TREE_INDENT,
   sessionAncestors,
@@ -65,6 +66,19 @@ describe('buildSessionForest', () => {
     assert.equal(forest.length, 1)
     assert.equal(forest[0]?.session.path, 'orphan')
     assert.equal(forest[0]?.depth, 0)
+  })
+})
+
+describe('filterSessions', () => {
+  it('matches title, first message, and cwd without changing source order', () => {
+    const sessions = [
+      session({ path: 'named', name: 'Deploy app', firstMessage: 'ship it' }),
+      session({ path: 'message', firstMessage: 'Investigate billing' }),
+      session({ path: 'cwd', cwd: '/workspace/payments', firstMessage: 'other' }),
+    ]
+    assert.deepEqual(filterSessions(sessions, 'billing').map(item => item.path), ['message'])
+    assert.deepEqual(filterSessions(sessions, 'PAYMENTS').map(item => item.path), ['cwd'])
+    assert.deepEqual(filterSessions(sessions, '  ').map(item => item.path), ['named', 'message', 'cwd'])
   })
 })
 

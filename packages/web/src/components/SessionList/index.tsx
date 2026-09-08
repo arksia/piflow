@@ -1,11 +1,11 @@
 import type { SessionInfoLite, SessionStatusRecord } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { readCollapsedSessions, saveCollapsedSessions } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
-import { buildSessionForest, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
+import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
 import NewSessionDialog from '../NewSessionDialog'
@@ -64,16 +64,18 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
   const [editingPath, setEditingPath] = useState<string | null>(null)
   const [openingPath, setOpeningPath] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => readCollapsedSessions())
+  const filteredSessions = useMemo(() => filterSessions(store.sessions, query), [store.sessions, query])
   const byCwd = useMemo(() => {
     const map = new Map<string, SessionInfoLite[]>()
-    for (const session of store.sessions) {
+    for (const session of filteredSessions) {
       const sessions = map.get(session.cwd) ?? []
       sessions.push(session)
       map.set(session.cwd, sessions)
     }
     return map
-  }, [store.sessions])
+  }, [filteredSessions])
 
   const rowsByCwd = useMemo(() => {
     const map = new Map<string, SessionTreeRow[]>()
@@ -162,6 +164,15 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
           </div>
         </div>
         {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
+        <label className={styles.search}>
+          <Search size={14} aria-hidden="true" />
+          <input
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="搜索会话"
+            aria-label="搜索会话"
+          />
+        </label>
 
         {[...byCwd.entries()].map(([cwd]) => (
           <div key={cwd} className={styles.group}>
@@ -205,6 +216,8 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             })}
           </div>
         ))}
+
+        {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
 
         {!store.connected ? <div className={styles.offline}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</div> : null}
         <div className={styles.footer}>
