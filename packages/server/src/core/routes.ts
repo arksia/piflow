@@ -30,6 +30,10 @@ import type {
   UsageWindow,
 } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { ExtensionManager } from '../extensions/manager'
 import type { FlowStore } from '../flow/store'
 import type { ServerConfig } from './config'
@@ -283,6 +287,37 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         if (!tree)
           return json(res, 404, { error: `session not found: ${action.key}` })
         return json(res, 200, tree satisfies SessionTreeResponse)
+      }
+
+      if (action.action === 'export' && method === 'GET') {
+        const managed = sessions.get(action.key)
+        const filePath = managed?.runtime.session.sessionFile
+        if (!managed && !filePath) {
+          const session = await sessions.openSavedSession(action.key)
+          if (!session)
+            return json(res, 404, { error: `session not found: ${action.key}` })
+        }
+        const active = sessions.get(action.key)
+        const inputPath = active?.runtime.session.sessionFile
+        if (!inputPath)
+          return json(res, 400, { error: 'session is not persisted' })
+        const directory = await mkdtemp(join(tmpdir(), 'piflow-export-'))
+        const outputPath = join(directory, 'session.html')
+        try {
+          await active!.runtime.session.exportToHtml(outputPath)
+          const html = await readFile(outputPath, 'utf8')
+          const inline = new URL(req.url ?? 'http://localhost').searchParams.get('inline') === '1'
+          res.writeHead(200, {
+            'content-type': 'text/html; charset=utf-8',
+            'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="session.html"`,
+            'cache-control': 'no-cache',
+          })
+          res.end(html)
+        }
+        finally {
+          await rm(directory, { recursive: true, force: true })
+        }
+        return
       }
 
       if (action.action === 'navigate' && method === 'POST') {

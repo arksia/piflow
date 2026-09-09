@@ -1,7 +1,8 @@
 import type { ForkPoint, SessionInfoLite } from '@piflow/protocol'
-import { GitFork, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { Download, ExternalLink, GitFork, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { deleteSession, fetchForkPoints, forkSession } from '../../session/actions'
+import { sessionUrl } from '../../session/api'
 import { setSidebarOpen } from '../../session/store'
 import styles from './styles.module.css'
 
@@ -77,6 +78,14 @@ export default function SessionItemMenu({ session, label, streaming, className, 
                 <GitFork size={13} />
                 从消息分叉…
               </button>
+              <a role="menuitem" className={styles.menuItem} href={`${sessionUrl(session.path, 'export')}?inline=1`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>
+                <ExternalLink size={13} />
+                在新标签页预览
+              </a>
+              <a role="menuitem" className={styles.menuItem} href={sessionUrl(session.path, 'export')} onClick={() => setMenuOpen(false)}>
+                <Download size={13} />
+                下载 HTML
+              </a>
               <button
                 role="menuitem"
                 className={`${styles.menuItem} ${styles.danger}`}
