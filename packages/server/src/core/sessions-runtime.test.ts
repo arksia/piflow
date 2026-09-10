@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { it } from 'node:test'
+import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { createFlowStore } from '../flow/store'
 import { createSessionStore } from './sessions'
 
@@ -76,6 +78,67 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
       delete process.env.PI_CODING_AGENT_DIR
     else
       process.env.PI_CODING_AGENT_DIR = previousAgentDir
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('refreshes an idle resident session from disk when explicitly reopened', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-runtime-'))
+  const store = createSessionStore({
+    rootCwd: root,
+    agentDir: join(root, 'agent'),
+    flow: createFlowStore(join(root, 'data')),
+    poolSize: 16,
+    publish: () => {},
+  })
+  try {
+    const resident = await store.createFreshSession(root, true)
+    const path = resident.runtime.session.sessionFile
+    assert.ok(path)
+    SessionManager.open(path).appendMessage({ role: 'user', content: 'external update', timestamp: Date.now() })
+
+    assert.equal(store.getState(resident).messages.length, 0)
+    const refreshed = await store.openSavedSession(path, { refresh: true })
+    assert.ok(refreshed)
+    assert.equal(store.getState(refreshed).messages.length, 1)
+  }
+  finally {
+    await store.disposeAll()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('deletes only the target session file without rewriting its child', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-runtime-'))
+  const store = createSessionStore({
+    rootCwd: root,
+    agentDir: join(root, 'agent'),
+    flow: createFlowStore(join(root, 'data')),
+    poolSize: 16,
+    publish: () => {},
+  })
+  try {
+    const parent = await store.createFreshSession(root, true)
+    const parentPath = parent.runtime.session.sessionFile
+    assert.ok(parentPath)
+    const childPath = join(root, 'child.jsonl')
+    await writeFile(childPath, `${JSON.stringify({
+      type: 'session',
+      version: 3,
+      id: 'child',
+      timestamp: new Date().toISOString(),
+      cwd: root,
+      parentSession: parentPath,
+    })}\n`)
+    const childBefore = await readFile(childPath, 'utf8')
+
+    assert.equal(await store.deleteSession(parentPath), 'deleted')
+    assert.equal(existsSync(parentPath), false)
+    assert.equal(existsSync(childPath), true)
+    assert.equal(await readFile(childPath, 'utf8'), childBefore)
+  }
+  finally {
+    await store.disposeAll()
     await rm(root, { recursive: true, force: true })
   }
 })

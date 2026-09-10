@@ -56,7 +56,7 @@ export class SessionsStreamingError extends Error {
 
 export interface SessionStore {
   createFreshSession: (cwd?: string, persist?: boolean) => Promise<ManagedSession>
-  openSavedSession: (path: string) => Promise<ManagedSession | null>
+  openSavedSession: (path: string, options?: { refresh?: boolean }) => Promise<ManagedSession | null>
   prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
   compact: (managed: ManagedSession, instructions?: string) => Promise<void>
   abortCompaction: (managed: ManagedSession) => void
@@ -427,9 +427,17 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return { path: directory, parent: parent === directory ? null : parent, directories }
   }
 
-  async function openSavedSession(path: string): Promise<ManagedSession | null> {
+  async function openSavedSession(path: string, options: { refresh?: boolean } = {}): Promise<ManagedSession | null> {
     const resident = pool.get(path)
     if (resident) {
+      if (options.refresh && resident.runtime.session.isIdle && !resident.extensionUi.hasPendingDialogs()) {
+        remove(resident)
+        unbind(resident)
+        await resident.runtime.dispose()
+        if (!existsSync(path))
+          return null
+        return openSession({ path, cwd: resident.cwd })
+      }
       touch(resident)
       return resident
     }
