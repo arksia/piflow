@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { it } from 'node:test'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { userMessageText } from './core/sessions'
@@ -129,3 +130,25 @@ it('throws when forking from an unknown entry id', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+for (const messageCount of [100, 500, 1000]) {
+  it(`opens a ${messageCount}-message session within one second`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'piflow-manage-'))
+    try {
+      const entries = Array.from({ length: messageCount }, (_, index): FixtureEntry => ({
+        id: `m${index}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `message ${index}`,
+      }))
+      const file = await createSessionFile(root, entries)
+      const started = performance.now()
+      const messages = SessionManager.open(file).buildSessionContext().messages
+      const duration = performance.now() - started
+      assert.equal(messages.length, messageCount)
+      assert.ok(duration < 1000, `opened in ${duration.toFixed(1)}ms`)
+    }
+    finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}

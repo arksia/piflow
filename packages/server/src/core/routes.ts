@@ -238,7 +238,7 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       const body = await readBody<Partial<OpenSessionRequest>>(req)
       if (typeof body.path !== 'string')
         return json(res, 400, { error: 'path required' })
-      const managed = await sessions.openSavedSession(body.path)
+      const managed = await sessions.openSavedSession(body.path, { refresh: true })
       if (!managed)
         return json(res, 404, { error: 'session not found' })
       return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
