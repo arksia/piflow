@@ -8,10 +8,10 @@ import type {
   FlowDocumentResponse,
   ForkPointsResponse,
   ForkSessionRequest,
-  NavigateSessionRequest,
   HelloResponse,
   InstallExtensionRequest,
   ModelsResponse,
+  NavigateSessionRequest,
   NewSessionRequest,
   OpenSessionRequest,
   ProjectTrustResponse,
@@ -30,16 +30,15 @@ import type {
   UsageWindow,
 } from '@piflow/protocol'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import type { ExtensionManager } from '../extensions/manager'
 import type { FlowStore } from '../flow/store'
 import type { ServerConfig } from './config'
 import type { StaticHandler } from './http'
 import type { ManagedSession, SessionStore } from './sessions'
 import type { SseHub } from './sse'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,

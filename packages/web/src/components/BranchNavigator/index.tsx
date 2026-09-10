@@ -17,7 +17,9 @@ export default function BranchNavigator({ path }: { path: string }) {
         setLeafId(result.leafId)
       }
     }).catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [path])
 
   if (!tree?.length)
