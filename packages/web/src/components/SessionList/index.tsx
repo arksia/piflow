@@ -1,6 +1,6 @@
 import type { SessionInfoLite, SessionStatusRecord } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
+import { ChevronDown, ChevronRight, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { readCollapsedSessions, saveCollapsedSessions } from '../../session/persistence'
@@ -9,6 +9,7 @@ import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncest
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
 import NewSessionDialog from '../NewSessionDialog'
+import ProviderDialog from '../ProviderDialog'
 import SessionItemMenu from '../SessionItemMenu'
 import styles from './styles.module.css'
 
@@ -60,6 +61,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
   const store = useStore()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [extensionsOpen, setExtensionsOpen] = useState(false)
+  const [providersOpen, setProvidersOpen] = useState(false)
   const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
   const [editingPath, setEditingPath] = useState<string | null>(null)
   const [openingPath, setOpeningPath] = useState<string | null>(null)
@@ -227,7 +229,10 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             {store.sessions.length}
             {' 个会话'}
           </span>
-          <button className={styles.settings} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}><Settings size={14} /></button>
+          <span className={styles.footerActions}>
+            <button className={styles.settings} title="Provider 与凭证" aria-label="Provider 与凭证" disabled={!store.connected} onClick={() => setProvidersOpen(true)}><KeyRound size={14} /></button>
+            <button className={styles.settings} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}><Settings size={14} /></button>
+          </span>
         </div>
       </div>
       {newSessionOpen
@@ -243,6 +248,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
           )
         : null}
       {extensionsOpen ? <ExtensionManagerDialog onClose={() => setExtensionsOpen(false)} /> : null}
+      {providersOpen ? <ProviderDialog onClose={() => setProvidersOpen(false)} /> : null}
     </>
   )
 }

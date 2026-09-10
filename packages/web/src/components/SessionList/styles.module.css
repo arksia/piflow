@@ -350,6 +350,11 @@
   transition: color 0.15s var(--ease), background 0.15s var(--ease);
 }
 
+.footer-actions {
+  display: flex;
+  gap: 2px;
+}
+
 .settings:hover {
   background: var(--c-raise);
   color: var(--c-ink);
