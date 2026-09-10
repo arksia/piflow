@@ -18,6 +18,8 @@ import type {
   OpenSessionRequest,
   ProjectTrustResponse,
   PromptRequest,
+  ProviderInfo,
+  ProvidersResponse,
   RemoveExtensionRequest,
   RenameSessionRequest,
   SessionState,
@@ -34,6 +36,7 @@ import {
   API_EXTENSIONS_UI_RESPONSE_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
+  API_PROVIDERS_PATH,
   buildDirectoriesPath,
   buildUsagePath,
   API_SESSIONS_NEW_PATH as newSessionPath,
@@ -161,6 +164,11 @@ export async function fetchExtensions(): Promise<ExtensionSourceInfo[]> {
   const cwd = activeCwd()
   const { extensions } = await api<ExtensionsResponse>(`${API_EXTENSIONS_PATH}?${new URLSearchParams({ cwd })}`)
   return extensions
+}
+
+export async function fetchProviders(): Promise<ProviderInfo[]> {
+  const { providers } = await api<ProvidersResponse>(API_PROVIDERS_PATH)
+  return providers
 }
 
 export function installExtension(source: string, scope: 'global' | 'project'): Promise<ExtensionChangeResponse> {

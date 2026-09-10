@@ -1,8 +1,10 @@
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
+import type { AuthType, CredentialInfo } from '@earendil-works/pi-ai'
 import type {
   ContextUsage,
   JsonAgentSessionEvent,
   ModelInfo,
+  ModelRuntime,
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
 } from '@earendil-works/pi-coding-agent'
@@ -16,6 +18,7 @@ export {
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
+  API_PROVIDERS_PATH,
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
   API_SESSIONS_PATH,
@@ -244,6 +247,22 @@ export interface SessionsResponse {
 
 export interface ModelsResponse {
   models: ModelInfo[]
+}
+
+export interface ProviderInfo {
+  id: string
+  name: string
+  authTypes: AuthType[]
+  oauthName?: string
+  credentialType?: CredentialInfo['type']
+  configured: boolean
+  source?: ReturnType<ModelRuntime['getProviderAuthStatus']>['source']
+  label?: string
+  modelCount: number
+}
+
+export interface ProvidersResponse {
+  providers: ProviderInfo[]
 }
 
 export interface DirectoriesResponse {

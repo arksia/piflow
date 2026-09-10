@@ -1,3 +1,4 @@
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type {
   ApiOkResponse,
   CompactRequest,
@@ -16,6 +17,7 @@ import type {
   OpenSessionRequest,
   ProjectTrustResponse,
   PromptRequest,
+  ProvidersResponse,
   RemoveExtensionRequest,
   RenameSessionRequest,
   ReplaceFlowRequest,
@@ -48,6 +50,7 @@ import {
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
+  API_PROVIDERS_PATH,
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
   API_SESSIONS_PATH,
@@ -59,6 +62,7 @@ import {
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
 import { json, readBody } from './http'
+import { listProviders } from './providers'
 import { SessionsStreamingError } from './sessions'
 
 interface UsageSnapshot {
@@ -74,10 +78,11 @@ interface CreateRequestHandlerOptions {
   getUsage: (provider: string, fresh?: boolean) => Promise<UsageSnapshot | null>
   flow: FlowStore
   extensions: ExtensionManager
+  modelRuntime: ModelRuntime
 }
 
 export function createRequestHandler(options: CreateRequestHandlerOptions) {
-  const { config, sessions, sse, serveStatic, getUsage, flow, extensions } = options
+  const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime } = options
 
   async function publishState(managed: ManagedSession) {
     sse.broadcast({ type: 'state', state: sessions.getState(managed) })
@@ -125,6 +130,9 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         return json(res, 404, { error: `session not open: ${String(key)}` })
       return json(res, 200, { models: await sessions.getAvailableModels(managed) } satisfies ModelsResponse)
     }
+
+    if (method === 'GET' && path === API_PROVIDERS_PATH)
+      return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
 
     if (method === 'GET' && path === API_DIRECTORIES_PATH) {
       return json(res, 200, {
