@@ -3,6 +3,7 @@ import process from 'node:process'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import { loadConfig } from './core/config'
 import { createStaticHandler } from './core/http'
+import { createProviderAuthManager } from './core/provider-auth'
 import { createRequestHandler } from './core/routes'
 import { createSessionStore } from './core/sessions'
 import { createSseHub } from './core/sse'
@@ -15,6 +16,7 @@ const sse = createSseHub(config.rootCwd)
 const flow = createFlowStore(config.dataDir)
 const extensions = createExtensionManager()
 const modelRuntime = await ModelRuntime.create()
+const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast)
 const sessions = createSessionStore({
   rootCwd: config.rootCwd,
   flow,
@@ -33,6 +35,7 @@ const httpServer = createServer(createRequestHandler({
   flow,
   extensions,
   modelRuntime,
+  providerAuth,
 }))
 
 httpServer.listen(config.port, config.host, () => {

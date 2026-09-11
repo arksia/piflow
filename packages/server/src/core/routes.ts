@@ -17,6 +17,8 @@ import type {
   OpenSessionRequest,
   ProjectTrustResponse,
   PromptRequest,
+  ProviderAuthLoginRequest,
+  ProviderAuthResponse,
   ProvidersResponse,
   RemoveExtensionRequest,
   RenameSessionRequest,
@@ -36,6 +38,7 @@ import type { ExtensionManager } from '../extensions/manager'
 import type { FlowStore } from '../flow/store'
 import type { ServerConfig } from './config'
 import type { StaticHandler } from './http'
+import type { ProviderAuthManager } from './provider-auth'
 import type { ManagedSession, SessionStore } from './sessions'
 import type { SseHub } from './sse'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -50,6 +53,7 @@ import {
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
+  API_PROVIDER_AUTH_PATH,
   API_PROVIDERS_PATH,
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
@@ -79,10 +83,11 @@ interface CreateRequestHandlerOptions {
   flow: FlowStore
   extensions: ExtensionManager
   modelRuntime: ModelRuntime
+  providerAuth: ProviderAuthManager
 }
 
 export function createRequestHandler(options: CreateRequestHandlerOptions) {
-  const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime } = options
+  const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime, providerAuth } = options
 
   async function publishState(managed: ManagedSession) {
     sse.broadcast({ type: 'state', state: sessions.getState(managed) })
@@ -133,6 +138,26 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
     if (method === 'GET' && path === API_PROVIDERS_PATH)
       return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
+
+    if (method === 'POST' && path === API_PROVIDER_AUTH_PATH) {
+      const body = await readBody<Partial<ProviderAuthLoginRequest>>(req)
+      if (typeof body.providerId !== 'string' || (body.type !== 'api_key' && body.type !== 'oauth'))
+        return json(res, 400, { error: 'providerId and valid type required' })
+      sessions.assertIdle()
+      return json(res, 202, await providerAuth.start(body.providerId, body.type))
+    }
+
+    if (path.startsWith(`${API_PROVIDER_AUTH_PATH}/`)) {
+      const operationId = decodeURIComponent(path.slice(API_PROVIDER_AUTH_PATH.length + 1))
+      if (method === 'POST') {
+        const body = await readBody<Partial<ProviderAuthResponse>>(req)
+        if (typeof body.promptId !== 'string' || typeof body.value !== 'string' || body.operationId !== operationId)
+          return json(res, 400, { error: 'valid provider auth response required' })
+        return json(res, providerAuth.respond(operationId, body.promptId, body.value) ? 200 : 404, { ok: true })
+      }
+      if (method === 'DELETE')
+        return json(res, providerAuth.cancel(operationId) ? 200 : 404, { ok: true })
+    }
 
     if (method === 'GET' && path === API_DIRECTORIES_PATH) {
       return json(res, 200, {
