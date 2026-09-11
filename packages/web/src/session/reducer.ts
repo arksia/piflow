@@ -275,6 +275,10 @@ export function route(message: ServerMessage, restoreSession: (path: string) => 
       applyStatusDelta(message.status)
       break
 
+    case 'provider_auth':
+      window.dispatchEvent(new CustomEvent('piflow:provider-auth', { detail: message }))
+      break
+
     case 'extension_ui_request': {
       const request = message as RpcExtensionUIRequest & { session: string }
       // Notices are fire-and-forget: the server never tracks them as pending,

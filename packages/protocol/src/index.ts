@@ -1,5 +1,5 @@
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
-import type { AuthType, CredentialInfo } from '@earendil-works/pi-ai'
+import type { AuthEvent, AuthPrompt, AuthType, CredentialInfo } from '@earendil-works/pi-ai'
 import type {
   ContextUsage,
   JsonAgentSessionEvent,
@@ -18,6 +18,7 @@ export {
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
+  API_PROVIDER_AUTH_PATH,
   API_PROVIDERS_PATH,
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
@@ -52,6 +53,7 @@ export type {
   TrustProjectRequest,
 } from './http'
 export type { ImageContent } from '@earendil-works/pi-ai'
+export type { AuthEvent, AuthPrompt, AuthType } from '@earendil-works/pi-ai'
 
 /** POST body for the extension-UI response route: the official RPC frame plus the target session key. */
 export type ExtensionUIResponseBody = { session: string } & RpcExtensionUIResponse
@@ -234,6 +236,7 @@ export type ServerMessage
     | { type: 'event', session: string, event: JsonAgentSessionEvent, context?: ContextUsage | null }
     | { type: 'status_snapshot', statuses: SessionStatusRecord[] }
     | { type: 'status_delta', status: SessionStatusRecord }
+    | { type: 'provider_auth', operationId: string, event: ProviderAuthEvent }
     | ({ session: string } & RpcExtensionUIRequest)
     | { type: 'error', error: string, session?: string }
 
@@ -263,6 +266,37 @@ export interface ProviderInfo {
 
 export interface ProvidersResponse {
   providers: ProviderInfo[]
+}
+
+export interface ProviderAuthLoginRequest {
+  providerId: string
+  type: AuthType
+}
+
+export interface ProviderAuthStartResponse {
+  operationId: string
+  prompt?: ProviderAuthPrompt
+}
+
+export interface ProviderAuthPrompt {
+  id: string
+  prompt:
+    | Omit<Extract<AuthPrompt, { type: 'text' }>, 'signal'>
+    | Omit<Extract<AuthPrompt, { type: 'secret' }>, 'signal'>
+    | Omit<Extract<AuthPrompt, { type: 'select' }>, 'signal'>
+    | Omit<Extract<AuthPrompt, { type: 'manual_code' }>, 'signal'>
+}
+
+export type ProviderAuthEvent
+  = { type: 'prompt', prompt: ProviderAuthPrompt }
+    | ({ type: 'info' | 'auth_url' | 'device_code' | 'progress' } & Omit<AuthEvent, 'type'>)
+    | { type: 'completed' }
+    | { type: 'failed', message: string }
+
+export interface ProviderAuthResponse {
+  operationId: string
+  promptId: string
+  value: string
 }
 
 export interface DirectoriesResponse {

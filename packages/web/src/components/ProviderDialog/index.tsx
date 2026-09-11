@@ -1,7 +1,7 @@
-import type { ProviderInfo } from '@piflow/protocol'
+import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
 import { RefreshCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { fetchProviders } from '../../session/actions'
+import { cancelProviderAuth, fetchProviders, respondProviderAuth, startProviderLogin } from '../../session/actions'
 import styles from './styles.module.css'
 
 interface Props {
@@ -30,6 +30,7 @@ function authLabel(provider: ProviderInfo) {
 export default function ProviderDialog({ onClose }: Props) {
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [operation, setOperation] = useState<{ id: string, providerId: string, prompt?: ProviderAuthPrompt, busy: boolean } | null>(null)
 
   useEffect(() => {
     void refresh()
@@ -44,6 +45,26 @@ export default function ProviderDialog({ onClose }: Props) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  useEffect(() => {
+    function onAuth(event: Event) {
+      const message = (event as CustomEvent<Extract<ServerMessage, { type: 'provider_auth' }>>).detail
+      const authEvent = message.event as ProviderAuthEvent
+      if (authEvent.type === 'prompt') {
+        setOperation(current => current ? { ...current, prompt: authEvent.prompt, busy: false } : current)
+      }
+      else if (authEvent.type === 'completed') {
+        setOperation(null)
+        void refresh()
+      }
+      else if (authEvent.type === 'failed') {
+        setError(authEvent.message)
+        setOperation(null)
+      }
+    }
+    window.addEventListener('piflow:provider-auth', onAuth)
+    return () => window.removeEventListener('piflow:provider-auth', onAuth)
+  }, [])
+
   async function refresh() {
     setError(null)
     try {
@@ -52,6 +73,41 @@ export default function ProviderDialog({ onClose }: Props) {
     catch (reason) {
       setError(reason instanceof Error ? reason.message : '无法读取 Provider 列表')
     }
+  }
+
+  async function login(provider: ProviderInfo) {
+    if (operation)
+      return
+    setError(null)
+    try {
+      const response = await startProviderLogin(provider.id, 'api_key')
+      setOperation({ id: response.operationId, providerId: provider.id, prompt: response.prompt, busy: !response.prompt })
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '无法开始登录')
+    }
+  }
+
+  async function answer(value: string) {
+    if (!operation?.prompt)
+      return
+    const current = operation
+    const prompt = current.prompt!
+    setOperation({ ...current, prompt: undefined, busy: true })
+    try {
+      await respondProviderAuth(current.id, prompt.id, value)
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '无法提交认证信息')
+      await cancelProviderAuth(current.id).catch(() => {})
+      setOperation(null)
+    }
+  }
+
+  function cancel() {
+    if (operation)
+      void cancelProviderAuth(operation.id).catch(() => {})
+    setOperation(null)
   }
 
   return (
@@ -86,11 +142,35 @@ export default function ProviderDialog({ onClose }: Props) {
                     </span>
                     <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
                   </span>
+                  {!provider.configured && provider.authTypes.includes('api_key')
+                    ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider)}>登录</button>
+                    : null}
                 </div>
               ))}
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
         </div>
+        {operation?.prompt
+          ? <AuthPromptDialog prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
+          : null}
       </section>
+    </div>
+  )
+}
+
+function AuthPromptDialog({ prompt, busy, onSubmit, onCancel }: { prompt: ProviderAuthPrompt, busy: boolean, onSubmit: (value: string) => void, onCancel: () => void }) {
+  const [value, setValue] = useState('')
+  const authPrompt = prompt.prompt
+  const isSelect = authPrompt.type === 'select'
+  return (
+    <div className={styles.prompt}>
+      <p>{authPrompt.message}</p>
+      {isSelect
+        ? <select value={value} onChange={event => setValue(event.target.value)}>{(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+        : <input autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
+      <div className={styles.promptActions}>
+        <button onClick={onCancel}>取消</button>
+        <button disabled={busy || !value} onClick={() => onSubmit(value)}>继续</button>
+      </div>
     </div>
   )
 }

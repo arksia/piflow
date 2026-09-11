@@ -18,6 +18,9 @@ import type {
   OpenSessionRequest,
   ProjectTrustResponse,
   PromptRequest,
+  ProviderAuthLoginRequest,
+  ProviderAuthResponse,
+  ProviderAuthStartResponse,
   ProviderInfo,
   ProvidersResponse,
   RemoveExtensionRequest,
@@ -36,6 +39,7 @@ import {
   API_EXTENSIONS_UI_RESPONSE_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
+  API_PROVIDER_AUTH_PATH,
   API_PROVIDERS_PATH,
   buildDirectoriesPath,
   buildUsagePath,
@@ -169,6 +173,18 @@ export async function fetchExtensions(): Promise<ExtensionSourceInfo[]> {
 export async function fetchProviders(): Promise<ProviderInfo[]> {
   const { providers } = await api<ProvidersResponse>(API_PROVIDERS_PATH)
   return providers
+}
+
+export function startProviderLogin(providerId: string, type: ProviderAuthLoginRequest['type']): Promise<ProviderAuthStartResponse> {
+  return post<ProviderAuthStartResponse>(API_PROVIDER_AUTH_PATH, { providerId, type } satisfies ProviderAuthLoginRequest)
+}
+
+export function respondProviderAuth(operationId: string, promptId: string, value: string): Promise<ApiOkResponse> {
+  return post<ApiOkResponse>(`${API_PROVIDER_AUTH_PATH}/${encodeURIComponent(operationId)}`, { operationId, promptId, value } satisfies ProviderAuthResponse)
+}
+
+export function cancelProviderAuth(operationId: string): Promise<ApiOkResponse> {
+  return api<ApiOkResponse>(`${API_PROVIDER_AUTH_PATH}/${encodeURIComponent(operationId)}`, { method: 'DELETE' })
 }
 
 export function installExtension(source: string, scope: 'global' | 'project'): Promise<ExtensionChangeResponse> {

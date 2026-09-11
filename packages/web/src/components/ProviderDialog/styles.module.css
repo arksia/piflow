@@ -30,6 +30,48 @@
   align-items: center;
 }
 
+.login,
+.prompt-actions button {
+  border: 1px solid var(--c-line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--c-body);
+  font-size: 0.7rem;
+}
+
+.login:hover,
+.prompt-actions button:hover {
+  border-color: var(--c-signal);
+}
+
+.prompt {
+  border-top: 1px solid var(--c-line);
+  padding: 14px 12px 6px;
+}
+
+.prompt p {
+  margin: 0 0 8px;
+  color: var(--c-body);
+  font-size: 0.78rem;
+}
+
+.prompt input,
+.prompt select {
+  width: 100%;
+  border: 1px solid var(--c-line);
+  border-radius: 4px;
+  padding: 8px;
+  background: var(--c-bg);
+  color: var(--c-body);
+}
+
+.prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .header {
   justify-content: space-between;
   gap: 16px;
