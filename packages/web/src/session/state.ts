@@ -7,6 +7,7 @@ import type {
 import type {
   ProjectTrustStatus,
   SessionInfoLite,
+  SessionStats,
   SessionStatusRecord,
   UsageReport,
 } from '@piflow/protocol'
@@ -34,6 +35,7 @@ export interface SessionView {
   thinkingLevels: ThinkingLevel[]
   modelScope: Array<{ model: ModelInfo, thinkingLevel?: ThinkingLevel }>
   modelDiagnostics: Array<{ type: 'info' | 'warning' | 'error', message: string }>
+  stats: SessionStats | null
   context: ContextUsage | null
   toolResults: Record<string, ToolState>
   queue: { steering: readonly string[], followUp: readonly string[] }

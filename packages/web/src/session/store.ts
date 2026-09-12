@@ -65,6 +65,7 @@ export function ensureView(key: string): SessionView {
     thinkingLevels: [],
     modelScope: [],
     modelDiagnostics: [],
+    stats: null,
     context: null,
     toolResults: {},
     queue: { steering: [], followUp: [] },
