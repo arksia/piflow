@@ -66,6 +66,7 @@ import {
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
 import { json, readBody } from './http'
+import { ProviderAuthBusyError } from './provider-auth'
 import { listProviders } from './providers'
 import { SessionsStreamingError } from './sessions'
 
@@ -513,6 +514,8 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
             res.end()
           else if (err instanceof SessionsStreamingError)
             json(res, 409, { error: String(err), sessions: err.keys })
+          else if (err instanceof ProviderAuthBusyError)
+            json(res, 409, { error: err.message })
           else
             json(res, 500, { error: String(err) })
         }
