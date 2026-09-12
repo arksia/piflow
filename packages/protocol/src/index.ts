@@ -268,6 +268,12 @@ export interface ProvidersResponse {
   providers: ProviderInfo[]
 }
 
+export interface ProviderCheckResponse {
+  configured: boolean
+  type?: AuthType
+  source?: string
+}
+
 export interface ProviderAuthLoginRequest {
   providerId: string
   type: AuthType
