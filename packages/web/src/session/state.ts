@@ -32,6 +32,8 @@ export interface SessionView {
   model: ModelInfo | null
   thinkingLevel: ThinkingLevel | null
   thinkingLevels: ThinkingLevel[]
+  modelScope: Array<{ model: ModelInfo, thinkingLevel?: ThinkingLevel }>
+  modelDiagnostics: Array<{ type: 'info' | 'warning' | 'error', message: string }>
   context: ContextUsage | null
   toolResults: Record<string, ToolState>
   queue: { steering: readonly string[], followUp: readonly string[] }

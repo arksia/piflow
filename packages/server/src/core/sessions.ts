@@ -27,6 +27,7 @@ import {
   getAgentDir,
   hasTrustRequiringProjectResources,
   ProjectTrustStore,
+  resolveModelScopeWithDiagnostics,
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent'
@@ -37,6 +38,10 @@ import { toJsonEvent } from './json-event'
 type ExtensionUI = ReturnType<typeof createExtensionUIContext>
 type AvailableModel = ReturnType<ManagedSession['runtime']['services']['modelRuntime']['getAvailableSnapshot']>[number]
 
+function modelInfo(model: AvailableModel) {
+  return { provider: model.provider, id: model.id, contextWindow: model.contextWindow, reasoning: model.reasoning }
+}
+
 export interface ManagedSession {
   key: string
   cwd: string
@@ -44,6 +49,7 @@ export interface ManagedSession {
   extensionUi: ExtensionUI
   unsubscribe?: () => void
   lastUsed: number
+  modelDiagnostics: SessionState['modelDiagnostics']
 }
 
 /** Thrown when a session mutation would invalidate active work or a dialog. */
@@ -183,6 +189,11 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         : null,
       thinkingLevel: session.thinkingLevel,
       thinkingLevels: session.getAvailableThinkingLevels(),
+      modelScope: session.scopedModels.map(scoped => ({
+        model: modelInfo(scoped.model),
+        ...(scoped.thinkingLevel ? { thinkingLevel: scoped.thinkingLevel } : {}),
+      })),
+      modelDiagnostics: managed.modelDiagnostics,
       context: session.getContextUsage() ?? null,
       queue: {
         steering: [...session.getSteeringMessages()],
@@ -301,6 +312,12 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         runtime,
         extensionUi: undefined as unknown as ExtensionUI,
         lastUsed: Date.now(),
+        modelDiagnostics: [...(runtime.diagnostics ?? [])],
+      }
+      const enabledModels = runtime.services.settingsManager.getEnabledModels()
+      if (enabledModels?.length) {
+        const { diagnostics } = await resolveModelScopeWithDiagnostics(enabledModels, runtime.services.modelRuntime)
+        managed.modelDiagnostics = [...(managed.modelDiagnostics ?? []), ...diagnostics]
       }
       pool.set(key, managed)
       touch(managed)
