@@ -8,6 +8,7 @@ import type {
   ModelRuntime,
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
+  SessionStats,
 } from '@earendil-works/pi-coding-agent'
 
 export {
@@ -55,6 +56,7 @@ export type {
 } from './http'
 export type { ImageContent } from '@earendil-works/pi-ai'
 export type { AuthEvent, AuthPrompt, AuthType } from '@earendil-works/pi-ai'
+export type { SessionStats } from '@earendil-works/pi-coding-agent'
 
 /** POST body for the extension-UI response route: the official RPC frame plus the target session key. */
 export type ExtensionUIResponseBody = { session: string } & RpcExtensionUIResponse
@@ -225,6 +227,7 @@ export interface SessionState {
   thinkingLevels: ThinkingLevel[]
   modelScope?: Array<{ model: ModelInfo, thinkingLevel?: ThinkingLevel }>
   modelDiagnostics?: Array<Pick<AgentSessionRuntimeDiagnostic, 'type' | 'message'>>
+  stats?: SessionStats
   context: ContextUsage | null
   queue: { steering: string[], followUp: string[] }
   extensionRequests: RpcExtensionUIRequest[]

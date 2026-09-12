@@ -194,6 +194,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         ...(scoped.thinkingLevel ? { thinkingLevel: scoped.thinkingLevel } : {}),
       })),
       modelDiagnostics: managed.modelDiagnostics,
+      stats: session.getSessionStats(),
       context: session.getContextUsage() ?? null,
       queue: {
         steering: [...session.getSteeringMessages()],
