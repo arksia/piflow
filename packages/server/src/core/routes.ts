@@ -19,6 +19,7 @@ import type {
   PromptRequest,
   ProviderAuthLoginRequest,
   ProviderAuthResponse,
+  ProviderCheckResponse,
   ProvidersResponse,
   RemoveExtensionRequest,
   RenameSessionRequest,
@@ -139,6 +140,31 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
     if (method === 'GET' && path === API_PROVIDERS_PATH)
       return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
+
+    const providerAction = path.match(/^\/api\/providers\/([^/]+)\/(check|refresh)$/)
+    if (providerAction && method === 'POST') {
+      const providerId = decodeURIComponent(providerAction[1]!)
+      if (!modelRuntime.getProvider(providerId))
+        return json(res, 404, { error: `provider not found: ${providerId}` })
+      if (providerAction[2] === 'check') {
+        const check = await modelRuntime.checkAuth(providerId, { signal: AbortSignal.timeout(15_000) })
+        return json(res, 200, {
+          configured: !!check,
+          type: check?.type,
+          source: check?.source,
+        } satisfies ProviderCheckResponse)
+      }
+      const result = await modelRuntime.refresh({
+        allowNetwork: true,
+        force: true,
+        providers: [providerId],
+        signal: AbortSignal.timeout(15_000),
+      })
+      const error = result.errors.get(providerId)
+      if (error)
+        return json(res, 502, { error: error.message })
+      return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
+    }
 
     if (method === 'POST' && path === API_PROVIDER_AUTH_PATH) {
       const body = await readBody<Partial<ProviderAuthLoginRequest>>(req)

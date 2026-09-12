@@ -1,7 +1,7 @@
 import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
-import { ExternalLink, RefreshCw, X } from 'lucide-react'
+import { ExternalLink, FlaskConical, RefreshCw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { cancelProviderAuth, fetchProviders, respondProviderAuth, startProviderLogin } from '../../session/actions'
+import { cancelProviderAuth, checkProvider, fetchProviders, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
 import styles from './styles.module.css'
 
 interface Props {
@@ -33,6 +33,8 @@ export default function ProviderDialog({ onClose }: Props) {
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [operation, setOperation] = useState<{ id: string, providerId: string, prompt?: ProviderAuthPrompt, event?: AuthDisplayEvent, busy: boolean } | null>(null)
+  const [action, setAction] = useState<string | null>(null)
+  const [checkResult, setCheckResult] = useState<Record<string, string>>({})
   const operationRef = useRef(operation)
   operationRef.current = operation
 
@@ -101,6 +103,40 @@ export default function ProviderDialog({ onClose }: Props) {
     }
   }
 
+  async function refreshProviderModels(provider: ProviderInfo) {
+    if (action)
+      return
+    setAction(provider.id)
+    setError(null)
+    try {
+      setProviders(await refreshProvider(provider.id))
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '模型发现失败')
+    }
+    finally {
+      setAction(null)
+    }
+  }
+
+  async function testProvider(provider: ProviderInfo) {
+    if (action)
+      return
+    setAction(provider.id)
+    setError(null)
+    try {
+      const result = await checkProvider(provider.id)
+      setCheckResult(current => ({ ...current, [provider.id]: result.configured ? '可用' : '未配置' }))
+    }
+    catch (reason) {
+      setCheckResult(current => ({ ...current, [provider.id]: '失败' }))
+      setError(reason instanceof Error ? reason.message : 'Provider 测试失败')
+    }
+    finally {
+      setAction(null)
+    }
+  }
+
   async function answer(value: string) {
     if (!operation?.prompt)
       return
@@ -154,7 +190,10 @@ export default function ProviderDialog({ onClose }: Props) {
                       个模型
                     </span>
                     <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
+                    {checkResult[provider.id] ? <span>{checkResult[provider.id]}</span> : null}
                   </span>
+                  <button className={styles.iconButton} title="测试 Provider" aria-label={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}><FlaskConical size={13} /></button>
+                  <button className={styles.iconButton} title="刷新模型" aria-label={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}><RefreshCw size={13} /></button>
                   {!provider.configured && provider.authTypes.includes('api_key')
                     ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
                     : null}

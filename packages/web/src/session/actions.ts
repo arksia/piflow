@@ -21,6 +21,7 @@ import type {
   ProviderAuthLoginRequest,
   ProviderAuthResponse,
   ProviderAuthStartResponse,
+  ProviderCheckResponse,
   ProviderInfo,
   ProvidersResponse,
   RemoveExtensionRequest,
@@ -172,6 +173,15 @@ export async function fetchExtensions(): Promise<ExtensionSourceInfo[]> {
 
 export async function fetchProviders(): Promise<ProviderInfo[]> {
   const { providers } = await api<ProvidersResponse>(API_PROVIDERS_PATH)
+  return providers
+}
+
+export function checkProvider(providerId: string): Promise<ProviderCheckResponse> {
+  return post<ProviderCheckResponse>(`/api/providers/${encodeURIComponent(providerId)}/check`)
+}
+
+export async function refreshProvider(providerId: string): Promise<ProviderInfo[]> {
+  const { providers } = await post<ProvidersResponse>(`/api/providers/${encodeURIComponent(providerId)}/refresh`)
   return providers
 }
 
