@@ -109,6 +109,8 @@ export function applyState(state: SessionState) {
   view.model = state.model
   view.thinkingLevel = state.thinkingLevel ?? null
   view.thinkingLevels = state.thinkingLevels ?? []
+  view.modelScope = state.modelScope ?? []
+  view.modelDiagnostics = state.modelDiagnostics ?? []
   view.context = state.context ?? null
   view.extensionRequests = state.extensionRequests
   view.queue = state.queue

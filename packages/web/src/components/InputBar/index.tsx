@@ -49,6 +49,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     models.push(model)
     modelGroups.set(model.provider, models)
   }
+  const scopedModels = new Map(view?.modelScope.map(scoped => [`${scoped.model.provider}/${scoped.model.id}`, scoped.thinkingLevel] as const) ?? [])
 
   const provider = view?.model?.provider
   const report = provider ? store.usage[provider] : null
@@ -378,6 +379,14 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                             onClick={() => pickModel(model.provider, model.id)}
                           >
                             {model.id}
+                            {scopedModels.has(`${model.provider}/${model.id}`)
+                              ? (
+                                  <small>
+                                    {' · '}
+                                    {scopedModels.get(`${model.provider}/${model.id}`) ?? '固定'}
+                                  </small>
+                                )
+                              : null}
                           </button>
                         ))}
                       </div>
@@ -393,6 +402,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                           </div>
                         )
                       : null}
+                    {view?.modelDiagnostics.map(diagnostic => <div key={diagnostic.message} className={styles.usage}>{diagnostic.message}</div>)}
                   </div>
                 </>
               )

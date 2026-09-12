@@ -1,6 +1,7 @@
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { AuthEvent, AuthPrompt, AuthType, CredentialInfo } from '@earendil-works/pi-ai'
 import type {
+  AgentSessionRuntimeDiagnostic,
   ContextUsage,
   JsonAgentSessionEvent,
   ModelInfo,
@@ -222,6 +223,8 @@ export interface SessionState {
   model: ModelInfo | null
   thinkingLevel: ThinkingLevel | null
   thinkingLevels: ThinkingLevel[]
+  modelScope?: Array<{ model: ModelInfo, thinkingLevel?: ThinkingLevel }>
+  modelDiagnostics?: Array<Pick<AgentSessionRuntimeDiagnostic, 'type' | 'message'>>
   context: ContextUsage | null
   queue: { steering: string[], followUp: string[] }
   extensionRequests: RpcExtensionUIRequest[]
