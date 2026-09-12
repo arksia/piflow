@@ -142,3 +142,62 @@ it('keeps compaction feedback when the authoritative state follows the event', (
   route({ type: 'state', state }, () => {})
   assert.deepEqual(store.views['session-a']?.compactionNotice, { status: 'success', tokensBefore: 12000, tokensAfter: 3000 })
 })
+
+it('keeps aborted and failed compaction feedback visible', () => {
+  store.views = {}
+  const state: SessionState = {
+    key: 'session-a',
+    cwd: '/project',
+    messages: [],
+    isStreaming: false,
+    isCompacting: false,
+    autoCompactionEnabled: true,
+    model: null,
+    thinkingLevel: null,
+    thinkingLevels: [],
+    context: null,
+    queue: { steering: [], followUp: [] },
+    extensionRequests: [],
+    error: null,
+  }
+  route({ type: 'state', state }, () => {})
+  handleEvent('session-a', { type: 'compaction_end', reason: 'manual', result: undefined, aborted: true, willRetry: false })
+  assert.deepEqual(store.views['session-a']?.compactionNotice, { status: 'aborted' })
+  handleEvent('session-a', { type: 'compaction_end', reason: 'manual', result: undefined, aborted: false, willRetry: false, errorMessage: 'provider failed' })
+  assert.deepEqual(store.views['session-a']?.compactionNotice, { status: 'error', message: 'provider failed' })
+})
+
+it('projects model switch capabilities, context window, and native session stats', () => {
+  store.views = {}
+  route({ type: 'state', state: {
+    key: 'session-a',
+    cwd: '/project',
+    messages: [],
+    isStreaming: false,
+    isCompacting: false,
+    autoCompactionEnabled: true,
+    model: { provider: 'openai', id: 'gpt-5', contextWindow: 128000, reasoning: true },
+    thinkingLevel: 'high',
+    thinkingLevels: ['off', 'low', 'high'],
+    context: { tokens: 64000, contextWindow: 128000, percent: 50 },
+    queue: { steering: [], followUp: [] },
+    extensionRequests: [],
+    error: null,
+    stats: {
+      sessionFile: '/project/a.jsonl',
+      sessionId: 'a',
+      userMessages: 2,
+      assistantMessages: 2,
+      toolCalls: 1,
+      toolResults: 1,
+      totalMessages: 5,
+      tokens: { input: 100, output: 50, cacheRead: 10, cacheWrite: 5, total: 165 },
+      cost: 0.12,
+    },
+  } }, () => {})
+  const view = store.views['session-a']
+  assert.equal(view?.model?.contextWindow, 128000)
+  assert.deepEqual(view?.thinkingLevels, ['off', 'low', 'high'])
+  assert.equal(view?.context?.contextWindow, 128000)
+  assert.equal(view?.stats?.cost, 0.12)
+})
