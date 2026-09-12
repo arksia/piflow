@@ -134,6 +134,13 @@
   font-size: 0.72rem;
 }
 
+.stats {
+  padding: 8px 0;
+  color: var(--c-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
 .column {
   width: min(calc(100% - 48px), var(--chat-w));
   margin: 0 auto;
