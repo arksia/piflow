@@ -1,7 +1,7 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { createProviderAuthManager } from './provider-auth'
+import { createProviderAuthManager, ProviderAuthBusyError } from './provider-auth'
 
 it('bridges native login prompts and never publishes the answer', async () => {
   let answer = ''
@@ -31,7 +31,7 @@ it('serializes auth operations and supports cancellation', async () => {
   } as unknown as ModelRuntime
   const manager = createProviderAuthManager(runtime, () => {})
   const started = await manager.start('demo', 'api_key')
-  await assert.rejects(manager.start('demo', 'api_key'))
+  await assert.rejects(manager.start('demo', 'api_key'), ProviderAuthBusyError)
   assert.equal(manager.cancel(started.operationId), true)
   assert.equal(manager.cancel(started.operationId), false)
 })

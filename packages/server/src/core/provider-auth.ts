@@ -27,6 +27,13 @@ export interface ProviderAuthManager {
   cancel: (operationId: string) => boolean
 }
 
+export class ProviderAuthBusyError extends Error {
+  constructor() {
+    super('provider authentication already in progress')
+    this.name = 'ProviderAuthBusyError'
+  }
+}
+
 function withoutSignal(prompt: AuthPrompt): ProviderAuthPrompt['prompt'] {
   const { signal: _signal, ...safePrompt } = prompt
   return safePrompt as ProviderAuthPrompt['prompt']
@@ -41,7 +48,7 @@ export function createProviderAuthManager(runtime: ModelRuntime, publish: (messa
 
   async function start(providerId: string, type: AuthType) {
     if (operations.size > 0)
-      throw new Error('provider authentication already in progress')
+      throw new ProviderAuthBusyError()
     const provider = runtime.getProvider(providerId)
     if (!provider)
       throw new Error(`provider not found: ${providerId}`)

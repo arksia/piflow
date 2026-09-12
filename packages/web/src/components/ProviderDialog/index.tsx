@@ -1,12 +1,14 @@
 import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
-import { RefreshCw, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ExternalLink, RefreshCw, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { cancelProviderAuth, fetchProviders, respondProviderAuth, startProviderLogin } from '../../session/actions'
 import styles from './styles.module.css'
 
 interface Props {
   onClose: () => void
 }
+
+type AuthDisplayEvent = Extract<ProviderAuthEvent, { type: 'info' | 'auth_url' | 'device_code' | 'progress' }>
 
 const sourceLabels: Record<NonNullable<ProviderInfo['source']>, string> = {
   environment: '环境变量',
@@ -30,7 +32,9 @@ function authLabel(provider: ProviderInfo) {
 export default function ProviderDialog({ onClose }: Props) {
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [operation, setOperation] = useState<{ id: string, providerId: string, prompt?: ProviderAuthPrompt, busy: boolean } | null>(null)
+  const [operation, setOperation] = useState<{ id: string, providerId: string, prompt?: ProviderAuthPrompt, event?: AuthDisplayEvent, busy: boolean } | null>(null)
+  const operationRef = useRef(operation)
+  operationRef.current = operation
 
   useEffect(() => {
     void refresh()
@@ -45,20 +49,29 @@ export default function ProviderDialog({ onClose }: Props) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  useEffect(() => () => {
+    const current = operationRef.current
+    if (current)
+      void cancelProviderAuth(current.id).catch(() => {})
+  }, [])
+
   useEffect(() => {
     function onAuth(event: Event) {
       const message = (event as CustomEvent<Extract<ServerMessage, { type: 'provider_auth' }>>).detail
       const authEvent = message.event as ProviderAuthEvent
       if (authEvent.type === 'prompt') {
-        setOperation(current => current ? { ...current, prompt: authEvent.prompt, busy: false } : current)
+        setOperation(current => current && current.id === message.operationId ? { ...current, prompt: authEvent.prompt, event: undefined, busy: false } : current)
       }
       else if (authEvent.type === 'completed') {
-        setOperation(null)
+        setOperation(current => current?.id === message.operationId ? null : current)
         void refresh()
       }
       else if (authEvent.type === 'failed') {
+        setOperation(current => current?.id === message.operationId ? null : current)
         setError(authEvent.message)
-        setOperation(null)
+      }
+      else {
+        setOperation(current => current && current.id === message.operationId ? { ...current, event: authEvent as AuthDisplayEvent } : current)
       }
     }
     window.addEventListener('piflow:provider-auth', onAuth)
@@ -75,12 +88,12 @@ export default function ProviderDialog({ onClose }: Props) {
     }
   }
 
-  async function login(provider: ProviderInfo) {
+  async function login(provider: ProviderInfo, type: 'api_key' | 'oauth') {
     if (operation)
       return
     setError(null)
     try {
-      const response = await startProviderLogin(provider.id, 'api_key')
+      const response = await startProviderLogin(provider.id, type)
       setOperation({ id: response.operationId, providerId: provider.id, prompt: response.prompt, busy: !response.prompt })
     }
     catch (reason) {
@@ -143,7 +156,10 @@ export default function ProviderDialog({ onClose }: Props) {
                     <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
                   </span>
                   {!provider.configured && provider.authTypes.includes('api_key')
-                    ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider)}>登录</button>
+                    ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
+                    : null}
+                  {!provider.configured && provider.authTypes.includes('oauth')
+                    ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'oauth')}>OAuth</button>
                     : null}
                 </div>
               ))}
@@ -151,8 +167,39 @@ export default function ProviderDialog({ onClose }: Props) {
         </div>
         {operation?.prompt
           ? <AuthPromptDialog prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
-          : null}
+          : operation?.event
+            ? <AuthEventPanel event={operation.event} onCancel={cancel} />
+            : null}
       </section>
+    </div>
+  )
+}
+
+function AuthEventPanel({ event, onCancel }: { event: AuthDisplayEvent, onCancel: () => void }) {
+  return (
+    <div className={styles.prompt}>
+      {event.type === 'auth_url'
+        ? (
+            <a className={styles.authLink} href={event.url} target="_blank" rel="noreferrer">
+              <ExternalLink size={14} />
+              打开授权页面
+            </a>
+          )
+        : event.type === 'device_code'
+          ? (
+              <>
+                <p>请打开授权页面并输入设备码</p>
+                <a className={styles.authLink} href={event.verificationUri} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} />
+                  打开授权页面
+                </a>
+                <code className={styles.deviceCode}>{event.userCode}</code>
+              </>
+            )
+          : <p>{event.type === 'info' || event.type === 'progress' ? event.message : ''}</p>}
+      <div className={styles.promptActions}>
+        <button onClick={onCancel}>取消</button>
+      </div>
     </div>
   )
 }

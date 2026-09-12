@@ -289,7 +289,10 @@ export interface ProviderAuthPrompt {
 
 export type ProviderAuthEvent
   = { type: 'prompt', prompt: ProviderAuthPrompt }
-    | ({ type: 'info' | 'auth_url' | 'device_code' | 'progress' } & Omit<AuthEvent, 'type'>)
+    | Extract<AuthEvent, { type: 'info' }>
+    | Extract<AuthEvent, { type: 'auth_url' }>
+    | Extract<AuthEvent, { type: 'device_code' }>
+    | Extract<AuthEvent, { type: 'progress' }>
     | { type: 'completed' }
     | { type: 'failed', message: string }
 
