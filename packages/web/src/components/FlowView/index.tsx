@@ -35,6 +35,7 @@ import '@xyflow/react/dist/style.css'
 const nodeTypes = { session: FlowSessionNode }
 
 interface FlowViewProps {
+  active?: boolean
   onShowChat: () => void
   onToggleSidebar: () => void
   sidebarCollapsed: boolean
@@ -44,7 +45,7 @@ interface ConnectMode {
   sourceId: string
 }
 
-export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
+export default function FlowView({ active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
   const store = useStore()
   const activeView = store.activeKey ? store.views[store.activeKey] : undefined
   const activeSessionPath = activeView?.sessionFile ?? store.activeKey
@@ -71,6 +72,7 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const poll = useRef({ start() {}, stop() {} })
   const focusSession = useCallback(async (path: string) => {
     try {
       await openSession(path)
@@ -144,6 +146,9 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
       seenMessageIdsRef.current = new Set(document.messages.map(m => m.id))
   }, [document])
 
+  const activeRef = useRef(active)
+  activeRef.current = active
+
   // Poll for new inter-node messages while the canvas is visible.
   // Only the message list is inspected; topology is never overwritten from poll.
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
     }
 
     function start() {
-      if (intervalId !== null || window.document.visibilityState === 'hidden')
+      if (intervalId !== null || !activeRef.current || window.document.visibilityState === 'hidden')
         return
       tick()
       intervalId = window.setInterval(tick, 3000)
@@ -212,12 +217,13 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
     }
 
     function handleVisibility() {
-      if (window.document.visibilityState === 'hidden')
+      if (!activeRef.current || window.document.visibilityState === 'hidden')
         stop()
       else
         start()
     }
 
+    poll.current = { start, stop }
     start()
     window.document.addEventListener('visibilitychange', handleVisibility)
     return () => {
@@ -231,6 +237,24 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
       setActiveEdges(new Map())
     }
   }, [projectPath])
+
+  useEffect(() => {
+    if (active)
+      poll.current.start()
+    else
+      poll.current.stop()
+  }, [active])
+
+  useEffect(() => {
+    if (!active || !instance)
+      return
+    const target = nodes.find(node => node.data.sessionPath === activeSessionPath)
+    if (target)
+      void instance.fitView({ nodes: [target], padding: 0.55, maxZoom: 1.1, duration: reducedMotion ? 0 : 180 })
+    else if (document)
+      void instance.setViewport(document.viewport)
+    // ponytail: refit when the canvas first has nodes; later topology edits stay put
+  }, [active, instance, nodes.length])
 
   // Re-render edges when topology, active message events, selection, or motion preference change.
   useEffect(() => {
@@ -410,6 +434,8 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
       ...node.data,
       status: sessionStatusFor(node.data.sessionPath, store.statuses),
       needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
+      unread: store.unreadSessions.has(node.data.sessionPath),
+      isCurrent: node.data.sessionPath === activeSessionPath,
       isAnchor: connectMode?.sourceId === node.id,
     },
   }))
@@ -450,7 +476,7 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
         {connectMode
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
           : null}
-        <button className={styles.add} disabled={!document} onClick={() => setPanelOpen(open => !open)}>+ 节点</button>
+        <button className={styles.add} disabled={!document} aria-expanded={panelOpen} onClick={() => setPanelOpen(open => !open)}>添加节点</button>
         <ViewSwitch active="flow" onChange={view => view === 'chat' && onShowChat()} />
       </header>
 
@@ -465,7 +491,7 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
                   个会话需要处理
                 </strong>
                 <span>
-                  {attentionItems[0]!.reason === 'needs_input' ? '等待输入' : '执行失败'}
+                  {attentionItems[0]!.reason === 'needs_input' ? '待回答' : '失败'}
                   {' · '}
                   {attentionItems[0]!.name}
                 </span>

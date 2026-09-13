@@ -4,7 +4,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  background: #080808;
+  background: var(--c-bg);
 }
 
 .bar {
