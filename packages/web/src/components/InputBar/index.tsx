@@ -1,14 +1,15 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { UsageWindow } from '@piflow/protocol'
-import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from 'react'
+import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
-import { ArrowUp, ListX, Minimize2, Square } from 'lucide-react'
+import { ArrowUp, ImagePlus, ListX, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { abort, abortCompaction, clearQueue, compact, requestUsage, sendPrompt, setAutoCompaction, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
+import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
 interface Props {
@@ -33,6 +34,7 @@ function formatWindow(window: UsageWindow) {
 export default function InputBar({ view, text, focusVersion, onTextChange, draftKey }: Props) {
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
+  const [thinkingOpen, setThinkingOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
   const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'followUp'>('steer')
@@ -42,6 +44,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const fileRef = useRef<HTMLInputElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const modelButtonRef = useRef<HTMLButtonElement>(null)
+  const thinkingRef = useRef<HTMLDivElement>(null)
   const previousStreamingRef = useRef(view?.isStreaming)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
@@ -55,15 +58,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const report = provider ? store.usage[provider] : null
   const usage = report?.supported ? report : null
   const quota = usage?.windows.length ? Math.min(...usage.windows.map(window => window.remaining)) : null
-  const quotaTitle = usage?.windows.map(formatWindow).join('\n') ?? ''
   const contextPercent = Math.round(view?.context?.percent ?? 0)
-  const contextLevel = contextPercent >= 85 ? styles.danger : contextPercent >= 70 ? styles.warning : styles.normal
-  const contextTitle = view?.context
-    ? `上下文已用 ${contextPercent}%（${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}）`
-    : ''
+  const contextLevel = contextPercent >= 85 ? styles.danger : contextPercent >= 70 ? styles.warning : ''
   const canSend = store.connected && (text.trim().length > 0 || images.length > 0)
   const isLive = store.connected && !!view?.isStreaming
-  const ringStyle = { '--p': contextPercent } as CSSProperties
 
   const viewKey = view?.key
   const modelId = view?.model?.id
@@ -92,17 +90,29 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   }, [draftKey])
 
   useEffect(() => {
-    if (!modelOpen)
+    if (!modelOpen && !thinkingOpen)
       return
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') {
+      if (event.key !== 'Escape')
+        return
+      if (modelOpen) {
         setModelOpen(false)
         modelButtonRef.current?.focus()
+        return
       }
+      setThinkingOpen(false)
+    }
+    function onPointerDown(event: PointerEvent) {
+      if (thinkingOpen && event.target instanceof Node && !thinkingRef.current?.contains(event.target))
+        setThinkingOpen(false)
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [modelOpen])
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [modelOpen, thinkingOpen])
 
   function pickModel(selectedProvider: string, modelId: string) {
     if (!view)
@@ -113,21 +123,20 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   }
 
   function toggleModels() {
+    setThinkingOpen(false)
     setModelOpen(open => !open)
     if (!modelOpen && view)
       requestUsage(view.key)
   }
 
-  function cycleThinking() {
+  function pickThinking(level: ThinkingLevel) {
     if (!view)
       return
-    const levels: ThinkingLevel[] = view.thinkingLevels.length ? view.thinkingLevels : ['off', 'low', 'medium', 'high']
-    const current = view.thinkingLevel ? levels.indexOf(view.thinkingLevel) : -1
-    const next = levels[(current + 1) % levels.length]
-    if (!next)
+    setThinkingOpen(false)
+    if (level === view.thinkingLevel)
       return
     setOperationError(null)
-    void setThinking(view.key, next).catch(error => setOperationError(errorMessage(error)))
+    void setThinking(view.key, level).catch(error => setOperationError(errorMessage(error)))
   }
 
   async function submit() {
@@ -200,13 +209,9 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   function runCompact() {
     if (!view || compacting)
       return
-    // eslint-disable-next-line no-alert
-    const instructions = window.prompt('压缩指令（可留空）')
-    if (instructions === null)
-      return
     setOperationError(null)
     setCompacting(true)
-    void compact(view.key, instructions).catch(error => setOperationError(errorMessage(error))).finally(() => setCompacting(false))
+    void compact(view.key).catch(error => setOperationError(errorMessage(error))).finally(() => setCompacting(false))
   }
 
   function stopCompaction() {
@@ -256,7 +261,9 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                     ? <QueueGroup label="完成后继续" messages={view.queue.followUp} />
                     : null}
                 </div>
-                <button className={styles.clearQueue} title="清空全部队列" aria-label="清空全部队列" disabled={clearingQueue} onClick={clearPendingMessages}><ListX size={14} /></button>
+                <IconButton label="清空全部队列" disabled={clearingQueue} onClick={clearPendingMessages}>
+                  <ListX />
+                </IconButton>
               </div>
             )
           : null}
@@ -284,7 +291,18 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             hidden
             onChange={pickImages}
           />
-          {images.length ? <div className={styles.images}>{images.map((image, index) => <button key={image.id} type="button" title="移除图片" onClick={() => removeImage(image.id)}><img src={image.previewUrl} alt={`待发送图片 ${index + 1}`} /></button>)}</div> : null}
+          {images.length
+            ? (
+                <div className={styles.images}>
+                  {images.map((image, index) => (
+                    <button key={image.id} type="button" title="移除图片" aria-label={`移除图片 ${index + 1}`} onClick={() => removeImage(image.id)}>
+                      <img src={image.previewUrl} alt={`待发送图片 ${index + 1}`} />
+                      <X />
+                    </button>
+                  ))}
+                </div>
+              )
+            : null}
           <div className={styles.footer}>
             <div className={styles.left}>
               {isLive
@@ -297,21 +315,94 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                   )
                 : view?.thinkingLevels.length
                   ? (
-                      <button className={styles.thinking} title="切换思考强度" aria-label={`切换思考强度，当前${thinkingLabel(view.thinkingLevel)}`} onClick={cycleThinking}>
-                        思考强度 ·
-                        {' '}
-                        {thinkingLabel(view.thinkingLevel)}
-                      </button>
+                      <div ref={thinkingRef} className={styles.thinking}>
+                        <button
+                          type="button"
+                          className={styles.thinkingTrigger}
+                          title="思考强度"
+                          aria-label={`思考强度，当前${thinkingLabel(view.thinkingLevel)}`}
+                          aria-haspopup="menu"
+                          aria-expanded={thinkingOpen}
+                          onClick={() => {
+                            setModelOpen(false)
+                            setThinkingOpen(open => !open)
+                          }}
+                        >
+                          思考 ·
+                          {' '}
+                          {thinkingLabel(view.thinkingLevel)}
+                        </button>
+                        {thinkingOpen
+                          ? (
+                              <div className={styles.thinkingMenu} role="menu" aria-label="思考强度">
+                                {view.thinkingLevels.map(level => (
+                                  <button
+                                    key={level}
+                                    type="button"
+                                    role="menuitemradio"
+                                    aria-checked={view.thinkingLevel === level}
+                                    onClick={() => pickThinking(level)}
+                                  >
+                                    {thinkingLabel(level)}
+                                  </button>
+                                ))}
+                              </div>
+                            )
+                          : null}
+                      </div>
                     )
                   : null}
             </div>
             <div className={styles.right}>
-              {quota !== null
+              {view?.context
                 ? (
-                    <span className={`${styles.quota} ${quota < 20 ? styles.low : ''}`} title={quotaTitle}>
-                      {quota}
-                      %
-                    </span>
+                    <div className={styles.meter} onMouseEnter={() => viewKey && requestUsage(viewKey)}>
+                      <button type="button" className={`${styles.meterTrigger} ${contextLevel}`} aria-label={`上下文 ${contextPercent}%`} aria-describedby="composer-usage">
+                        {`${contextPercent}%`}
+                      </button>
+                      <div className={styles.meterTip} id="composer-usage" role="tooltip">
+                        {quota !== null
+                          ? (
+                              <div>
+                                额度
+                                {' '}
+                                {quota}
+                                %
+                              </div>
+                            )
+                          : null}
+                        {usage?.windows.map(window => (
+                          <div key={`${window.minutes}:${window.limit}:${window.resetTime ?? ''}`}>{formatWindow(window)}</div>
+                        ))}
+                        <div>
+                          上下文
+                          {' '}
+                          {contextPercent}
+                          %
+                          {' · '}
+                          {formatTokens(view.context.tokens ?? 0)}
+                          {' / '}
+                          {formatTokens(view.context.contextWindow)}
+                        </div>
+                        {isLive
+                          ? null
+                          : (
+                              <div className={styles.sessionActions}>
+                                <button
+                                  type="button"
+                                  className={styles.chip}
+                                  aria-pressed={view.autoCompactionEnabled}
+                                  onClick={toggleAutoCompaction}
+                                >
+                                  {view.autoCompactionEnabled ? '自动压缩开' : '自动压缩关'}
+                                </button>
+                                <button type="button" className={styles.chip} disabled={compacting || view.isCompacting} onClick={runCompact}>
+                                  {compacting || view.isCompacting ? '压缩中…' : '压缩上下文'}
+                                </button>
+                              </div>
+                            )}
+                      </div>
+                    </div>
                   )
                 : null}
               {view?.model
@@ -321,46 +412,45 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                       className={styles.model}
                       aria-haspopup="dialog"
                       aria-expanded={modelOpen}
+                      aria-label={`选择模型，当前 ${view.model.id}`}
                       onClick={toggleModels}
                     >
                       {view.model.id}
                     </button>
                   )
                 : null}
-              <button className={styles.attach} type="button" title="添加图片" aria-label="添加图片" onClick={() => fileRef.current?.click()}>＋</button>
-              {view && !isLive
-                ? <button className={styles.attach} type="button" title={view.autoCompactionEnabled ? '关闭自动压缩' : '开启自动压缩'} aria-label={view.autoCompactionEnabled ? '关闭自动压缩' : '开启自动压缩'} onClick={toggleAutoCompaction}><Minimize2 size={14} /></button>
-                : null}
-              {view && view.isCompacting
-                ? <button className={`${styles.button} ${styles.stop}`} title="中止压缩" aria-label="中止压缩" onClick={stopCompaction}><Square size={10} fill="currentColor" strokeWidth={0} /></button>
-                : view && !isLive
-                  ? <button className={styles.attach} type="button" title="压缩上下文" aria-label="压缩上下文" disabled={compacting} onClick={runCompact}><Minimize2 size={14} /></button>
-                  : null}
-              {isLive
+              <IconButton label="添加图片" onClick={() => fileRef.current?.click()}>
+                <ImagePlus />
+              </IconButton>
+              {view?.isCompacting
                 ? (
-                    <button
-                      className={`${styles.button} ${styles.ring} ${styles.stop} ${contextLevel}`}
-                      style={ringStyle}
-                      title={aborting ? '正在中断…' : `中断回复 · ${contextTitle}`}
-                      aria-label={aborting ? '正在中断回复' : '中断回复'}
-                      disabled={aborting}
-                      onClick={stop}
-                    >
+                    <button type="button" className={`${styles.button} ${styles.stop}`} title="中止压缩" aria-label="中止压缩" onClick={stopCompaction}>
                       <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
                     </button>
                   )
-                : (
-                    <button
-                      className={`${styles.button} ${styles.ring} ${styles.send} ${contextLevel} ${canSend ? styles.ready : ''}`}
-                      style={ringStyle}
-                      title={contextTitle || '发送'}
-                      aria-label="发送"
-                      disabled={!canSend}
-                      onClick={() => void submit()}
-                    >
-                      <span className={styles.core}><ArrowUp size={14} /></span>
-                    </button>
-                  )}
+                : isLive
+                  ? (
+                      <button
+                        className={`${styles.button} ${styles.stop}`}
+                        title={aborting ? '正在中断…' : '中断回复'}
+                        aria-label={aborting ? '正在中断回复' : '中断回复'}
+                        disabled={aborting}
+                        onClick={stop}
+                      >
+                        <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
+                      </button>
+                    )
+                  : (
+                      <button
+                        className={`${styles.button} ${styles.send} ${canSend ? styles.ready : ''}`}
+                        title="发送"
+                        aria-label="发送"
+                        disabled={!canSend}
+                        onClick={() => void submit()}
+                      >
+                        <span className={styles.core}><ArrowUp size={14} /></span>
+                      </button>
+                    )}
             </div>
           </div>
 
@@ -391,18 +481,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                         ))}
                       </div>
                     ))}
-                    {usage
-                      ? (
-                          <div className={styles.usage}>
-                            {usage.windows.map(window => (
-                              <div key={`${window.minutes}:${window.limit}:${window.resetTime ?? ''}`}>
-                                {formatWindow(window)}
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      : null}
-                    {view?.modelDiagnostics.map(diagnostic => <div key={diagnostic.message} className={styles.usage}>{diagnostic.message}</div>)}
+                    {view?.modelDiagnostics.map(diagnostic => <div key={diagnostic.message} className={styles.diag}>{diagnostic.message}</div>)}
                   </div>
                 </>
               )
