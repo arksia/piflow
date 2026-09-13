@@ -27,6 +27,7 @@ import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../.
 import { createBackgroundSession, openSession } from '../../session/actions'
 import { useStore } from '../../session/use-store'
 import FlowSessionNode from '../FlowSessionNode'
+import IconButton from '../IconButton'
 import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
@@ -430,7 +431,13 @@ export default function FlowView({ onShowChat, onToggleSidebar, sidebarCollapsed
   return (
     <div className={styles.workspace}>
       <header className={styles.bar}>
-        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}><PanelLeft size={15} /></button> : null}
+        {sidebarCollapsed
+          ? (
+              <IconButton label="展开会话列表" onClick={onToggleSidebar}>
+                <PanelLeft />
+              </IconButton>
+            )
+          : null}
         <div className={styles.heading}>
           <strong>Flow</strong>
           <span title={projectPath}>{shorten(projectPath)}</span>

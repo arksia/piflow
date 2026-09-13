@@ -1,0 +1,30 @@
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import styles from './styles.module.css'
+
+interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
+  label: string
+  variant?: 'ghost' | 'outline'
+  children: ReactNode
+}
+
+export default function IconButton({
+  label,
+  title,
+  variant = 'ghost',
+  className,
+  children,
+  type = 'button',
+  ...rest
+}: Props) {
+  return (
+    <button
+      type={type}
+      title={title ?? label}
+      aria-label={label}
+      className={`${styles.button} ${styles[variant]} ${className ?? ''}`}
+      {...rest}
+    >
+      {children}
+    </button>
+  )
+}

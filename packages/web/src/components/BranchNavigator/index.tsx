@@ -22,22 +22,38 @@ export default function BranchNavigator({ path }: { path: string }) {
     }
   }, [path])
 
-  if (!tree?.length)
+  if (!tree || !isBranched(tree))
     return null
 
   async function select(id: string) {
     await navigateSessionTree(path, id)
     setLeafId(id)
+    setOpen(false)
   }
 
   return (
     <div className={styles.root}>
-      <button className={styles.toggle} title="切换会话分支" aria-label="切换会话分支" onClick={() => setOpen(value => !value)}>
-        <GitBranch size={14} />
+      <button
+        type="button"
+        className={styles.toggle}
+        title="切换会话分支"
+        aria-label="切换会话分支"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen(value => !value)}
+      >
+        <GitBranch />
+        分支
       </button>
       {open ? <div className={styles.menu} role="menu">{tree.map(node => <BranchNode key={node.entry.id} node={node} leafId={leafId} onSelect={select} />)}</div> : null}
     </div>
   )
+}
+
+function isBranched(nodes: SessionTreeNode[]): boolean {
+  return nodes.some(function walk(node): boolean {
+    return node.children.length > 1 || node.children.some(walk)
+  })
 }
 
 function BranchNode({ node, leafId, onSelect }: { node: SessionTreeNode, leafId: string | null, onSelect: (id: string) => Promise<void> }) {

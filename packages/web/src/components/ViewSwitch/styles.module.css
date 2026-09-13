@@ -1,20 +1,22 @@
 .switcher {
   display: flex;
+  height: var(--control);
   flex-shrink: 0;
+  align-items: stretch;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--c-line);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--c-raise);
 }
 
 .switcher button {
-  min-width: 48px;
-  padding: 3px 8px;
+  min-width: 44px;
+  padding: 0 10px;
   border-radius: 4px;
   color: var(--c-muted);
   font-size: 0.75rem;
-  line-height: 1.5;
+  line-height: 1;
 }
 
 .switcher button:hover {

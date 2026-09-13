@@ -1,0 +1,43 @@
+.button {
+  display: grid;
+  width: var(--control);
+  height: var(--control);
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-control);
+  color: var(--c-muted);
+  background: transparent;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+
+.button svg {
+  width: var(--icon);
+  height: var(--icon);
+}
+
+.button:disabled {
+  color: var(--c-faint);
+  opacity: 0.45;
+}
+
+.button:hover:not(:disabled) {
+  color: var(--c-ink);
+  background: var(--c-raise);
+}
+
+.button:active:not(:disabled) {
+  background: var(--c-press);
+}
+
+.button[aria-pressed='true'] {
+  color: var(--c-ink);
+  background: var(--c-press);
+}
+
+.outline {
+  border: 1px solid var(--c-line);
+}
+
+.outline:hover:not(:disabled) {
+  border-color: var(--c-faint);
+}

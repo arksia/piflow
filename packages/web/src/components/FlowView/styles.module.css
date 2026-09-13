@@ -10,36 +10,21 @@
 .bar {
   z-index: 4;
   display: flex;
-  min-height: 58px;
+  height: var(--chrome-h);
+  min-height: var(--chrome-h);
   align-items: center;
-  gap: 10px;
-  margin: 0 8px;
-  padding: 8px 16px;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   border-bottom: 1px solid var(--c-line);
   background: var(--c-bg);
-}
-
-.menu {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--c-muted);
-  font-size: 0.95rem;
-}
-
-.menu:hover {
-  color: var(--c-ink);
 }
 
 .heading {
   display: flex;
   min-width: 0;
   flex: 1;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .heading strong {
@@ -132,11 +117,14 @@
 .delete,
 .connect,
 .cancel {
-  min-height: 30px;
-  padding: 4px 10px;
-  border-radius: 5px;
+  display: inline-flex;
+  height: var(--control);
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
   font-size: 0.78rem;
-  line-height: 1.4;
+  line-height: 1;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
 }
 
 .connect {
@@ -162,6 +150,10 @@
   background: var(--c-mid);
   color: var(--c-bg);
   font-weight: 600;
+}
+
+.add:disabled {
+  opacity: 0.45;
 }
 
 .add:hover {
@@ -344,10 +336,6 @@
 }
 
 @media (width <= 768px) {
-  .menu {
-    display: none;
-  }
-
   .workspace {
     display: none;
   }
