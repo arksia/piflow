@@ -8,6 +8,7 @@ import { setSidebarOpen } from '../../session/store'
 import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
+import IconButton from '../IconButton'
 import NewSessionDialog from '../NewSessionDialog'
 import ProviderDialog from '../ProviderDialog'
 import SessionItemMenu from '../SessionItemMenu'
@@ -161,8 +162,12 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             <span className={styles.subtitle}>coding workspace</span>
           </div>
           <div className={styles.topActions}>
-            <button className={styles.newSession} title="新会话" aria-label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}><MessageSquarePlus size={15} /></button>
-            <button className={styles.collapse} title="收起会话列表" aria-label="收起会话列表" onClick={onToggleSidebar}><PanelLeftClose size={15} /></button>
+            <IconButton variant="outline" label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
+              <MessageSquarePlus />
+            </IconButton>
+            <IconButton label="收起会话列表" onClick={onToggleSidebar}>
+              <PanelLeftClose />
+            </IconButton>
           </div>
         </div>
         {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
@@ -183,15 +188,13 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                 <div className={styles.projectName} title={cwd}>{projectName(cwd)}</div>
                 <div className={styles.cwd} title={cwd}>{shorten(cwd)}</div>
               </div>
-              <button
-                className={styles.projectNew}
-                title={`在 ${shorten(cwd)} 中新建会话`}
-                aria-label={`在 ${shorten(cwd)} 中新建会话`}
+              <IconButton
+                label={`在 ${shorten(cwd)} 中新建会话`}
                 disabled={!store.connected || creatingCwd !== null}
                 onClick={() => void createIn(cwd)}
               >
-                {creatingCwd === cwd ? '…' : <Plus size={13} />}
-              </button>
+                {creatingCwd === cwd ? <span className={styles.busy}>…</span> : <Plus />}
+              </IconButton>
             </div>
             {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
               const session = node.session
@@ -230,8 +233,12 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             {' 个会话'}
           </span>
           <span className={styles.footerActions}>
-            <button className={styles.settings} title="Provider 与凭证" aria-label="Provider 与凭证" disabled={!store.connected} onClick={() => setProvidersOpen(true)}><KeyRound size={14} /></button>
-            <button className={styles.settings} title="扩展管理" aria-label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}><Settings size={14} /></button>
+            <IconButton label="Provider 与凭证" disabled={!store.connected} onClick={() => setProvidersOpen(true)}>
+              <KeyRound />
+            </IconButton>
+            <IconButton label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>
+              <Settings />
+            </IconButton>
           </span>
         </div>
       </div>

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "app-ui-ux-best-practices": {
+      "source": "touchine-ojo/OJO-Design-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/app-ui-ux-best-practices/SKILL.md",
+      "computedHash": "dac1eb96a781cddc42b29d87637a0815d35860719a861c4828bea5781933a7d9"
+    }
+  }
+}

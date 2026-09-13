@@ -12,28 +12,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 58px;
-  padding: 0 6px;
+  height: var(--chrome-h);
+  min-height: var(--chrome-h);
+  padding: 0 var(--space-1);
+  gap: var(--space-2);
   border-bottom: 1px solid var(--c-line);
-}
-
-.new-session {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border: 1px solid var(--c-line);
-  border-radius: 4px;
-  color: var(--c-muted);
-  font-size: 1.05rem;
-  line-height: 1;
-  transition: border-color 0.15s var(--ease), color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
-.new-session:hover {
-  border-color: var(--c-faint);
-  background: var(--c-raise);
-  color: var(--c-ink);
 }
 
 .brand {
@@ -57,17 +40,18 @@
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
 }
 
 .search {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 10px 2px 0;
-  padding: 6px 8px;
+  height: var(--control);
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-2);
   border: 1px solid var(--c-line);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   color: var(--c-faint);
 }
 
@@ -96,20 +80,9 @@
   font-size: 0.8rem;
 }
 
-.collapse {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--c-muted);
-  font-size: 0.92rem;
-  transition: color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
-.collapse:hover {
-  background: var(--c-raise);
-  color: var(--c-ink);
+.busy {
+  font-size: 0.85rem;
+  line-height: 1;
 }
 
 .group {
@@ -147,21 +120,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.project-new {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  border-radius: 4px;
-  color: var(--c-faint);
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.project-new:hover {
-  background: var(--c-raise);
-  color: var(--c-ink);
 }
 
 .item {
@@ -338,24 +296,8 @@
   font-size: 0.64rem;
 }
 
-.settings {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--c-faint);
-  font-size: 0.85rem;
-  line-height: 1;
-  transition: color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
 .footer-actions {
   display: flex;
-  gap: 2px;
-}
-
-.settings:hover {
-  background: var(--c-raise);
-  color: var(--c-ink);
+  align-items: center;
+  gap: var(--space-1);
 }

@@ -1,12 +1,13 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { CSSProperties, UIEvent, WheelEvent } from 'react'
-import { PanelLeft } from 'lucide-react'
+import { Columns2, PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { trustProject } from '../../session/actions'
 import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import BranchNavigator from '../BranchNavigator'
+import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
 import ViewSwitch from '../ViewSwitch'
@@ -225,16 +226,32 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   return (
     <div className={styles.chat} style={chatStyle}>
       <header className={styles.bar}>
-        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}><PanelLeft size={15} /></button> : null}
-        <button className={styles.mobileMenu} title="会话列表" aria-label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}><PanelLeft size={15} /></button>
+        {sidebarCollapsed
+          ? (
+              <span className={styles.menu}>
+                <IconButton label="展开会话列表" onClick={onToggleSidebar}>
+                  <PanelLeft />
+                </IconButton>
+              </span>
+            )
+          : null}
+        <span className={styles.mobileMenu}>
+          <IconButton label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>
+            <PanelLeft />
+          </IconButton>
+        </span>
         <div className={styles.identity}>
           {title ? <div className={styles.title} title={title}>{title}</div> : null}
-          {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
         </div>
         <div className={styles.actions}>
           <span className={`${styles.status} ${statusLabel ? styles.on : ''}`}>{statusLabel}</span>
+          {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
           <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
-          <button className={styles.width} title="切换聊天宽度" aria-label="切换聊天宽度" onClick={cycleWidth}>⇔</button>
+          <span className={styles.width}>
+            <IconButton label="切换聊天宽度" onClick={cycleWidth}>
+              <Columns2 />
+            </IconButton>
+          </span>
         </div>
       </header>
 
