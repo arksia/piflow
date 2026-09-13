@@ -19,8 +19,8 @@
   gap: 8px;
   max-width: 78%;
   padding: 8px 14px;
-  background: #a160fc14;
-  border: 1px solid #a160fc33;
+  background: var(--c-raise);
+  border: 1px solid var(--c-line);
   border-radius: 14px 14px 4px;
   line-height: 1.6;
 }
@@ -39,12 +39,19 @@
 }
 
 .thinking {
-  margin: 8px 0;
+  margin: var(--space-2) 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-control);
+  background: var(--c-raise);
   font-size: 0.85rem;
   color: var(--c-muted);
 }
 
 .thinking summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--control);
   cursor: pointer;
   user-select: none;
 }
@@ -63,9 +70,10 @@
 }
 
 .thinking-body {
-  margin-top: 6px;
-  padding-left: 12px;
-  border-left: 2px solid var(--c-line);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--c-bg);
   white-space: pre-wrap;
   font-size: 0.82rem;
   line-height: 1.6;
