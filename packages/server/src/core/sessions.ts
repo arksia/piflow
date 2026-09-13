@@ -77,6 +77,8 @@ export interface SessionStore {
   getStatusSnapshot: () => SessionStatusRecord[]
   publishError: (key: string, error: string) => void
   reloadExtensions: (cwd?: string) => Promise<number>
+  refreshProvider: (providerId: string) => Promise<number>
+  assertProviderIdle: (providerId: string) => void
   assertIdle: (cwd?: string) => void
   respondExtensionUi: (response: ExtensionUIResponseBody) => boolean
   renameSession: (path: string, name: string) => Promise<boolean>
@@ -497,6 +499,30 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return affected.length
   }
 
+  async function refreshProvider(providerId: string): Promise<number> {
+    const affected = activeSessions().filter(managed =>
+      managed.runtime.services.modelRuntime.getProvider(providerId) !== undefined)
+    assertProviderIdle(providerId)
+    for (const managed of affected) {
+      await managed.runtime.services.modelRuntime.refresh({
+        allowNetwork: true,
+        force: true,
+        providers: [providerId],
+        signal: AbortSignal.timeout(15_000),
+      })
+      publish({ type: 'state', state: getState(managed) })
+    }
+    return affected.length
+  }
+
+  function assertProviderIdle(providerId: string) {
+    const busy = activeSessions().filter(managed =>
+      managed.runtime.services.modelRuntime.getProvider(providerId) !== undefined
+      && (!managed.runtime.session.isIdle || managed.extensionUi.hasPendingDialogs()))
+    if (busy.length)
+      throw new SessionsStreamingError(busy.map(managed => managed.key))
+  }
+
   function assertIdle(cwd?: string) {
     const busy = activeSessions().filter(managed => (cwd === undefined || managed.cwd === cwd)
       && (!managed.runtime.session.isIdle || managed.extensionUi.hasPendingDialogs()))
@@ -648,6 +674,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     getStatusSnapshot,
     publishError,
     reloadExtensions,
+    refreshProvider,
+    assertProviderIdle,
     assertIdle,
     respondExtensionUi,
     renameSession,

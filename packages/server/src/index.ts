@@ -16,12 +16,14 @@ const sse = createSseHub(config.rootCwd)
 const flow = createFlowStore(config.dataDir)
 const extensions = createExtensionManager()
 const modelRuntime = await ModelRuntime.create()
-const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast)
 const sessions = createSessionStore({
   rootCwd: config.rootCwd,
   flow,
   poolSize: config.sessionPoolSize,
   publish: sse.broadcast,
+})
+const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (providerId) => {
+  void sessions.refreshProvider(providerId).catch(() => {})
 })
 sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
 sse.setStateSnapshotProvider(sessions.getStateSnapshot)

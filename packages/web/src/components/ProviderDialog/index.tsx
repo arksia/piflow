@@ -1,7 +1,7 @@
 import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
-import { ExternalLink, FlaskConical, RefreshCw, X } from 'lucide-react'
+import { ExternalLink, FlaskConical, LogOut, RefreshCw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { cancelProviderAuth, checkProvider, fetchProviders, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
+import { cancelProviderAuth, checkProvider, fetchProviders, logoutProvider, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
 import styles from './styles.module.css'
 
 interface Props {
@@ -119,6 +119,22 @@ export default function ProviderDialog({ onClose }: Props) {
     }
   }
 
+  async function logout(provider: ProviderInfo) {
+    if (action)
+      return
+    setAction(provider.id)
+    setError(null)
+    try {
+      setProviders(await logoutProvider(provider.id))
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '登出失败')
+    }
+    finally {
+      setAction(null)
+    }
+  }
+
   async function testProvider(provider: ProviderInfo) {
     if (action)
       return
@@ -194,6 +210,9 @@ export default function ProviderDialog({ onClose }: Props) {
                   </span>
                   <button className={styles.iconButton} title="测试 Provider" aria-label={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}><FlaskConical size={13} /></button>
                   <button className={styles.iconButton} title="刷新模型" aria-label={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}><RefreshCw size={13} /></button>
+                  {provider.configured && provider.credentialType
+                    ? <button className={styles.iconButton} title="登出" aria-label={`登出 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void logout(provider)}><LogOut size={13} /></button>
+                    : null}
                   {!provider.configured && provider.authTypes.includes('api_key')
                     ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
                     : null}
