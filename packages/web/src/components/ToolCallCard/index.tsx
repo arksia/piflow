@@ -1,6 +1,8 @@
 import type { ToolState } from '../../session/state'
+import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import ContentImage from '../ContentImage'
+import { reviewOpenByDefault, toolKind, toolPath, toolTarget } from './kind'
 import styles from './styles.module.css'
 
 interface Props {
@@ -9,12 +11,11 @@ interface Props {
 }
 
 export default function ToolCallCard({ call, state }: Props) {
-  const [open, setOpen] = useState(false)
+  const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const [expanded, setExpanded] = useState(false)
   const args = call.arguments ?? {}
-  const value = args.command ?? args.path ?? args.pattern ?? args.query ?? args.url ?? args.message ?? ''
-  const rawSummary = String(value)
-  const summary = rawSummary.length > 72 ? `${rawSummary.slice(0, 72)}…` : rawSummary
+  const rawSummary = toolTarget(args)
+  const path = toolPath(args)
   const details = state?.result?.details
   const diffText = typeof details?.diff === 'string'
     ? details.diff
@@ -45,32 +46,47 @@ export default function ToolCallCard({ call, state }: Props) {
   const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput
   const status = state?.running ? 'running' : state?.isError ? 'error' : state?.result ? 'done' : 'pending'
   const expandable = Boolean(diff || rawOutput || images.length)
-
-  function copyOutput() {
-    void navigator.clipboard.writeText(rawOutput)
-  }
-
-  const head = (
-    <>
-      <span className={styles.name}>{call.name}</span>
-      <span className={styles.summary} title={rawSummary}>{summary}</span>
-      {status === 'running' ? <span className={styles.signal} title="运行中" /> : null}
-      {status === 'error' ? <span className={styles.error}>失败</span> : null}
-    </>
-  )
+  const defaultOpen = reviewOpenByDefault(status === 'error' ? 'error' : 'done', Boolean(diff))
+  const open = expandable && (userOpen ?? defaultOpen)
+  const kind = toolKind(call.name)
 
   return (
-    <div className={`${styles.tool} ${styles[status]}`}>
-      {expandable
-        ? (
-            <button className={styles.head} aria-expanded={open} onClick={() => setOpen(value => !value)}>
-              <span className={`${styles.chevron} ${open ? styles.open : ''}`}>›</span>
-              {head}
-            </button>
-          )
-        : <div className={`${styles.head} ${styles.static}`}>{head}</div>}
+    <article className={`${styles.tool} ${styles[status]}`}>
+      <div className={styles.headRow}>
+        {expandable
+          ? (
+              <button
+                type="button"
+                className={styles.head}
+                aria-expanded={open}
+                aria-label={`${open ? '收起' : '展开'} ${kind}${rawSummary ? ` ${rawSummary}` : ''}`}
+                onClick={() => setUserOpen(!(userOpen ?? defaultOpen))}
+              >
+                <ChevronRight size={12} className={`${styles.chevron} ${open ? styles.open : ''}`} aria-hidden />
+                <span className={styles.kind}>{kind}</span>
+                {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
+                {status === 'running' ? <span className={styles.live}>运行中</span> : null}
+                {status === 'error' ? <span className={styles.fail}>失败</span> : null}
+              </button>
+            )
+          : (
+              <div className={`${styles.head} ${styles.static}`}>
+                <span className={styles.kind}>{kind}</span>
+                {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
+                {status === 'running' ? <span className={styles.live}>运行中</span> : null}
+                {status === 'error' ? <span className={styles.fail}>失败</span> : null}
+              </div>
+            )}
+        {path
+          ? (
+              <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(path)}>
+                复制路径
+              </button>
+            )
+          : null}
+      </div>
 
-      {expandable && open
+      {open
         ? (
             <div className={styles.body}>
               {diff
@@ -83,23 +99,10 @@ export default function ToolCallCard({ call, state }: Props) {
                       ))}
                     </div>
                   )
-                : output
-                  ? (
-                      <>
-                        <pre className={styles.output}>{output}</pre>
-                        <div className={styles.actions}>
-                          {lines.length > 60
-                            ? (
-                                <button className={styles.action} onClick={() => setExpanded(value => !value)}>
-                                  {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
-                                </button>
-                              )
-                            : null}
-                          <button className={styles.action} onClick={copyOutput}>复制</button>
-                        </div>
-                      </>
-                    )
-                  : images.length ? null : <div className={styles.none}>无输出</div>}
+                : null}
+              {output
+                ? <pre className={styles.output}>{output}</pre>
+                : !diff && !images.length ? <div className={styles.none}>无输出</div> : null}
               {images.length
                 ? (
                     <div className={styles.images}>
@@ -111,9 +114,25 @@ export default function ToolCallCard({ call, state }: Props) {
                     </div>
                   )
                 : null}
+              {rawOutput
+                ? (
+                    <div className={styles.actions}>
+                      {lines.length > 60
+                        ? (
+                            <button type="button" className={styles.action} onClick={() => setExpanded(value => !value)}>
+                              {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
+                            </button>
+                          )
+                        : null}
+                      <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(rawOutput)}>
+                        复制输出
+                      </button>
+                    </div>
+                  )
+                : null}
             </div>
           )
         : null}
-    </div>
+    </article>
   )
 }
