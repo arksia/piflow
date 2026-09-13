@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { deleteSession, fetchForkPoints, forkSession } from '../../session/actions'
 import { sessionUrl } from '../../session/api'
 import { setSidebarOpen } from '../../session/store'
+import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
 interface Props {
@@ -41,16 +42,15 @@ export default function SessionItemMenu({ session, label, streaming, className, 
 
   return (
     <span ref={rootRef} className={`${styles.root} ${className ?? ''}`} data-open={menuOpen || undefined}>
-      <button
-        className={styles.trigger}
-        title="会话操作"
-        aria-label={`会话操作：${label}`}
+      <IconButton
+        size="compact"
+        label={`会话操作：${label}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen(open => !open)}
       >
-        <MoreHorizontal size={13} />
-      </button>
+        <MoreHorizontal />
+      </IconButton>
       {menuOpen
         ? (
             <span className={styles.menu} role="menu" aria-label="会话操作">
@@ -62,7 +62,7 @@ export default function SessionItemMenu({ session, label, streaming, className, 
                   onRename()
                 }}
               >
-                <Pencil size={13} />
+                <Pencil />
                 重命名
               </button>
               <button
@@ -75,15 +75,15 @@ export default function SessionItemMenu({ session, label, streaming, className, 
                   setForkOpen(true)
                 }}
               >
-                <GitFork size={13} />
+                <GitFork />
                 从消息分叉…
               </button>
               <a role="menuitem" className={styles.menuItem} href={`${sessionUrl(session.path, 'export')}?inline=1`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>
-                <ExternalLink size={13} />
+                <ExternalLink />
                 在新标签页预览
               </a>
               <a role="menuitem" className={styles.menuItem} href={sessionUrl(session.path, 'export')} onClick={() => setMenuOpen(false)}>
-                <Download size={13} />
+                <Download />
                 下载 HTML
               </a>
               <button
@@ -96,7 +96,7 @@ export default function SessionItemMenu({ session, label, streaming, className, 
                   setDeleteOpen(true)
                 }}
               >
-                <Trash2 size={13} />
+                <Trash2 />
                 删除
               </button>
             </span>
@@ -171,7 +171,7 @@ function ForkDialog({ session, label, onClose }: { session: SessionInfoLite, lab
             <p className={styles.eyebrow}>分叉</p>
             <h2 id="fork-dialog-title">选择分叉点</h2>
           </div>
-          <button className={styles.close} title="关闭" aria-label="关闭" onClick={onClose}><X size={16} /></button>
+          <IconButton label="关闭" onClick={onClose}><X /></IconButton>
         </header>
         <p className={styles.hint}>
           从「
@@ -221,7 +221,7 @@ function DeleteDialog({ path, label, onClose }: { path: string, label: string, o
             <p className={styles.eyebrow}>删除</p>
             <h2 id="delete-dialog-title">删除会话？</h2>
           </div>
-          <button className={styles.close} title="关闭" aria-label="关闭" onClick={onClose}><X size={16} /></button>
+          <IconButton label="关闭" onClick={onClose}><X /></IconButton>
         </header>
         <p className={styles.hint} id="delete-dialog-desc">
           将永久删除「

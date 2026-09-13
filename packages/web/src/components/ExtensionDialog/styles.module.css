@@ -138,13 +138,3 @@
   white-space: pre-wrap;
 }
 
-.dismiss {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  color: var(--c-muted);
-}
-
-.dismiss:hover {
-  color: var(--c-ink);
-}

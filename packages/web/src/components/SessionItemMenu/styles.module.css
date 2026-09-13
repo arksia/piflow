@@ -6,21 +6,6 @@
   right: 6px;
 }
 
-.trigger {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--c-faint);
-  transition: color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
-.trigger:hover {
-  background: var(--c-line);
-  color: var(--c-ink);
-}
-
 .menu {
   position: absolute;
   z-index: 30;
@@ -45,6 +30,11 @@
   font-size: 0.78rem;
   text-align: left;
   transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.menu-item svg {
+  width: 14px;
+  height: 14px;
 }
 
 .menu-item:disabled {
@@ -106,17 +96,6 @@
   margin: 0;
   color: var(--c-ink);
   font-size: 1.05rem;
-}
-
-.close {
-  display: grid;
-  place-items: center;
-  color: var(--c-muted);
-  transition: color 0.15s var(--ease);
-}
-
-.close:hover {
-  color: var(--c-ink);
 }
 
 .hint {
