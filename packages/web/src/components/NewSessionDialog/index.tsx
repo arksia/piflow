@@ -1,8 +1,9 @@
 import type { DirectoryListing } from '@piflow/protocol'
 import type { FormEvent } from 'react'
-import { ArrowUp, Folder, X } from 'lucide-react'
+import { Folder, FolderUp, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { newSessionIn, requestDirectories } from '../../session/actions'
+import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
 interface Props {
@@ -78,7 +79,7 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
             <p className={styles.eyebrow}>新会话</p>
             <h2 id="new-session-title">选择项目文件夹</h2>
           </div>
-          <button className={styles.close} title="关闭" aria-label="关闭" onClick={onClose}><X size={16} /></button>
+          <IconButton label="关闭" onClick={onClose}><X /></IconButton>
         </header>
 
         <form className={styles.pathForm} onSubmit={submitPath}>
@@ -92,15 +93,15 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
         </form>
 
         <div className={styles.location} title={listing?.path ?? path}>
-          <button
-            className={styles.parent}
+          <IconButton
+            size="compact"
+            variant="outline"
+            label="返回上级目录"
             disabled={!listing?.parent || loading}
-            title="返回上级目录"
-            aria-label="返回上级目录"
             onClick={() => listing?.parent && void browse(listing.parent)}
           >
-            <ArrowUp size={13} />
-          </button>
+            <FolderUp />
+          </IconButton>
           <span>{listing?.path ?? path}</span>
         </div>
 

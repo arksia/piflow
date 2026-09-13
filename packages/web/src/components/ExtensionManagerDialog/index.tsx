@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { fetchExtensions, installExtension, removeExtension } from '../../session/actions'
+import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
 interface Props {
@@ -81,7 +82,7 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
             <p className={styles.eyebrow}>扩展</p>
             <h2 id="extensions-title">管理 pi 扩展</h2>
           </div>
-          <button className={styles.close} title="关闭" aria-label="关闭" onClick={onClose}><X size={16} /></button>
+          <IconButton label="关闭" onClick={onClose}><X /></IconButton>
         </header>
 
         <form className={styles.installForm} onSubmit={submitInstall}>
@@ -110,15 +111,14 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
                     <span className={styles.source} title={extension.installedPath ?? extension.source}>
                       {extension.source}
                     </span>
-                    <button
-                      className={styles.remove}
-                      title={`移除 ${extension.source}`}
-                      aria-label={`移除 ${extension.source}`}
+                    <IconButton
+                      size="compact"
+                      label={`移除 ${extension.source}`}
                       disabled={busy}
                       onClick={() => void run(() => removeExtension(extension.source, extension.scope === 'project' ? 'project' : 'global'))}
                     >
-                      <Trash2 size={13} />
-                    </button>
+                      <Trash2 />
+                    </IconButton>
                   </div>
                 ))}
           {error ? <p className={styles.error}>{error}</p> : null}

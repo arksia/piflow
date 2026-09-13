@@ -22,7 +22,7 @@
 
 .button:hover:not(:disabled) {
   color: var(--c-ink);
-  background: var(--c-raise);
+  background: var(--c-press);
 }
 
 .button:active:not(:disabled) {
@@ -32,6 +32,16 @@
 .button[aria-pressed='true'] {
   color: var(--c-ink);
   background: var(--c-press);
+}
+
+.compact {
+  width: 24px;
+  height: 24px;
+}
+
+.compact svg {
+  width: 14px;
+  height: 14px;
 }
 
 .outline {

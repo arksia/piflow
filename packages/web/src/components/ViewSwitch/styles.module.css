@@ -23,6 +23,10 @@
   color: var(--c-ink);
 }
 
+.switcher button:active {
+  background: var(--c-press);
+}
+
 .switcher button.active {
   background: #292929;
   color: var(--c-ink);

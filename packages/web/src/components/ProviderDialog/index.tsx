@@ -1,7 +1,8 @@
 import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
-import { ExternalLink, FlaskConical, RefreshCw, X } from 'lucide-react'
+import { ExternalLink, RefreshCw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cancelProviderAuth, checkProvider, fetchProviders, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
+import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
 interface Props {
@@ -168,8 +169,12 @@ export default function ProviderDialog({ onClose }: Props) {
             <h2 id="providers-title">模型服务与凭证</h2>
           </div>
           <div className={styles.actions}>
-            <button className={styles.iconButton} title="刷新" aria-label="刷新 Provider" onClick={() => void refresh()}><RefreshCw size={15} /></button>
-            <button className={styles.iconButton} title="关闭" aria-label="关闭" onClick={onClose}><X size={16} /></button>
+            <IconButton label="刷新 Provider" onClick={() => void refresh()}>
+              <RefreshCw />
+            </IconButton>
+            <IconButton label="关闭" onClick={onClose}>
+              <X />
+            </IconButton>
           </div>
         </header>
 
@@ -192,8 +197,8 @@ export default function ProviderDialog({ onClose }: Props) {
                     <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
                     {checkResult[provider.id] ? <span>{checkResult[provider.id]}</span> : null}
                   </span>
-                  <button className={styles.iconButton} title="测试 Provider" aria-label={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}><FlaskConical size={13} /></button>
-                  <button className={styles.iconButton} title="刷新模型" aria-label={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}><RefreshCw size={13} /></button>
+                  <button className={styles.login} title={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}>测试</button>
+                  <button className={styles.login} title={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}>刷新模型</button>
                   {!provider.configured && provider.authTypes.includes('api_key')
                     ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
                     : null}

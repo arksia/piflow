@@ -44,6 +44,10 @@
   border-color: var(--c-signal);
 }
 
+.login:disabled {
+  opacity: 0.45;
+}
+
 .prompt {
   border-top: 1px solid var(--c-line);
   padding: 14px 12px 6px;
@@ -112,21 +116,6 @@ h2 {
 
 .actions {
   gap: 4px;
-}
-
-.icon-button {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--c-muted);
-  transition: color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
-.icon-button:hover {
-  background: var(--c-bg);
-  color: var(--c-ink);
 }
 
 .body {
