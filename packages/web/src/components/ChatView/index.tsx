@@ -1,7 +1,8 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { CSSProperties, UIEvent, WheelEvent } from 'react'
-import { Columns2, PanelLeft } from 'lucide-react'
+import type { UIEvent, WheelEvent } from 'react'
+import { PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { sessionAttention } from '../../flow/attention'
 import { trustProject } from '../../session/actions'
 import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -15,7 +16,6 @@ import styles from './styles.module.css'
 
 const SCROLL_KEY = 'piflow.scroll'
 const PRESETS = ['探索这个代码库', '回顾我的改动', '修一个 bug', '做个功能规划']
-const WIDTHS = [860, 1180, 1440] as const
 const messageIds = new WeakMap<AgentMessage, number>()
 let nextMessageId = 1
 
@@ -51,7 +51,6 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const [composerText, setComposerText] = useState('')
   const [composerFocusVersion, setComposerFocusVersion] = useState(0)
   const [trustError, setTrustError] = useState<string | null>(null)
-  const [widthIndex, setWidthIndex] = useState(() => Math.min(Number(localStorage.getItem('piflow.chatWidth') ?? 1), 2))
   const session = store.sessions.find(session => session.path === store.activeKey)
   const title = store.activeKey ? session?.name || session?.firstMessage || '新会话' : ''
   const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
@@ -192,28 +191,22 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   }, [])
 
   const isEmpty = !view || view.messages.length === 0
-  const chatStyle = { '--chat-w': `${WIDTHS[widthIndex] ?? WIDTHS[1]}px` } as CSSProperties
   const isLive = store.connected && !!view?.isStreaming
-  const statusLabel = store.connectionState !== 'connected'
-    ? store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'
+  const attention = store.activeKey ? sessionAttention(store.activeKey, store.statuses) : null
+  const status = store.connectionState !== 'connected'
+    ? { label: store.connectionState === 'reconnecting' ? '重连中…' : '连接中…', kind: 'connection' }
     : view?.isCompacting
-      ? '压缩上下文'
-      : isLive
-        ? '生成中'
-        : ''
+      ? { label: '压缩上下文', kind: 'running' }
+      : attention && attention.kind !== 'unread'
+        ? attention
+        : isLive
+          ? { label: '运行中', kind: 'running' }
+          : { label: '', kind: '' }
 
   function applyPreset(preset: string) {
     setComposerText(preset)
     saveDraftText(draftKey, preset)
     setComposerFocusVersion(version => version + 1)
-  }
-
-  function cycleWidth() {
-    setWidthIndex((current) => {
-      const next = (current + 1) % WIDTHS.length
-      localStorage.setItem('piflow.chatWidth', String(next))
-      return next
-    })
   }
 
   function trustProjectNow() {
@@ -224,7 +217,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   }
 
   return (
-    <div className={styles.chat} style={chatStyle}>
+    <div className={styles.chat}>
       <header className={styles.bar}>
         {sidebarCollapsed
           ? (
@@ -244,14 +237,9 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
           {title ? <div className={styles.title} title={title}>{title}</div> : null}
         </div>
         <div className={styles.actions}>
-          <span className={`${styles.status} ${statusLabel ? styles.on : ''}`}>{statusLabel}</span>
+          <span className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}>{status.label}</span>
           {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
           <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
-          <span className={styles.width}>
-            <IconButton label="切换聊天宽度" onClick={cycleWidth}>
-              <Columns2 />
-            </IconButton>
-          </span>
         </div>
       </header>
 
