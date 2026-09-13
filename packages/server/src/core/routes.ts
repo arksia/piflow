@@ -141,6 +141,17 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
     if (method === 'GET' && path === API_PROVIDERS_PATH)
       return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
 
+    const providerLogout = path.match(/^\/api\/providers\/([^/]+)\/logout$/)
+    if (providerLogout && method === 'DELETE') {
+      const providerId = decodeURIComponent(providerLogout[1]!)
+      if (!modelRuntime.getProvider(providerId))
+        return json(res, 404, { error: `provider not found: ${providerId}` })
+      sessions.assertProviderIdle(providerId)
+      await modelRuntime.logout(providerId)
+      await sessions.refreshProvider(providerId)
+      return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
+    }
+
     const providerAction = path.match(/^\/api\/providers\/([^/]+)\/(check|refresh)$/)
     if (providerAction && method === 'POST') {
       const providerId = decodeURIComponent(providerAction[1]!)
@@ -154,6 +165,15 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
           source: check?.source,
         } satisfies ProviderCheckResponse)
       }
+      // Validate affected sessions before changing the shared provider state.
+      try {
+        sessions.assertProviderIdle(providerId)
+      }
+      catch (error) {
+        if (error instanceof SessionsStreamingError)
+          return json(res, 409, { error: error.message })
+        throw error
+      }
       const result = await modelRuntime.refresh({
         allowNetwork: true,
         force: true,
@@ -163,6 +183,14 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       const error = result.errors.get(providerId)
       if (error)
         return json(res, 502, { error: error.message })
+      try {
+        await sessions.refreshProvider(providerId)
+      }
+      catch (error) {
+        if (error instanceof SessionsStreamingError)
+          return json(res, 409, { error: error.message })
+        throw error
+      }
       return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
     }
 

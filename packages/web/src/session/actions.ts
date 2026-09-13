@@ -185,6 +185,11 @@ export async function refreshProvider(providerId: string): Promise<ProviderInfo[
   return providers
 }
 
+export async function logoutProvider(providerId: string): Promise<ProviderInfo[]> {
+  const { providers } = await api<ProvidersResponse>(`/api/providers/${encodeURIComponent(providerId)}/logout`, { method: 'DELETE' })
+  return providers
+}
+
 export function startProviderLogin(providerId: string, type: ProviderAuthLoginRequest['type']): Promise<ProviderAuthStartResponse> {
   return post<ProviderAuthStartResponse>(API_PROVIDER_AUTH_PATH, { providerId, type } satisfies ProviderAuthLoginRequest)
 }
