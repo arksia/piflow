@@ -61,6 +61,18 @@
   flex-direction: column;
 }
 
+.pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.pane-hidden {
+  display: none;
+}
+
 .scrim {
   display: none;
 }
