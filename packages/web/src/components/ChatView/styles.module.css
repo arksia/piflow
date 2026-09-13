@@ -1,4 +1,6 @@
 .chat {
+  --chat-w: 1180px;
+
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -48,10 +50,6 @@
   gap: var(--space-2);
 }
 
-.width {
-  display: contents;
-}
-
 .status {
   flex-shrink: 0;
   color: var(--c-faint);
@@ -61,6 +59,14 @@
 
 .status.on {
   color: var(--c-signal);
+}
+
+.status.failed {
+  color: #f08a83;
+}
+
+.status.wait {
+  color: #f0b35a;
 }
 
 @keyframes pulse {
@@ -217,7 +223,6 @@
 
   .mobile-menu { display: contents; }
 
-  .width { display: none; }
   .column { width: calc(100% - 32px); }
 
   .trust,

@@ -1,7 +1,8 @@
-import type { SessionInfoLite, SessionStatusRecord } from '@piflow/protocol'
+import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
 import { ChevronDown, ChevronRight, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
+import { sessionAttention } from '../../flow/attention'
 import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { readCollapsedSessions, saveCollapsedSessions } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -37,16 +38,14 @@ function label(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
 }
 
-function attentionFor(session: SessionInfoLite, status: SessionStatusRecord | undefined, unread: ReadonlySet<string>) {
-  if (status?.needsInputAt)
-    return { label: '待回答', className: styles.needsInput }
-  if (status?.status === 'failed')
-    return { label: '失败', className: styles.failed }
-  if (status?.status === 'running')
-    return { label: '运行中', className: styles.running }
-  if (unread.has(session.path))
-    return { label: '已完成', className: styles.unread }
-  return null
+function attentionClass(kind: string) {
+  if (kind === 'needs_input')
+    return styles.needsInput
+  if (kind === 'failed')
+    return styles.failed
+  if (kind === 'running')
+    return styles.running
+  return styles.unread
 }
 
 function projectName(cwd: string) {
@@ -204,7 +203,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                   session={session}
                   active={store.activeKey === session.path}
                   streaming={store.statuses[session.path]?.status === 'running'}
-                  attention={attentionFor(session, store.statuses[session.path], store.unreadSessions)}
+                  attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
                   connected={store.connected}
                   opening={openingPath === session.path}
                   editing={editingPath === session.path}
@@ -264,7 +263,7 @@ interface SessionRowProps {
   session: SessionInfoLite
   active: boolean
   streaming: boolean
-  attention: { label: string, className?: string } | null
+  attention: { kind: string, label: string } | null
   connected: boolean
   opening: boolean
   editing: boolean
@@ -308,7 +307,7 @@ function SessionRow({ session, active, streaming, attention, connected, opening,
             {session.messageCount}
             {' '}
             条
-            {attention ? <span className={`${styles.attention} ${attention.className}`}>{attention.label}</span> : null}
+            {attention ? <span className={`${styles.attention} ${attentionClass(attention.kind)}`}>{attention.label}</span> : null}
             {opening ? <span className={styles.loading}>读取中…</span> : null}
           </span>
         </button>

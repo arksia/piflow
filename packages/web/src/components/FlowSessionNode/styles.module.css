@@ -2,10 +2,14 @@
   width: 288px;
   min-height: 156px;
   padding: 16px;
-  border: 1px solid #343434;
+  border: 1px solid var(--c-line);
   border-radius: 8px;
-  background: #111;
+  background: var(--c-raise);
   color: var(--c-body);
+}
+
+.node.current {
+  border-color: var(--c-faint);
 }
 
 .node.selected,
@@ -29,20 +33,17 @@
   height: 7px;
   flex: 0 0 7px;
   border-radius: 50%;
-  background: #777;
+  background: var(--c-faint);
 }
 
-.status-dot.running {
-  background: #56d6b2;
-}
+.status-dot.running { background: var(--c-signal); }
+.status-dot.failed { background: #f08a83; }
+.status-dot.needsInput { background: #f0b35a; }
+.status-dot.unread { background: var(--c-mid); }
 
-.status-dot.failed {
-  background: #ff786d;
-}
-
-.status-dot.needs-input {
-  background: #e9ad55;
-}
+.status.running { color: var(--c-signal); }
+.status.failed { color: #f08a83; }
+.status.needsInput { color: #f0b35a; }
 
 .status {
   color: var(--c-muted);
