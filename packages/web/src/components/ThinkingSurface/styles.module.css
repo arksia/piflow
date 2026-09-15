@@ -1,0 +1,16 @@
+.surface {
+  width: min(440px, 82vw);
+  height: min(280px, 48vw);
+  margin: 0 auto 18px;
+  border: 1px solid #263436;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0d1112;
+  box-shadow: 0 0 0 1px #152124, 0 18px 48px rgb(0 0 0 / 28%);
+}
+
+.surface canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
