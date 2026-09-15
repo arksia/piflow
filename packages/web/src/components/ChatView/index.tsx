@@ -11,6 +11,7 @@ import BranchNavigator from '../BranchNavigator'
 import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
+import ThinkingSurface from '../ThinkingSurface'
 import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
 
@@ -256,6 +257,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
         {isEmpty
           ? (
               <div className={styles.hero}>
+                <ThinkingSurface active={isLive || !view} />
                 <h1>今天做点什么？</h1>
                 <div className={styles.presets}>
                   {PRESETS.map(preset => (
@@ -278,8 +280,11 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                 {isLive && !view.live
                   ? (
                       <div className={styles.pending}>
-                        <span className={styles.dot} />
-                        正在生成…
+                        <ThinkingSurface />
+                        <div className={styles['pending-label']}>
+                          <span className={styles.dot} />
+                          正在生成…
+                        </div>
                       </div>
                     )
                   : null}
