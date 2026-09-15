@@ -7,6 +7,7 @@
   width: var(--sidebar-width);
   flex-shrink: 0;
   border-right: 1px solid var(--c-line);
+  background: var(--c-sidebar);
   overflow: hidden auto;
   transition: width 0.2s var(--ease), border-color 0.2s var(--ease);
 }
@@ -59,6 +60,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background: var(--c-doc);
 }
 
 .pane {

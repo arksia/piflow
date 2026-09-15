@@ -4,7 +4,7 @@ import styles from './styles.module.css'
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string
   variant?: 'ghost' | 'outline'
-  size?: 'default' | 'compact'
+  size?: 'default' | 'compact' | 'mini'
   children: ReactNode
 }
 
@@ -23,7 +23,13 @@ export default function IconButton({
       type={type}
       title={title ?? label}
       aria-label={label}
-      className={`${styles.button} ${styles[variant]} ${size === 'compact' ? styles.compact : ''} ${className ?? ''}`}
+      className={[
+        styles.button,
+        variant === 'outline' && styles.outline,
+        size === 'compact' && styles.compact,
+        size === 'mini' && styles.mini,
+        className,
+      ].filter(Boolean).join(' ')}
       {...rest}
     >
       {children}

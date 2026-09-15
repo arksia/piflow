@@ -1,28 +1,39 @@
 .message {
-  margin-bottom: 20px;
   content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
 
-  /* 160px accounts for typical tool cards and thinking blocks,
-     reducing scroll position jumps when offscreen messages enter the viewport. */
-  contain-intrinsic-size: auto 160px;
+.assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.turn {
+  display: grid;
+  gap: 12px;
 }
 
 .user {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .user-bubble {
   display: grid;
   gap: 8px;
-  max-width: 78%;
-  padding: 8px 14px;
-  background: var(--c-raise);
-  border: 1px solid var(--c-line);
-  border-radius: 14px 14px 4px;
-  line-height: 1.6;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  background: var(--c-press);
+  border-radius: 12px;
+  line-height: 1.55;
+}
+
+.user-bubble.wide {
+  width: 100%;
 }
 
 .user-text {
@@ -31,50 +42,146 @@
   overflow-wrap: break-word;
 }
 
-.time {
-  display: inline-block;
-  margin-right: 4px;
-  color: var(--c-faint);
-  font-size: 0.72rem;
-}
-
-.thinking {
-  margin: var(--space-2) 0;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-control);
-  background: var(--c-raise);
-  font-size: 0.85rem;
-  color: var(--c-muted);
-}
-
-.thinking summary {
+.meta {
   display: flex;
   align-items: center;
-  min-height: var(--control);
-  cursor: pointer;
-  user-select: none;
+  gap: 2px;
+  min-height: 20px;
 }
 
-.message-error {
-  margin-top: 8px;
-  padding: 10px 14px;
-  border-left: 2px solid #f8514966;
-  background: #f851490d;
-  border-radius: 0 6px 6px 0;
-  color: #ffa198;
+.time {
+  color: var(--c-faint);
+  font-size: 11px;
+  line-height: 20px;
+  margin-left: 2px;
+}
+
+.copy {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.message:hover .copy,
+.message:focus-within .copy {
+  opacity: 1;
+}
+
+.aside {
+  color: var(--c-faint);
+}
+
+.think {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  column-gap: 2px;
+  align-items: start;
+}
+
+.toggle {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 18px;
+  color: var(--c-faint);
+}
+
+.chevron {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease), transform var(--duration) var(--ease);
+}
+
+.think:hover .chevron,
+.think.open .chevron,
+.think.live .chevron,
+.think:focus-within .chevron {
+  opacity: 1;
+}
+
+.chevron-open {
+  transform: rotate(90deg);
+}
+
+.aside-body {
   font-size: 0.82rem;
-  line-height: 1.6;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
 
-.thinking-body {
-  margin: 0 0 var(--space-2);
-  padding: var(--space-2);
-  border-radius: var(--radius-control);
-  background: var(--c-bg);
-  white-space: pre-wrap;
+.think .aside-body {
+  font-style: italic;
+  color: var(--c-muted);
+}
+
+.chevron {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease), transform var(--duration) var(--ease);
+}
+
+.think:hover .chevron,
+.think.open .chevron,
+.think.live .chevron,
+.think:focus-within .chevron {
+  opacity: 1;
+}
+
+.chevron-open {
+  transform: rotate(90deg);
+}
+
+.aside-body {
   font-size: 0.82rem;
-  line-height: 1.6;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.think .aside-body {
+  font-style: italic;
+  color: var(--c-muted);
+}
+
+.think:not(.open) .aside-body {
+  max-height: calc(1.55em * 2);
+  overflow: hidden;
+  cursor: pointer;
+  mask-image: linear-gradient(180deg, #000 30%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent);
+}
+
+.think.live .aside-body {
+  animation: pulse 1.6s var(--ease) infinite;
+}
+
+.fail {
+  color: #c4a09a;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (pointer: coarse) {
+  .copy,
+  .chevron {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .copy,
+  .think.live .aside-body {
+    transition: none;
+    animation: none;
+  }
 }

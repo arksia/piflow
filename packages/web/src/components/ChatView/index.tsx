@@ -237,6 +237,15 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
           {title ? <div className={styles.title} title={title}>{title}</div> : null}
         </div>
         <div className={styles.actions}>
+          {view?.stats
+            ? (
+                <span className={styles.usage} title="本 session 累计统计，不含 Provider quota">
+                  {formatTokens(view.stats.tokens.total)}
+                  {' · $'}
+                  {view.stats.cost.toFixed(2)}
+                </span>
+              )
+            : null}
           <span className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}>{status.label}</span>
           {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
           <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
@@ -289,22 +298,6 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                     {compactionNoticeLabel(view.compactionNotice)}
                   </div>
                 )}
-                {view.stats
-                  ? (
-                      <div className={styles.stats} title="本 session 累计统计，不含 Provider quota">
-                        {formatTokens(view.stats.tokens.total)}
-                        {' tokens · $'}
-                        {view.stats.cost.toFixed(4)}
-                        {' · '}
-                        {view.stats.userMessages}
-                        {' 用户消息 · '}
-                        {view.stats.assistantMessages}
-                        {' 回复 · '}
-                        {view.stats.toolCalls}
-                        {' 工具调用'}
-                      </div>
-                    )
-                  : null}
                 {view.error ? <div className={styles.error}>{view.error}</div> : null}
               </div>
             )}

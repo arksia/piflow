@@ -27,16 +27,6 @@
   line-height: 1.25;
 }
 
-.subtitle {
-  display: block;
-  margin-top: 1px;
-  color: var(--c-faint);
-  font-family: var(--font-mono);
-  font-size: 0.61rem;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
 .top-actions {
   display: flex;
   align-items: center;
@@ -125,9 +115,9 @@
 .item {
   position: relative;
   width: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   line-height: 1.4;
-  transition: background 0.15s var(--ease);
+  transition: background var(--duration-fast) var(--ease);
 }
 
 .row-body {
@@ -171,18 +161,7 @@
 }
 
 .item.active {
-  background: #171717;
-}
-
-.item.active::before {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 0;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--c-signal);
-  content: '';
+  background: var(--c-press);
 }
 
 .label {

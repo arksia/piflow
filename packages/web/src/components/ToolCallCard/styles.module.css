@@ -1,21 +1,20 @@
 .tool {
-  margin: var(--space-2) 0;
-  padding: var(--space-1) var(--space-2) var(--space-2);
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-control);
-  background: var(--c-raise);
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: 0.82rem;
 }
 
 .tool.error {
-  border-color: #f85149;
+  padding: 0 8px;
+  border: 1px solid #f85149;
+  border-radius: var(--radius-control);
+  background: var(--c-bg);
 }
 
 .headRow {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--control);
+  min-height: 28px;
 }
 
 .head {
@@ -25,19 +24,18 @@
   flex: 1;
   min-width: 0;
   text-align: left;
-  padding: 0 4px;
+  padding: 0;
   border-radius: var(--radius-control);
   color: var(--c-muted);
+  transition: color var(--duration-fast) var(--ease);
 }
 
 button.head:hover {
   color: var(--c-ink);
-  background: var(--c-press);
 }
 
 .head.static {
   cursor: default;
-  padding-left: 0;
 }
 
 .kind {
@@ -68,7 +66,7 @@ button.head:hover {
 .chevron {
   flex-shrink: 0;
   color: var(--c-faint);
-  transition: transform 0.12s var(--ease);
+  transition: transform var(--duration) var(--ease);
 }
 
 .chevron.open {
@@ -78,7 +76,7 @@ button.head:hover {
 .body {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-1) 0 0;
+  padding: 8px 0 0 24px;
 }
 
 .output {
