@@ -7,7 +7,7 @@
   border-radius: var(--radius-control);
   color: var(--c-muted);
   background: transparent;
-  transition: color 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease);
+  transition: color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
 }
 
 .button svg {
@@ -27,6 +27,7 @@
 
 .button:active:not(:disabled) {
   background: var(--c-press);
+  transform: scale(0.96);
 }
 
 .button[aria-pressed='true'] {
@@ -44,10 +45,31 @@
   height: 14px;
 }
 
+.mini {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.mini svg {
+  width: 13px;
+  height: 13px;
+}
+
 .outline {
   border: 1px solid var(--c-line);
 }
 
 .outline:hover:not(:disabled) {
   border-color: var(--c-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .button:active:not(:disabled) {
+    transform: none;
+  }
 }

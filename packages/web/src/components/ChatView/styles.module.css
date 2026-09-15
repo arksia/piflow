@@ -1,9 +1,8 @@
 .chat {
-  --chat-w: 1180px;
-
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--c-doc);
 }
 
 .bar {
@@ -48,6 +47,14 @@
   flex: 0 0 auto;
   align-items: center;
   gap: var(--space-2);
+}
+
+.usage {
+  flex-shrink: 0;
+  color: var(--c-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .status {
@@ -126,17 +133,16 @@
   font-size: 0.72rem;
 }
 
-.stats {
-  padding: 8px 0;
-  color: var(--c-faint);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-}
-
 .column {
   width: min(calc(100% - 48px), var(--chat-w));
   margin: 0 auto;
-  padding: 24px 0 16px;
+  padding: 28px 0 32px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.column > * + * {
+  margin-top: 24px;
 }
 
 .hero {

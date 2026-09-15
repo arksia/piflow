@@ -158,7 +158,6 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
         <div className={styles.top}>
           <div>
             <span className={styles.brand}>piflow</span>
-            <span className={styles.subtitle}>coding workspace</span>
           </div>
           <div className={styles.topActions}>
             <IconButton variant="outline" label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>

@@ -4,7 +4,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  background: var(--c-bg);
+  background: var(--c-doc);
 }
 
 .bar {
@@ -175,9 +175,9 @@
   right: 16px;
   width: min(340px, calc(100% - 32px));
   padding: 16px;
-  border: 1px solid #383838;
-  border-radius: 8px;
-  background: #111;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  background: var(--c-raise);
 }
 
 .panel label {
@@ -194,7 +194,7 @@
   display: block;
   width: 100%;
   margin-top: 5px;
-  border: 1px solid #383838;
+  border: 1px solid var(--c-line);
   border-radius: 5px;
   outline: none;
   background: #090909;

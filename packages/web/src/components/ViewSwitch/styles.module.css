@@ -28,7 +28,7 @@
 }
 
 .switcher button.active {
-  background: #292929;
+  background: var(--c-press);
   color: var(--c-ink);
 }
 
