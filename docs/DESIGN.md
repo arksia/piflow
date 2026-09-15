@@ -36,6 +36,12 @@ Do not become an IDE. Do not copy PiChamber density. Do not invent a second bran
 
 Every clickable control must have hover, active, disabled, and `:focus-visible`. Native `title` is enough for icon tooltips. Do not use raw glyphs (`☰`, `⇔`, `+`) as chrome.
 
+## Motion
+
+[transitions-dev](../.agents/skills/transitions-dev/SKILL.md) is the recipe book. [transitions-polish](../.agents/skills/transitions-polish/SKILL.md) is the token scale (duration, distance, scale, blur, easing) and when each token applies.
+
+Pick the smallest matching recipe. Skip decorative ones that fight a quiet workspace (card tilt, like-burst, matrix loader). Always ship `prefers-reduced-motion`.
+
 ## Sequence
 
 A craft and chrome → B session status language → C chat review cards → D Chat / Flow as one workspace.
