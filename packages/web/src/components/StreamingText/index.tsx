@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo, useLayoutEffect, useRef } from 'react'
 
 interface Props {
   children?: React.ReactNode
@@ -10,6 +10,18 @@ interface TextChunk {
 }
 
 const MAX_CHUNKS = 24
+
+function StreamChunk({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el)
+      return
+    void el.offsetWidth
+    el.classList.add('is-in')
+  }, [])
+  return <span ref={ref} className="t-stream-w">{text}</span>
+}
 
 function StreamingText({ children }: Props) {
   const text = String(children ?? '')
@@ -37,7 +49,7 @@ function StreamingText({ children }: Props) {
     }
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     previousRef.current = text
     chunksRef.current = chunks
   }, [chunks, text])
@@ -45,7 +57,7 @@ function StreamingText({ children }: Props) {
   return (
     <>
       {chunks.map(chunk => (
-        <span key={chunk.key} className="streaming-text-chunk">{chunk.text}</span>
+        <StreamChunk key={chunk.key} text={chunk.text} />
       ))}
     </>
   )

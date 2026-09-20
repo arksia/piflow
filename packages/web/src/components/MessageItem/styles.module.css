@@ -48,12 +48,17 @@
   color: var(--c-muted);
 }
 
-.thinking summary {
+.thinking-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
   min-height: var(--control);
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
   cursor: pointer;
-  user-select: none;
 }
 
 .message-error {

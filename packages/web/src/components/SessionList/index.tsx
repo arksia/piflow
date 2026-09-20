@@ -3,6 +3,7 @@ import type { SessionTreeRow } from '../../session/tree'
 import { ChevronDown, ChevronRight, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
+import { TooltipGroup } from '../../motion'
 import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { readCollapsedSessions, saveCollapsedSessions } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -161,12 +162,14 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             <span className={styles.subtitle}>coding workspace</span>
           </div>
           <div className={styles.topActions}>
-            <IconButton variant="outline" label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
-              <MessageSquarePlus />
-            </IconButton>
-            <IconButton label="收起会话列表" onClick={onToggleSidebar}>
-              <PanelLeftClose />
-            </IconButton>
+            <TooltipGroup className={styles.tips}>
+              <IconButton tip variant="outline" label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
+                <MessageSquarePlus />
+              </IconButton>
+              <IconButton tip label="收起会话列表" onClick={onToggleSidebar}>
+                <PanelLeftClose />
+              </IconButton>
+            </TooltipGroup>
           </div>
         </div>
         {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
@@ -223,7 +226,7 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
 
         {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
 
-        {!store.connected ? <div className={styles.offline}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</div> : null}
+        {!store.connected ? <div className={styles.offline}><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
         <div className={styles.footer}>
           <span>
             {projectCount}
@@ -232,12 +235,14 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             {' 个会话'}
           </span>
           <span className={styles.footerActions}>
-            <IconButton label="Provider 与凭证" disabled={!store.connected} onClick={() => setProvidersOpen(true)}>
-              <KeyRound />
-            </IconButton>
-            <IconButton label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>
-              <Settings />
-            </IconButton>
+            <TooltipGroup className={styles.tips}>
+              <IconButton tip label="Provider 与凭证" disabled={!store.connected} onClick={() => setProvidersOpen(true)}>
+                <KeyRound />
+              </IconButton>
+              <IconButton tip label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>
+                <Settings />
+              </IconButton>
+            </TooltipGroup>
           </span>
         </div>
       </div>

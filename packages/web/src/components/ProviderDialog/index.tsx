@@ -1,6 +1,7 @@
 import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
 import { ExternalLink, RefreshCw, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ModalFrame } from '../../motion'
 import { cancelProviderAuth, checkProvider, fetchProviders, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -42,15 +43,6 @@ export default function ProviderDialog({ onClose }: Props) {
   useEffect(() => {
     void refresh()
   }, [])
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape')
-        onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
 
   useEffect(() => () => {
     const current = operationRef.current
@@ -161,61 +153,63 @@ export default function ProviderDialog({ onClose }: Props) {
   }
 
   return (
-    <div className={styles.backdrop} onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="providers-title">
-        <header className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Provider</p>
-            <h2 id="providers-title">模型服务与凭证</h2>
-          </div>
-          <div className={styles.actions}>
-            <IconButton label="刷新 Provider" onClick={() => void refresh()}>
-              <RefreshCw />
-            </IconButton>
-            <IconButton label="关闭" onClick={onClose}>
-              <X />
-            </IconButton>
-          </div>
-        </header>
+    <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="providers-title">
+      {close => (
+        <>
+          <header className={styles.header}>
+            <div>
+              <p className={styles.eyebrow}>Provider</p>
+              <h2 id="providers-title">模型服务与凭证</h2>
+            </div>
+            <div className={styles.actions}>
+              <IconButton label="刷新 Provider" onClick={() => void refresh()}>
+                <RefreshCw />
+              </IconButton>
+              <IconButton label="关闭" onClick={close}>
+                <X />
+              </IconButton>
+            </div>
+          </header>
 
-        <div className={styles.body}>
-          {providers === null
-            ? <p className={styles.message}>读取 Provider 中…</p>
-            : providers.map(provider => (
-                <div key={provider.id} className={styles.row}>
-                  <span className={`${styles.status} ${provider.configured ? styles.configured : ''}`} aria-hidden="true" />
-                  <span className={styles.identity}>
-                    <strong>{provider.name}</strong>
-                    <span>{provider.id}</span>
-                  </span>
-                  <span className={styles.meta}>
-                    <span>
-                      {provider.modelCount}
-                      {' '}
-                      个模型
+          <div className={styles.body}>
+            {providers === null
+              ? <p className={styles.message}>读取 Provider 中…</p>
+              : providers.map(provider => (
+                  <div key={provider.id} className={styles.row}>
+                    <span className={`${styles.status} ${provider.configured ? styles.configured : ''}`} aria-hidden="true" />
+                    <span className={styles.identity}>
+                      <strong>{provider.name}</strong>
+                      <span>{provider.id}</span>
                     </span>
-                    <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
-                    {checkResult[provider.id] ? <span>{checkResult[provider.id]}</span> : null}
-                  </span>
-                  <button className={styles.login} title={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}>测试</button>
-                  <button className={styles.login} title={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}>刷新模型</button>
-                  {!provider.configured && provider.authTypes.includes('api_key')
-                    ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
-                    : null}
-                  {!provider.configured && provider.authTypes.includes('oauth')
-                    ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'oauth')}>OAuth</button>
-                    : null}
-                </div>
-              ))}
-          {error ? <p className={styles.error} role="alert">{error}</p> : null}
-        </div>
-        {operation?.prompt
-          ? <AuthPromptDialog prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
-          : operation?.event
-            ? <AuthEventPanel event={operation.event} onCancel={cancel} />
-            : null}
-      </section>
-    </div>
+                    <span className={styles.meta}>
+                      <span>
+                        {provider.modelCount}
+                        {' '}
+                        个模型
+                      </span>
+                      <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
+                      {checkResult[provider.id] ? <span>{checkResult[provider.id]}</span> : null}
+                    </span>
+                    <button className={styles.login} title={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}>测试</button>
+                    <button className={styles.login} title={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}>刷新模型</button>
+                    {!provider.configured && provider.authTypes.includes('api_key')
+                      ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
+                      : null}
+                    {!provider.configured && provider.authTypes.includes('oauth')
+                      ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'oauth')}>OAuth</button>
+                      : null}
+                  </div>
+                ))}
+            {error ? <p className={styles.error} role="alert">{error}</p> : null}
+          </div>
+          {operation?.prompt
+            ? <AuthPromptDialog prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
+            : operation?.event
+              ? <AuthEventPanel event={operation.event} onCancel={cancel} />
+              : null}
+        </>
+      )}
+    </ModalFrame>
   )
 }
 

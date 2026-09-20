@@ -1,6 +1,7 @@
 import type { SessionTreeNode } from '@earendil-works/pi-coding-agent'
 import { GitBranch } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { usePresence } from '../../motion'
 import { fetchSessionTree, navigateSessionTree } from '../../session/actions'
 import styles from './styles.module.css'
 
@@ -8,6 +9,7 @@ export default function BranchNavigator({ path }: { path: string }) {
   const [tree, setTree] = useState<SessionTreeNode[] | null>(null)
   const [leafId, setLeafId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const menu = usePresence(open, '--dropdown-close-dur', 150)
 
   useEffect(() => {
     let cancelled = false
@@ -45,7 +47,13 @@ export default function BranchNavigator({ path }: { path: string }) {
         <GitBranch />
         分支
       </button>
-      {open ? <div className={styles.menu} role="menu">{tree.map(node => <BranchNode key={node.entry.id} node={node} leafId={leafId} onSelect={select} />)}</div> : null}
+      {menu.mounted
+        ? (
+            <div className={`${styles.menu} t-dropdown ${menu.className}`} data-origin="top-right" role="menu">
+              {tree.map(node => <BranchNode key={node.entry.id} node={node} leafId={leafId} onSelect={select} />)}
+            </div>
+          )
+        : null}
     </div>
   )
 }
