@@ -2,6 +2,7 @@ import type { DirectoryListing } from '@piflow/protocol'
 import type { FormEvent } from 'react'
 import { Folder, FolderUp, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ModalFrame } from '../../motion'
 import { newSessionIn, requestDirectories } from '../../session/actions'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -24,15 +25,6 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
     inputRef.current?.focus()
     void browse(initialPath)
   }, [initialPath])
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape')
-        onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
 
   async function browse(nextPath: string) {
     setLoading(true)
@@ -72,65 +64,67 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
   }
 
   return (
-    <div className={styles.backdrop} onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="new-session-title">
-        <header className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>新会话</p>
-            <h2 id="new-session-title">选择项目文件夹</h2>
+    <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="new-session-title">
+      {close => (
+        <>
+          <header className={styles.header}>
+            <div>
+              <p className={styles.eyebrow}>新会话</p>
+              <h2 id="new-session-title">选择项目文件夹</h2>
+            </div>
+            <IconButton label="关闭" onClick={close}><X /></IconButton>
+          </header>
+
+          <form className={styles.pathForm} onSubmit={submitPath}>
+            <input
+              ref={inputRef}
+              value={path}
+              aria-label="项目文件夹路径"
+              onChange={event => setPath(event.target.value)}
+            />
+            <button className={styles.go} type="submit" disabled={loading}>前往</button>
+          </form>
+
+          <div className={styles.location} title={listing?.path ?? path}>
+            <IconButton
+              size="compact"
+              variant="outline"
+              label="返回上级目录"
+              disabled={!listing?.parent || loading}
+              onClick={() => listing?.parent && void browse(listing.parent)}
+            >
+              <FolderUp />
+            </IconButton>
+            <span>{listing?.path ?? path}</span>
           </div>
-          <IconButton label="关闭" onClick={onClose}><X /></IconButton>
-        </header>
 
-        <form className={styles.pathForm} onSubmit={submitPath}>
-          <input
-            ref={inputRef}
-            value={path}
-            aria-label="项目文件夹路径"
-            onChange={event => setPath(event.target.value)}
-          />
-          <button className={styles.go} type="submit" disabled={loading}>前往</button>
-        </form>
+          <div className={styles.body}>
+            {loading
+              ? <p className={styles.message}>读取目录中…</p>
+              : error
+                ? <p className={styles.error}>{error}</p>
+                : listing?.directories.length
+                  ? listing.directories.map(directory => (
+                      <button
+                        key={directory.path}
+                        className={styles.directory}
+                        onClick={() => void browse(directory.path)}
+                      >
+                        <span className={styles.folder}><Folder size={12} /></span>
+                        <span>{directory.name}</span>
+                      </button>
+                    ))
+                  : <p className={styles.message}>这里没有子文件夹</p>}
+          </div>
 
-        <div className={styles.location} title={listing?.path ?? path}>
-          <IconButton
-            size="compact"
-            variant="outline"
-            label="返回上级目录"
-            disabled={!listing?.parent || loading}
-            onClick={() => listing?.parent && void browse(listing.parent)}
-          >
-            <FolderUp />
-          </IconButton>
-          <span>{listing?.path ?? path}</span>
-        </div>
-
-        <div className={styles.body}>
-          {loading
-            ? <p className={styles.message}>读取目录中…</p>
-            : error
-              ? <p className={styles.error}>{error}</p>
-              : listing?.directories.length
-                ? listing.directories.map(directory => (
-                    <button
-                      key={directory.path}
-                      className={styles.directory}
-                      onClick={() => void browse(directory.path)}
-                    >
-                      <span className={styles.folder}><Folder size={12} /></span>
-                      <span>{directory.name}</span>
-                    </button>
-                  ))
-                : <p className={styles.message}>这里没有子文件夹</p>}
-        </div>
-
-        <footer className={styles.footer}>
-          <span className={styles.hint}>会话将在选中的文件夹中创建</span>
-          <button className={styles.create} disabled={!listing || loading || creating} onClick={() => void create()}>
-            {creating ? '创建中…' : '在此创建'}
-          </button>
-        </footer>
-      </section>
-    </div>
+          <footer className={styles.footer}>
+            <span className={styles.hint}>会话将在选中的文件夹中创建</span>
+            <button className={styles.create} disabled={!listing || loading || creating} onClick={() => void create()}>
+              {creating ? '创建中…' : '在此创建'}
+            </button>
+          </footer>
+        </>
+      )}
+    </ModalFrame>
   )
 }

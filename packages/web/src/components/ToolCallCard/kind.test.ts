@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { reviewOpenByDefault, toolKind, toolPath, toolTarget } from './kind.ts'
+import { reviewOpenByDefault, toolKind, toolPath, toolTarget } from './kind'
 
 test('toolKind uses a review label for known tools', () => {
   assert.equal(toolKind('read'), '读取')

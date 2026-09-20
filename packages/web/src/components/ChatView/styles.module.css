@@ -58,19 +58,24 @@
 }
 
 .status.on {
+  --think-base: var(--c-signal);
+  --think-highlight: var(--c-ink);
+
   color: var(--c-signal);
 }
 
 .status.failed {
+  --think-base: #f08a83;
+  --think-highlight: #ffd7d2;
+
   color: #f08a83;
 }
 
 .status.wait {
-  color: #f0b35a;
-}
+  --think-base: #f0b35a;
+  --think-highlight: #f4d29b;
 
-@keyframes pulse {
-  50% { opacity: 0.35; }
+  color: #f0b35a;
 }
 
 .scroll {
@@ -191,15 +196,6 @@
   font-size: 0.85rem;
 }
 
-.dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--c-signal);
-  animation: pulse 1.2s var(--ease) infinite;
-}
-
 .note {
   color: var(--c-muted);
   font-size: 0.85rem;
@@ -210,12 +206,6 @@
   color: #ffa198;
   font-size: 0.85rem;
   padding: 8px 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dot {
-    animation: none;
-  }
 }
 
 @media (width <= 768px) {

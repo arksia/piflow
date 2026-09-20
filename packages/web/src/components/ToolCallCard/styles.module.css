@@ -65,16 +65,6 @@ button.head:hover {
   color: #ffa198;
 }
 
-.chevron {
-  flex-shrink: 0;
-  color: var(--c-faint);
-  transition: transform 0.12s var(--ease);
-}
-
-.chevron.open {
-  transform: rotate(90deg);
-}
-
 .body {
   display: grid;
   gap: var(--space-2);
@@ -156,8 +146,3 @@ button.head:hover {
   background: var(--c-press);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .chevron {
-    transition: none;
-  }
-}

@@ -1,3 +1,6 @@
+@import url('./transitions-root.css');
+@import url('./transitions.css');
+
 :root {
   /* Quiet dark workspace — keep the black ground, tighten the chrome. */
   --c-bg: #000;
@@ -18,7 +21,17 @@
   --c-diff-del-fg: #ffa198aa;
   --c-scrollbar: #3a3a3a;
   --c-scrollbar-hover: #2c2c2c;
-  --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease: var(--ease-smooth-out);
+  --shimmer-base: var(--c-muted);
+  --shimmer-highlight: var(--c-ink);
+  --think-base: var(--c-muted);
+  --think-highlight: var(--c-ink);
+  --tabs-text-muted: var(--c-muted);
+  --tabs-text-active: var(--c-ink);
+  --tabs-bar-bg: var(--c-raise);
+  --tabs-pill-bg: #292929;
+  --tt-bg: var(--c-raise);
+  --tt-fg: var(--c-body);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "DM Mono", ui-monospace, sfmono-regular, menlo, monospace;
   --space-1: 4px;
@@ -255,20 +268,11 @@ button:disabled {
   border-radius: 6px;
 }
 
-.streaming-text-chunk {
-  animation: streaming-fade-in 180ms ease-out both;
-}
-
 .streaming-tail {
   display: inline-block;
   margin-left: 2px;
   color: var(--c-signal);
   animation: streaming-tail-breathe 1.2s ease-in-out infinite;
-}
-
-@keyframes streaming-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 @keyframes streaming-tail-breathe {

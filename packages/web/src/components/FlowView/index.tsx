@@ -468,7 +468,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           <strong>Flow</strong>
           <span title={projectPath}>{shorten(projectPath)}</span>
         </div>
-        {saving ? <span className={styles.saving}>保存中…</span> : null}
+        {saving ? <span className={styles.saving}><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
         {selection.nodes.length || selection.edges.length ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button> : null}
         {selection.nodes.length === 1 && !connectMode
           ? <button className={styles.connect} onClick={startConnect}>连接</button>

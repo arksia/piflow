@@ -1,6 +1,6 @@
 import type { ToolState } from '../../session/state'
-import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
+import { AccChevron } from '../../motion'
 import ContentImage from '../ContentImage'
 import { reviewOpenByDefault, toolKind, toolPath, toolTarget } from './kind'
 import styles from './styles.module.css'
@@ -51,18 +51,18 @@ export default function ToolCallCard({ call, state }: Props) {
   const kind = toolKind(call.name)
 
   return (
-    <article className={`${styles.tool} ${styles[status]}`}>
+    <article className={`${styles.tool} ${styles[status]} ${expandable ? 't-acc' : ''}`} data-open={expandable ? String(open) : undefined}>
       <div className={styles.headRow}>
         {expandable
           ? (
               <button
                 type="button"
-                className={styles.head}
+                className={`${styles.head} t-acc-head`}
                 aria-expanded={open}
                 aria-label={`${open ? '收起' : '展开'} ${kind}${rawSummary ? ` ${rawSummary}` : ''}`}
                 onClick={() => setUserOpen(!(userOpen ?? defaultOpen))}
               >
-                <ChevronRight size={12} className={`${styles.chevron} ${open ? styles.open : ''}`} aria-hidden />
+                <AccChevron />
                 <span className={styles.kind}>{kind}</span>
                 {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
                 {status === 'running' ? <span className={styles.live}>运行中</span> : null}
@@ -86,50 +86,52 @@ export default function ToolCallCard({ call, state }: Props) {
           : null}
       </div>
 
-      {open
+      {expandable
         ? (
-            <div className={styles.body}>
-              {diff
-                ? (
-                    <div className={styles.diff}>
-                      {diff.map(item => (
-                        <div key={item.key} className={`${styles.diffLine} ${item.className}`}>
-                          {item.line}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                : null}
-              {output
-                ? <pre className={styles.output}>{output}</pre>
-                : !diff && !images.length ? <div className={styles.none}>无输出</div> : null}
-              {images.length
-                ? (
-                    <div className={styles.images}>
-                      {images.map((image, index) => (
-                        // Tool result content is immutable; its index is stable.
-                        // eslint-disable-next-line react/no-array-index-key
-                        <ContentImage key={index} image={image} alt={`工具输出图片 ${index + 1}`} />
-                      ))}
-                    </div>
-                  )
-                : null}
-              {rawOutput
-                ? (
-                    <div className={styles.actions}>
-                      {lines.length > 60
-                        ? (
-                            <button type="button" className={styles.action} onClick={() => setExpanded(value => !value)}>
-                              {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
-                            </button>
-                          )
-                        : null}
-                      <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(rawOutput)}>
-                        复制输出
-                      </button>
-                    </div>
-                  )
-                : null}
+            <div className="t-acc-panel">
+              <div className={`t-acc-panel-inner ${styles.body}`}>
+                {diff
+                  ? (
+                      <div className={styles.diff}>
+                        {diff.map(item => (
+                          <div key={item.key} className={`${styles.diffLine} ${item.className}`}>
+                            {item.line}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  : null}
+                {output
+                  ? <pre className={styles.output}>{output}</pre>
+                  : !diff && !images.length ? <div className={styles.none}>无输出</div> : null}
+                {images.length
+                  ? (
+                      <div className={styles.images}>
+                        {images.map((image, index) => (
+                          // Tool result content is immutable; its index is stable.
+                          // eslint-disable-next-line react/no-array-index-key
+                          <ContentImage key={index} image={image} alt={`工具输出图片 ${index + 1}`} />
+                        ))}
+                      </div>
+                    )
+                  : null}
+                {rawOutput
+                  ? (
+                      <div className={styles.actions}>
+                        {lines.length > 60
+                          ? (
+                              <button type="button" className={styles.action} onClick={() => setExpanded(value => !value)}>
+                                {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
+                              </button>
+                            )
+                          : null}
+                        <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(rawOutput)}>
+                          复制输出
+                        </button>
+                      </div>
+                    )
+                  : null}
+              </div>
             </div>
           )
         : null}

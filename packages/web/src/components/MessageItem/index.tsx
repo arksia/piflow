@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolState } from '../../session/state'
-import { memo } from 'react'
+import { memo, useState } from 'react'
+import { AccChevron } from '../../motion'
 import ContentImage from '../ContentImage'
 import MarkdownView from '../MarkdownView'
 import StreamingMarkdownView from '../StreamingMarkdownView'
@@ -67,14 +68,8 @@ function MessageItem({ message, toolResults, live = false }: Props) {
               ? <StreamingMarkdownView key={key} text={block.text} />
               : <MarkdownView key={key} text={block.text} />
           }
-          if (block.type === 'thinking') {
-            return (
-              <details key={key} className={styles.thinking}>
-                <summary>思考过程</summary>
-                <div className={styles.thinkingBody}>{block.thinking}</div>
-              </details>
-            )
-          }
+          if (block.type === 'thinking')
+            return <ThinkingBlock key={key} text={block.thinking} />
           if (block.type === 'toolCall')
             return <ToolCallCard key={block.id} call={block} state={toolResults[block.id]} />
           if (block.type === 'image')
@@ -103,6 +98,21 @@ function MessageItem({ message, toolResults, live = false }: Props) {
   }
 
   return null
+}
+
+function ThinkingBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className={`${styles.thinking} t-acc`} data-open={String(open)}>
+      <button type="button" className={`${styles.thinkingHead} t-acc-head`} aria-expanded={open} onClick={() => setOpen(value => !value)}>
+        思考过程
+        <AccChevron />
+      </button>
+      <div className="t-acc-panel">
+        <div className={`t-acc-panel-inner ${styles.thinkingBody}`}>{text}</div>
+      </div>
+    </div>
+  )
 }
 
 export default memo(MessageItem, (prev, next) => {

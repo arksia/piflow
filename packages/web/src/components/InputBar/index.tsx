@@ -6,6 +6,7 @@ import type { SessionView } from '../../session/state'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
 import { ArrowUp, ImagePlus, ListX, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { TextSwap, usePresence, useTabsPill } from '../../motion'
 import { abort, abortCompaction, clearQueue, compact, requestUsage, sendPrompt, setAutoCompaction, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
@@ -45,6 +46,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const modelButtonRef = useRef<HTMLButtonElement>(null)
   const thinkingRef = useRef<HTMLDivElement>(null)
+  const streamingTabsRef = useRef<HTMLDivElement>(null)
+  const streamingPillRef = useTabsPill(streamingTabsRef, view?.isStreaming ? streamingBehavior : '')
+  const modelMenu = usePresence(modelOpen, '--dropdown-close-dur', 150)
+  const thinkingMenu = usePresence(thinkingOpen, '--dropdown-close-dur', 150)
   const previousStreamingRef = useRef(view?.isStreaming)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
@@ -62,6 +67,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const contextLevel = contextPercent >= 85 ? styles.danger : contextPercent >= 70 ? styles.warning : ''
   const canSend = store.connected && (text.trim().length > 0 || images.length > 0)
   const isLive = store.connected && !!view?.isStreaming
+  const stopping = Boolean(view?.isCompacting || isLive)
 
   const viewKey = view?.key
   const modelId = view?.model?.id
@@ -307,10 +313,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             <div className={styles.left}>
               {isLive
                 ? (
-                    <div className={styles.streamingMode} aria-label="运行中消息发送方式">
-                      <span className={styles.dot} />
-                      <button className={streamingBehavior === 'steer' ? styles.active : ''} aria-pressed={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
-                      <button className={streamingBehavior === 'followUp' ? styles.active : ''} aria-pressed={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
+                    <div ref={streamingTabsRef} className={`t-tabs ${styles.streamingMode}`} aria-label="运行中消息发送方式">
+                      <span ref={streamingPillRef} className="t-tabs-pill" aria-hidden="true" />
+                      <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
+                      <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
                     </div>
                   )
                 : view?.thinkingLevels.length
@@ -330,11 +336,11 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                         >
                           思考 ·
                           {' '}
-                          {thinkingLabel(view.thinkingLevel)}
+                          <TextSwap text={thinkingLabel(view.thinkingLevel)} />
                         </button>
-                        {thinkingOpen
+                        {thinkingMenu.mounted
                           ? (
-                              <div className={styles.thinkingMenu} role="menu" aria-label="思考强度">
+                              <div className={`${styles.thinkingMenu} t-dropdown ${thinkingMenu.className}`} data-origin="bottom-left" role="menu" aria-label="思考强度">
                                 {view.thinkingLevels.map(level => (
                                   <button
                                     key={level}
@@ -422,43 +428,29 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
               <IconButton label="添加图片" onClick={() => fileRef.current?.click()}>
                 <ImagePlus />
               </IconButton>
-              {view?.isCompacting
-                ? (
-                    <button type="button" className={`${styles.button} ${styles.stop}`} title="中止压缩" aria-label="中止压缩" onClick={stopCompaction}>
-                      <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
-                    </button>
-                  )
-                : isLive
-                  ? (
-                      <button
-                        className={`${styles.button} ${styles.stop}`}
-                        title={aborting ? '正在中断…' : '中断回复'}
-                        aria-label={aborting ? '正在中断回复' : '中断回复'}
-                        disabled={aborting}
-                        onClick={stop}
-                      >
-                        <span className={styles.core}><Square size={10} fill="currentColor" strokeWidth={0} /></span>
-                      </button>
-                    )
-                  : (
-                      <button
-                        className={`${styles.button} ${styles.send} ${canSend ? styles.ready : ''}`}
-                        title="发送"
-                        aria-label="发送"
-                        disabled={!canSend}
-                        onClick={() => void submit()}
-                      >
-                        <span className={styles.core}><ArrowUp size={14} /></span>
-                      </button>
-                    )}
+              <button
+                type="button"
+                className={`${styles.button} ${stopping ? styles.stop : `${styles.send} ${canSend ? styles.ready : ''}`}`}
+                title={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复') : '发送'}
+                aria-label={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断回复' : '中断回复') : '发送'}
+                disabled={stopping ? aborting : !canSend}
+                onClick={stopping ? (view?.isCompacting ? stopCompaction : stop) : () => void submit()}
+              >
+                <span className={styles.core}>
+                  <span className="t-icon-swap" data-state={stopping ? 'b' : 'a'}>
+                    <span className="t-icon" data-icon="a"><ArrowUp size={14} /></span>
+                    <span className="t-icon" data-icon="b"><Square size={10} fill="currentColor" strokeWidth={0} /></span>
+                  </span>
+                </span>
+              </button>
             </div>
           </div>
 
-          {modelOpen
+          {modelMenu.mounted
             ? (
                 <>
                   <div className={styles.scrim} aria-hidden onClick={() => setModelOpen(false)} />
-                  <div className={styles.popover} role="dialog" aria-label="选择模型">
+                  <div className={`${styles.popover} t-dropdown ${modelMenu.className}`} data-origin="bottom-right" role="dialog" aria-label="选择模型">
                     {[...modelGroups.entries()].map(([groupProvider, models]) => (
                       <div key={groupProvider} className={styles.providerGroup}>
                         <div className={styles.providerName}>{groupProvider}</div>

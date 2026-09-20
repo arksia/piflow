@@ -145,39 +145,7 @@
 }
 
 .streaming-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
   font-size: 0.75rem;
-}
-
-.streaming-mode button {
-  padding: 3px 6px;
-  border-radius: var(--radius-control);
-  color: var(--c-faint);
-}
-
-.streaming-mode button:hover {
-  color: var(--c-muted);
-  background: var(--c-press);
-}
-
-.streaming-mode button.active {
-  background: var(--c-press);
-  color: var(--c-signal);
-}
-
-.dot {
-  margin-right: 4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--c-signal);
-  animation: pulse 1.2s var(--ease) infinite;
-}
-
-@keyframes pulse {
-  50% { opacity: 0.3; }
 }
 
 .thinking {
@@ -441,8 +409,3 @@
   color: var(--c-ink);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dot {
-    animation: none;
-  }
-}

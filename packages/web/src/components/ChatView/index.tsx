@@ -3,6 +3,7 @@ import type { UIEvent, WheelEvent } from 'react'
 import { PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
+import { ThinkLine } from '../../motion'
 import { trustProject } from '../../session/actions'
 import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -237,7 +238,11 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
           {title ? <div className={styles.title} title={title}>{title}</div> : null}
         </div>
         <div className={styles.actions}>
-          <span className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}>{status.label}</span>
+          <ThinkLine
+            className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}
+            text={status.label}
+            sizer="压缩上下文"
+          />
           {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
           <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
         </div>
@@ -278,12 +283,11 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                 {isLive && !view.live
                   ? (
                       <div className={styles.pending}>
-                        <span className={styles.dot} />
-                        正在生成…
+                        <ThinkLine text="正在生成…" />
                       </div>
                     )
                   : null}
-                {store.connected && view.isCompacting ? <div className={styles.note}>正在压缩上下文…</div> : null}
+                {store.connected && view.isCompacting ? <div className={styles.note}><span className="t-shimmer" data-text="正在压缩上下文…">正在压缩上下文…</span></div> : null}
                 {view.compactionNotice && (
                   <div className={styles.note}>
                     {compactionNoticeLabel(view.compactionNotice)}
