@@ -1,6 +1,6 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Puzzle, Search, Settings } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, FolderOpen, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Puzzle, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
 import { TooltipGroup } from '../../motion'
@@ -17,23 +17,22 @@ import SessionItemMenu from '../SessionItemMenu'
 import SettingsDialog from '../SettingsDialog'
 import styles from './styles.module.css'
 
-function shorten(path: string) {
-  return path.replace(/^\/Users\/[^/]+/, '~')
-}
-
-function relativeTime(timestamp: string) {
+function sessionAge(timestamp: string) {
   const minutes = Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000)
   if (minutes < 1)
     return '刚刚'
   if (minutes < 60)
-    return `${minutes} 分钟前`
+    return `${minutes}m`
   const hours = Math.floor(minutes / 60)
   if (hours < 24)
-    return `${hours} 小时前`
+    return `${hours}h`
   const days = Math.floor(hours / 24)
   if (days < 30)
-    return `${days} 天前`
-  return new Date(timestamp).toLocaleDateString()
+    return `${days}d`
+  const months = Math.floor(days / 30)
+  if (months < 12)
+    return `${months}mo`
+  return `${Math.floor(months / 12)}y`
 }
 
 function label(session: SessionInfoLite) {
@@ -51,8 +50,8 @@ function attentionClass(kind: string) {
 }
 
 function projectName(cwd: string) {
-  const trimmed = cwd.replace(/\/+$/, '')
-  return trimmed.split('/').pop() || cwd
+  const trimmed = cwd.replace(/[\\/]+$/, '')
+  return trimmed.split(/[\\/]/).pop() || cwd
 }
 
 interface SessionListProps {
@@ -185,46 +184,53 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
           </IconButton>
         </div>
 
-        {[...byCwd.entries()].map(([cwd]) => (
-          <div key={cwd} className={styles.group}>
-            <div className={styles.cwdRow}>
-              <div className={styles.projectIdentity}>
-                <div className={styles.projectName} title={cwd}>{projectName(cwd)}</div>
-                <div className={styles.cwd} title={cwd}>{shorten(cwd)}</div>
+        {[...byCwd.entries()].map(([cwd]) => {
+          const open = store.sessions.some(session => session.path === store.activeKey && session.cwd === cwd)
+          return (
+            <div key={cwd} className={styles.group}>
+              <div className={styles.cwdRow}>
+                <span className={`t-icon-swap ${styles.folder}`} data-state={open ? 'b' : 'a'} aria-hidden="true">
+                  <span className="t-icon" data-icon="a"><Folder size={14} /></span>
+                  <span className="t-icon" data-icon="b"><FolderOpen size={14} /></span>
+                </span>
+                <div className={styles.projectName} title={cwd}>
+                  <span className={styles.projectLabel}>{projectName(cwd)}</span>
+                </div>
+                <IconButton
+                  size="compact"
+                  label={`在 ${projectName(cwd)} 中新建会话`}
+                  disabled={!store.connected || creatingCwd !== null}
+                  onClick={() => void createIn(cwd)}
+                >
+                  {creatingCwd === cwd ? <span className={styles.busy}>…</span> : <Plus />}
+                </IconButton>
               </div>
-              <IconButton
-                label={`在 ${shorten(cwd)} 中新建会话`}
-                disabled={!store.connected || creatingCwd !== null}
-                onClick={() => void createIn(cwd)}
-              >
-                {creatingCwd === cwd ? <span className={styles.busy}>…</span> : <Plus />}
-              </IconButton>
+              {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
+                const session = node.session
+                return (
+                  <SessionRow
+                    key={session.path}
+                    session={session}
+                    active={store.activeKey === session.path}
+                    streaming={store.statuses[session.path]?.status === 'running'}
+                    attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                    connected={store.connected}
+                    opening={openingPath === session.path}
+                    editing={editingPath === session.path}
+                    indent={indent}
+                    hasChildren={hasChildren}
+                    isCollapsed={collapsed.has(session.path)}
+                    lineage={sessionLineage(store.sessions, session.path)}
+                    onPick={() => void pick(session)}
+                    onRenameStart={() => setEditingPath(session.path)}
+                    onRenameEnd={() => setEditingPath(null)}
+                    onToggle={() => toggleCollapsed(session.path)}
+                  />
+                )
+              })}
             </div>
-            {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
-              const session = node.session
-              return (
-                <SessionRow
-                  key={session.path}
-                  session={session}
-                  active={store.activeKey === session.path}
-                  streaming={store.statuses[session.path]?.status === 'running'}
-                  attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
-                  connected={store.connected}
-                  opening={openingPath === session.path}
-                  editing={editingPath === session.path}
-                  indent={indent}
-                  hasChildren={hasChildren}
-                  isCollapsed={collapsed.has(session.path)}
-                  lineage={sessionLineage(store.sessions, session.path)}
-                  onPick={() => void pick(session)}
-                  onRenameStart={() => setEditingPath(session.path)}
-                  onRenameEnd={() => setEditingPath(null)}
-                  onToggle={() => toggleCollapsed(session.path)}
-                />
-              )
-            })}
-          </div>
-        ))}
+          )
+        })}
 
         {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
 
@@ -299,10 +305,16 @@ interface SessionRowProps {
 function SessionRow({ session, active, streaming, attention, connected, opening, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
   if (editing)
     return <RenameRow session={session} indent={indent} onDone={onRenameEnd} />
-  const title = lineage ? `${label(session)}\nfork 自：${lineage}` : label(session)
+  const age = sessionAge(session.modified)
+  const title = [
+    label(session),
+    lineage ? `fork 自：${lineage}` : '',
+    `${age} · ${session.messageCount} 条`,
+    attention?.label ?? '',
+  ].filter(Boolean).join('\n')
   return (
-    <div className={`${styles.item} ${active ? styles.active : ''}`} title={title}>
-      <div className={styles.rowBody} style={{ paddingLeft: indent * 14 }}>
+    <div className={styles.sessionRow} style={indent ? { paddingLeft: indent * 12 + 2 } : undefined}>
+      <span className={styles.rail}>
         {hasChildren
           ? (
               <button
@@ -315,33 +327,28 @@ function SessionRow({ session, active, streaming, attention, connected, opening,
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
               </button>
             )
-          : <span className={styles.chevronPlaceholder} />}
+          : null}
+      </span>
+      <div className={`${styles.item} ${active ? styles.active : ''}`} title={title}>
         <button className={styles.itemMain} disabled={!connected || opening} onClick={onPick}>
           <span className={styles.label}>{label(session)}</span>
-          <span className={styles.meta}>
-            {relativeTime(session.modified)}
-            {' '}
-            ·
-            {' '}
-            {session.messageCount}
-            {' '}
-            条
-            {attention ? <span className={`${styles.attention} ${attentionClass(attention.kind)}`}>{attention.label}</span> : null}
-            {opening ? <span className={styles.loading}>读取中…</span> : null}
+          <span className={styles.trailing}>
+            {attention ? <span className={`${styles.dot} ${attentionClass(attention.kind)}`} /> : null}
+            <span className={styles.age}>{opening ? '…' : age}</span>
           </span>
         </button>
+        {connected
+          ? (
+              <SessionItemMenu
+                className={styles.menu}
+                session={session}
+                label={label(session)}
+                streaming={streaming}
+                onRename={onRenameStart}
+              />
+            )
+          : null}
       </div>
-      {connected
-        ? (
-            <SessionItemMenu
-              className={styles.menu}
-              session={session}
-              label={label(session)}
-              streaming={streaming}
-              onRename={onRenameStart}
-            />
-          )
-        : null}
     </div>
   )
 }
@@ -374,32 +381,35 @@ function RenameRow({ session, indent, onDone }: { session: SessionInfoLite, inde
   }
 
   return (
-    <div className={`${styles.item} ${styles.editing}`} style={{ paddingLeft: indent * 14 + 22 }}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          void commit()
-        }}
-      >
-        <input
-          ref={inputRef}
-          className={styles.renameInput}
-          defaultValue={session.name ?? ''}
-          placeholder={session.firstMessage || '空会话'}
-          aria-label="会话名称"
-          aria-invalid={error !== null}
-          autoFocus
-          onFocus={event => event.currentTarget.select()}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              cancelledRef.current = true
-              event.currentTarget.blur()
-            }
+    <div className={styles.sessionRow} style={indent ? { paddingLeft: indent * 12 + 2 } : undefined}>
+      <span className={styles.rail} />
+      <div className={`${styles.item} ${styles.editing}`}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void commit()
           }}
-          onBlur={() => cancelledRef.current ? onDone() : void commit()}
-        />
-        {error ? <span className={styles.renameError}>{error}</span> : null}
-      </form>
+        >
+          <input
+            ref={inputRef}
+            className={styles.renameInput}
+            defaultValue={session.name ?? ''}
+            placeholder={session.firstMessage || '空会话'}
+            aria-label="会话名称"
+            aria-invalid={error !== null}
+            autoFocus
+            onFocus={event => event.currentTarget.select()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                cancelledRef.current = true
+                event.currentTarget.blur()
+              }
+            }}
+            onBlur={() => cancelledRef.current ? onDone() : void commit()}
+          />
+          {error ? <span className={styles.renameError}>{error}</span> : null}
+        </form>
+      </div>
     </div>
   )
 }

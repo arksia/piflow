@@ -88,37 +88,61 @@
 }
 
 .group {
-  margin-top: 18px;
+  --rail: 16px;
+  --rail-gap: 6px;
+
+  margin-top: 10px;
 }
 
-.cwd-row {
-  display: flex;
+.cwd-row,
+.session-row {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
-  padding: 0 3px 7px 7px;
+  column-gap: var(--rail-gap);
+  min-height: 28px;
+  padding: 0 2px;
+  border-radius: 6px;
 }
 
-.project-identity {
-  min-width: 0;
-  flex: 1;
+.session-row {
+  transition: background 0.15s var(--ease);
+}
+
+.session-row:hover {
+  background: var(--c-raise);
+}
+
+.session-row:has(.active) {
+  background: var(--c-press);
 }
 
 .project-name {
+  min-width: 0;
   color: var(--c-mid);
-  font-size: 0.77rem;
-  font-weight: 600;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.84rem;
 }
 
-.cwd {
+.folder,
+.rail {
+  display: grid;
+  width: var(--rail);
+  height: var(--rail);
+  place-items: center;
+}
+
+.folder {
+  align-content: center;
+  color: var(--c-muted);
+  line-height: 0;
+}
+
+.folder svg {
+  display: block;
+}
+
+.project-label {
   min-width: 0;
-  color: var(--c-faint);
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -126,23 +150,19 @@
 
 .item {
   position: relative;
-  width: 100%;
-  border-radius: 4px;
-  line-height: 1.4;
-  transition: background 0.15s var(--ease);
-}
-
-.row-body {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 6px;
+  line-height: 1.3;
 }
 
 .chevron {
   display: grid;
-  width: 18px;
-  height: 18px;
-  margin: 9px 0 0 2px;
-  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
   place-items: center;
   border-radius: 4px;
   color: var(--c-faint);
@@ -154,44 +174,23 @@
   color: var(--c-ink);
 }
 
-.chevron-placeholder {
-  width: 18px;
-  margin-left: 2px;
-  flex-shrink: 0;
-}
-
 .item-main {
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-items: center;
   min-width: 0;
-  flex: 1;
+  gap: 8px;
   border-radius: 4px;
   text-align: left;
-  padding: 8px 8px 8px 10px;
-}
-
-.item:hover {
-  background: var(--c-raise);
-}
-
-.item.active {
-  background: var(--c-accent-tint);
-}
-
-.item.active::before {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 0;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--c-signal);
-  content: '';
+  padding: 4px 0;
 }
 
 .label {
   display: block;
   color: var(--c-mid);
   overflow: hidden;
-  padding-right: 24px;
+  font-size: 0.84rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -200,20 +199,34 @@
   color: var(--c-ink);
 }
 
-.meta {
-  display: block;
+.trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 24px;
+  margin-left: auto;
+  padding-right: 2px;
+}
+
+.age {
   color: var(--c-faint);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.attention {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 0.68rem;
-  font-weight: 600;
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
 }
 
-.loading { color: var(--c-faint); }
+.item:hover .trailing,
+.item:focus-within .trailing {
+  opacity: 0;
+}
 
 .action-error {
   margin: 10px 6px 0;
@@ -224,14 +237,18 @@
   font-size: 0.76rem;
 }
 
-.needs-input { color: var(--c-warning); }
-.failed { color: var(--c-danger); }
-.running { color: var(--c-signal); }
-.unread { color: var(--c-mid); }
+.needs-input { background: var(--c-warning); }
+.failed { background: var(--c-danger); }
+.running { background: var(--c-signal); }
+.unread { background: var(--c-mid); }
 
 /* Row menu trigger — hover/focus reveal on fine pointers, always on touch */
 .menu {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s var(--ease);
 }
 
@@ -239,16 +256,23 @@
 .item:focus-within .menu,
 .menu[data-open] {
   opacity: 1;
+  pointer-events: auto;
 }
 
 @media (pointer: coarse) {
   .menu {
     opacity: 1;
+    pointer-events: auto;
+  }
+
+  .trailing {
+    opacity: 0;
   }
 }
 
 .editing {
-  padding: 6px 8px 6px 10px;
+  display: block;
+  padding: 4px 8px;
 }
 
 .rename-input {
