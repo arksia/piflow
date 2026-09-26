@@ -1,9 +1,8 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, Folder, FolderOpen, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Puzzle, Search, Settings } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
-import { TooltipGroup } from '../../motion'
 import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { readCollapsedSessions, saveCollapsedSessions } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -154,8 +153,6 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
     }
   }
 
-  const projectCount = byCwd.size
-
   return (
     <>
       <div className={styles.list}>
@@ -184,77 +181,63 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
           </IconButton>
         </div>
 
-        {[...byCwd.entries()].map(([cwd]) => {
-          const open = store.sessions.some(session => session.path === store.activeKey && session.cwd === cwd)
-          return (
-            <div key={cwd} className={styles.group}>
-              <div className={styles.cwdRow}>
-                <span className={`t-icon-swap ${styles.folder}`} data-state={open ? 'b' : 'a'} aria-hidden="true">
-                  <span className="t-icon" data-icon="a"><Folder size={14} /></span>
-                  <span className="t-icon" data-icon="b"><FolderOpen size={14} /></span>
-                </span>
-                <div className={styles.projectName} title={cwd}>
-                  <span className={styles.projectLabel}>{projectName(cwd)}</span>
+        <div className={styles.sessions}>
+          {[...byCwd.entries()].map(([cwd]) => {
+            const open = store.sessions.some(session => session.path === store.activeKey && session.cwd === cwd)
+            return (
+              <div key={cwd} className={styles.group}>
+                <div className={styles.cwdRow}>
+                  <span className={`t-icon-swap ${styles.folder}`} data-state={open ? 'b' : 'a'} aria-hidden="true">
+                    <span className="t-icon" data-icon="a"><Folder size={14} /></span>
+                    <span className="t-icon" data-icon="b"><FolderOpen size={14} /></span>
+                  </span>
+                  <div className={styles.projectName} title={cwd}>
+                    <span className={styles.projectLabel}>{projectName(cwd)}</span>
+                  </div>
+                  <IconButton
+                    size="compact"
+                    label={`在 ${projectName(cwd)} 中新建会话`}
+                    disabled={!store.connected || creatingCwd !== null}
+                    onClick={() => void createIn(cwd)}
+                  >
+                    {creatingCwd === cwd ? <span className={styles.busy}>…</span> : <Plus />}
+                  </IconButton>
                 </div>
-                <IconButton
-                  size="compact"
-                  label={`在 ${projectName(cwd)} 中新建会话`}
-                  disabled={!store.connected || creatingCwd !== null}
-                  onClick={() => void createIn(cwd)}
-                >
-                  {creatingCwd === cwd ? <span className={styles.busy}>…</span> : <Plus />}
-                </IconButton>
+                {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
+                  const session = node.session
+                  return (
+                    <SessionRow
+                      key={session.path}
+                      session={session}
+                      active={store.activeKey === session.path}
+                      streaming={store.statuses[session.path]?.status === 'running'}
+                      attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                      connected={store.connected}
+                      opening={openingPath === session.path}
+                      editing={editingPath === session.path}
+                      indent={indent}
+                      hasChildren={hasChildren}
+                      isCollapsed={collapsed.has(session.path)}
+                      lineage={sessionLineage(store.sessions, session.path)}
+                      onPick={() => void pick(session)}
+                      onRenameStart={() => setEditingPath(session.path)}
+                      onRenameEnd={() => setEditingPath(null)}
+                      onToggle={() => toggleCollapsed(session.path)}
+                    />
+                  )
+                })}
               </div>
-              {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
-                const session = node.session
-                return (
-                  <SessionRow
-                    key={session.path}
-                    session={session}
-                    active={store.activeKey === session.path}
-                    streaming={store.statuses[session.path]?.status === 'running'}
-                    attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
-                    connected={store.connected}
-                    opening={openingPath === session.path}
-                    editing={editingPath === session.path}
-                    indent={indent}
-                    hasChildren={hasChildren}
-                    isCollapsed={collapsed.has(session.path)}
-                    lineage={sessionLineage(store.sessions, session.path)}
-                    onPick={() => void pick(session)}
-                    onRenameStart={() => setEditingPath(session.path)}
-                    onRenameEnd={() => setEditingPath(null)}
-                    onToggle={() => toggleCollapsed(session.path)}
-                  />
-                )
-              })}
-            </div>
-          )
-        })}
+            )
+          })}
 
-        {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
+          {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
 
-        {!store.connected ? <div className={styles.offline}><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
+          {!store.connected ? <div className={styles.offline}><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
+        </div>
         <div className={styles.footer}>
-          <span>
-            {projectCount}
-            {' 个项目 · '}
-            {store.sessions.length}
-            {' 个会话'}
-          </span>
-          <span className={styles.footerActions}>
-            <TooltipGroup className={styles.tips}>
-              <IconButton tip label="Provider 与凭证" disabled={!store.connected} onClick={() => setProvidersOpen(true)}>
-                <KeyRound />
-              </IconButton>
-              <IconButton tip label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>
-                <Puzzle />
-              </IconButton>
-              <IconButton tip label="设置" onClick={() => setSettingsOpen(true)}>
-                <Settings />
-              </IconButton>
-            </TooltipGroup>
-          </span>
+          <IconButton tip size="compact" label="设置" onClick={() => setSettingsOpen(true)}>
+            <Settings />
+          </IconButton>
         </div>
       </div>
       {newSessionOpen
@@ -273,7 +256,16 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
         ? (
             <SettingsDialog
               theme={theme}
+              connected={store.connected}
               onToggleTheme={onToggleTheme}
+              onOpenProviders={() => {
+                setSettingsOpen(false)
+                setProvidersOpen(true)
+              }}
+              onOpenExtensions={() => {
+                setSettingsOpen(false)
+                setExtensionsOpen(true)
+              }}
               onClose={() => setSettingsOpen(false)}
             />
           )

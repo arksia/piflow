@@ -5,11 +5,14 @@ import styles from './styles.module.css'
 
 interface Props {
   theme: 'dark' | 'light'
+  connected: boolean
   onToggleTheme: () => void
+  onOpenProviders: () => void
+  onOpenExtensions: () => void
   onClose: () => void
 }
 
-export default function SettingsDialog({ theme, onToggleTheme, onClose }: Props) {
+export default function SettingsDialog({ theme, connected, onToggleTheme, onOpenProviders, onOpenExtensions, onClose }: Props) {
   return (
     <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="settings-title">
       {close => (
@@ -26,6 +29,8 @@ export default function SettingsDialog({ theme, onToggleTheme, onClose }: Props)
                 <button type="button" aria-pressed={theme === 'light'} onClick={() => theme !== 'light' && onToggleTheme()}>浅色</button>
               </div>
             </div>
+            <button type="button" className={styles.action} disabled={!connected} onClick={onOpenProviders}>Provider 与凭证</button>
+            <button type="button" className={styles.action} disabled={!connected} onClick={onOpenExtensions}>扩展管理</button>
           </div>
         </>
       )}

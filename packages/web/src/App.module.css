@@ -9,7 +9,7 @@
   flex-shrink: 0;
   background: var(--c-bg);
   border-right: 1px solid var(--c-line);
-  overflow: hidden auto;
+  overflow: hidden;
   transition: width 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
