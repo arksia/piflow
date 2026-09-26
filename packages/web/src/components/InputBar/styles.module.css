@@ -48,7 +48,7 @@
 
 .error {
   padding: 0 4px 8px;
-  color: #ffa198;
+  color: var(--c-danger);
   font-size: 0.78rem;
 }
 
@@ -63,15 +63,15 @@
 }
 
 .box:focus-within {
-  border-color: #2a2a2a;
+  border-color: var(--c-line-strong);
 }
 
 .box.streaming {
-  border-color: #ffffff1f;
+  border-color: var(--c-accent);
 }
 
 .box.streaming:focus-within {
-  border-color: #fff3;
+  border-color: var(--c-accent-hover);
 }
 
 .box textarea {
@@ -209,11 +209,11 @@
 }
 
 .meter-trigger.warning {
-  color: #d29922;
+  color: var(--c-warning);
 }
 
 .meter-trigger.danger {
-  color: #f85149;
+  color: var(--c-danger);
 }
 
 .meter-trigger:hover,
@@ -224,12 +224,12 @@
 
 .meter-trigger.warning:hover,
 .meter:focus-within .meter-trigger.warning {
-  color: #d29922;
+  color: var(--c-warning);
 }
 
 .meter-trigger.danger:hover,
 .meter:focus-within .meter-trigger.danger {
-  color: #f85149;
+  color: var(--c-danger);
 }
 
 .meter-tip {
@@ -350,7 +350,7 @@
 
 .provider-item:hover {
   color: var(--c-ink);
-  background: #ffffff08;
+  background: var(--c-press);
 }
 
 .provider-item.current {
@@ -380,7 +380,7 @@
   flex-shrink: 0;
   place-items: center;
   border-radius: 50%;
-  background: #ffffff14;
+  background: var(--c-press);
 }
 
 .core {
@@ -402,7 +402,7 @@
 }
 
 .send.ready:hover {
-  background: #ffffff22;
+  background: var(--c-line-strong);
 }
 
 .send.ready:hover .core {

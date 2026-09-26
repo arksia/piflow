@@ -37,13 +37,13 @@
 }
 
 .status-dot.running { background: var(--c-signal); }
-.status-dot.failed { background: #f08a83; }
-.status-dot.needsInput { background: #f0b35a; }
+.status-dot.failed { background: var(--c-danger); }
+.status-dot.needsInput { background: var(--c-warning); }
 .status-dot.unread { background: var(--c-mid); }
 
 .status.running { color: var(--c-signal); }
-.status.failed { color: #f08a83; }
-.status.needsInput { color: #f0b35a; }
+.status.failed { color: var(--c-danger); }
+.status.needsInput { color: var(--c-warning); }
 
 .status {
   color: var(--c-muted);

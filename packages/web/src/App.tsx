@@ -11,6 +11,7 @@ const FlowView = lazy(() => import('./components/FlowView'))
 const SIDEBAR_WIDTH_KEY = 'piflow.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_SIDEBAR_WIDTH = 420
+type Theme = 'dark' | 'light'
 
 function readSidebarWidth() {
   const value = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
@@ -25,6 +26,7 @@ export default function App() {
   const [flowReady, setFlowReady] = useState(() => localStorage.getItem('piflow.workspaceView') === 'flow')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('piflow.sidebarCollapsed') === 'true')
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth)
+  const [theme, setTheme] = useState<Theme>(() => document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
   const sidebarRef = useRef<HTMLElement>(null)
   const sidebarWidthRef = useRef(sidebarWidth)
   const [isResizing, setIsResizing] = useState(false)
@@ -45,6 +47,14 @@ export default function App() {
   const onShowChat = useCallback(() => {
     setWorkspaceView('chat')
     localStorage.setItem('piflow.workspaceView', 'chat')
+  }, [])
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark'
+      document.documentElement.dataset.theme = next
+      localStorage.setItem('piflow.theme', next)
+      return next
+    })
   }, [])
 
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -98,7 +108,7 @@ export default function App() {
         className={`${styles.sidebar} ${store.sidebarOpen ? styles.open : ''} ${sidebarCollapsed ? styles.collapsed : ''} ${isResizing ? styles.resizing : ''}`}
         style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
       >
-        <SessionList onToggleSidebar={toggleWorkspaceSidebar} />
+        <SessionList theme={theme} onToggleTheme={toggleTheme} onToggleSidebar={toggleWorkspaceSidebar} />
       </aside>
       <div
         className={`${styles.resizer} ${sidebarCollapsed ? styles.resizerHidden : ''}`}

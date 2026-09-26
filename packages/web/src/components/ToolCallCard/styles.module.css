@@ -8,7 +8,7 @@
 }
 
 .tool.error {
-  border-color: #f85149;
+  border-color: var(--c-danger);
 }
 
 .headRow {
@@ -62,7 +62,7 @@ button.head:hover {
 }
 
 .fail {
-  color: #ffa198;
+  color: var(--c-danger);
 }
 
 .body {

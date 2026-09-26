@@ -2,19 +2,34 @@
 @import url('./transitions.css');
 
 :root {
-  /* Quiet dark workspace — keep the black ground, tighten the chrome. */
+  color-scheme: dark;
+
+  /* Three surfaces: shell, workspace canvas, raised controls. */
   --c-bg: #000;
+  --c-canvas: #080808;
+  --c-surface: #0f0f0f;
   --c-ink: #fff;
   --c-mid: #e8e8e8;
   --c-body: #d2d2d2;
   --c-muted: #9b9b9b;
   --c-faint: #6f6f6f;
-  --c-code-bg: #141414;
+  --c-code-bg: #0a0a0a;
   --c-inline-code: #cccccc2e;
   --c-line: #222;
-  --c-raise: #0f0f0f;
+  --c-line-strong: #303030;
+  --c-raise: var(--c-surface);
   --c-press: #171717;
-  --c-signal: #e8e8e8;
+  --c-accent: #a160fc;
+  --c-accent-hover: #b887fd;
+  --c-accent-tint: #201332;
+  --c-accent-contrast: #171717;
+  --c-signal: var(--c-accent);
+  --c-success: #70c49b;
+  --c-success-tint: #14251d;
+  --c-warning: #e0a85a;
+  --c-warning-tint: #2a2114;
+  --c-danger: #f08a83;
+  --c-danger-tint: #2d1716;
   --c-diff-add: #3fb95026;
   --c-diff-del: #f8514926;
   --c-diff-add-fg: #7ee787aa;
@@ -29,7 +44,7 @@
   --tabs-text-muted: var(--c-muted);
   --tabs-text-active: var(--c-ink);
   --tabs-bar-bg: var(--c-raise);
-  --tabs-pill-bg: #292929;
+  --tabs-pill-bg: var(--c-accent-tint);
   --tt-bg: var(--c-raise);
   --tt-fg: var(--c-body);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -38,10 +53,56 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --chrome-h: 48px;
-  --control: 32px;
-  --icon: 16px;
+  --chrome-h: 36px;
+  --control: 28px;
+  --icon: 15px;
   --radius-control: 6px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --c-bg: #f1f1ef;
+  --c-canvas: #f7f7f5;
+  --c-surface: #fff;
+  --c-ink: #171717;
+  --c-mid: #333;
+  --c-body: #333;
+  --c-muted: #686868;
+  --c-faint: #929292;
+  --c-code-bg: #eeeeec;
+  --c-inline-code: #f4ecff;
+  --c-line: #dededb;
+  --c-line-strong: #cececa;
+  --c-raise: var(--c-surface);
+  --c-press: #e8e8e5;
+  --c-accent: #5d18bf;
+  --c-accent-hover: #5014a3;
+  --c-accent-tint: #f4ecff;
+  --c-accent-contrast: #fff;
+  --c-signal: var(--c-accent);
+  --c-success: #28784a;
+  --c-success-tint: #e8f4ec;
+  --c-warning: #9a641d;
+  --c-warning-tint: #f8efdf;
+  --c-danger: #b5443e;
+  --c-danger-tint: #faeceb;
+  --c-diff-add: #e8f4ec;
+  --c-diff-del: #faeceb;
+  --c-diff-add-fg: #28784a;
+  --c-diff-del-fg: #b5443e;
+  --c-scrollbar: #c2c2be;
+  --c-scrollbar-hover: #aaa9a4;
+  --shimmer-base: var(--c-muted);
+  --shimmer-highlight: var(--c-ink);
+  --think-base: var(--c-muted);
+  --think-highlight: var(--c-ink);
+  --tabs-text-muted: var(--c-muted);
+  --tabs-text-active: var(--c-accent);
+  --tabs-bar-bg: var(--c-surface);
+  --tabs-pill-bg: var(--c-accent-tint);
+  --tt-bg: var(--c-surface);
+  --tt-fg: var(--c-body);
 }
 
 * {
@@ -67,7 +128,7 @@ body {
 }
 
 ::selection {
-  background: #ffffff26;
+  background: var(--c-accent-tint);
 }
 
 button {

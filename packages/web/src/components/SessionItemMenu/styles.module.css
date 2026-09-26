@@ -47,7 +47,7 @@
 }
 
 .menu-item.danger:hover:not(:disabled) {
-  color: #f08a83;
+  color: var(--c-danger);
 }
 
 /* ---------- dialogs (fork picker / delete confirm) ---------- */
@@ -141,7 +141,7 @@
 
 .error {
   margin: 8px 12px 0;
-  color: #f08a83;
+  color: var(--c-danger);
   font-size: 0.76rem;
 }
 
@@ -171,8 +171,8 @@
 }
 
 .confirm-danger {
-  border: 1px solid rgb(240 138 131 / 45%);
-  color: #f08a83;
+  border: 1px solid var(--c-danger);
+  color: var(--c-danger);
 }
 
 .confirm-danger:disabled {
@@ -180,5 +180,5 @@
 }
 
 .confirm-danger:hover:not(:disabled) {
-  background: rgb(240 138 131 / 12%);
+  background: var(--c-danger-tint);
 }

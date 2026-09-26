@@ -1,6 +1,21 @@
 .switcher {
   flex-shrink: 0;
+  padding: 2px;
   border: 1px solid var(--c-line);
+}
+
+.tab,
+.pill {
+  height: 22px;
+}
+
+.pill {
+  top: 2px;
+}
+
+.tab {
+  padding: 0 10px;
+  font-size: 0.75rem;
 }
 
 @media (width <= 768px) {

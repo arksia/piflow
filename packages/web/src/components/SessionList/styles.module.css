@@ -22,9 +22,9 @@
 .brand {
   display: block;
   color: var(--c-ink);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 650;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 
 .subtitle {
@@ -37,18 +37,20 @@
   text-transform: uppercase;
 }
 
-.top-actions {
+.search-row {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  margin: var(--space-2) 0 0;
 }
 
 .search {
   display: flex;
+  min-width: 0;
+  flex: 1;
   align-items: center;
   height: var(--control);
   gap: var(--space-2);
-  margin: var(--space-2) 0 0;
   padding: 0 var(--space-2);
   border: 1px solid var(--c-line);
   border-radius: var(--radius-control);
@@ -171,7 +173,7 @@
 }
 
 .item.active {
-  background: #171717;
+  background: var(--c-accent-tint);
 }
 
 .item.active::before {
@@ -216,14 +218,14 @@
 .action-error {
   margin: 10px 6px 0;
   padding: 7px 8px;
-  border: 1px solid #6e3734;
+  border: 1px solid var(--c-danger);
   border-radius: 4px;
-  color: #f08a83;
+  color: var(--c-danger);
   font-size: 0.76rem;
 }
 
-.needs-input { color: #f0b35a; }
-.failed { color: #f08a83; }
+.needs-input { color: var(--c-warning); }
+.failed { color: var(--c-danger); }
 .running { color: var(--c-signal); }
 .unread { color: var(--c-mid); }
 
@@ -273,7 +275,7 @@
 .rename-error {
   display: block;
   padding: 4px 2px 0;
-  color: #f08a83;
+  color: var(--c-danger);
   font-size: 0.7rem;
 }
 

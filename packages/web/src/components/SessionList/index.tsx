@@ -1,6 +1,6 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
+import { ChevronDown, ChevronRight, KeyRound, MessageSquarePlus, PanelLeftClose, Plus, Puzzle, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
 import { TooltipGroup } from '../../motion'
@@ -14,6 +14,7 @@ import IconButton from '../IconButton'
 import NewSessionDialog from '../NewSessionDialog'
 import ProviderDialog from '../ProviderDialog'
 import SessionItemMenu from '../SessionItemMenu'
+import SettingsDialog from '../SettingsDialog'
 import styles from './styles.module.css'
 
 function shorten(path: string) {
@@ -55,12 +56,15 @@ function projectName(cwd: string) {
 }
 
 interface SessionListProps {
+  theme: 'dark' | 'light'
+  onToggleTheme: () => void
   onToggleSidebar: () => void
 }
 
-function SessionList({ onToggleSidebar }: SessionListProps) {
+function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps) {
   const store = useStore()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [extensionsOpen, setExtensionsOpen] = useState(false)
   const [providersOpen, setProvidersOpen] = useState(false)
   const [creatingCwd, setCreatingCwd] = useState<string | null>(null)
@@ -161,27 +165,25 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
             <span className={styles.brand}>piflow</span>
             <span className={styles.subtitle}>coding workspace</span>
           </div>
-          <div className={styles.topActions}>
-            <TooltipGroup className={styles.tips}>
-              <IconButton tip variant="outline" label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
-                <MessageSquarePlus />
-              </IconButton>
-              <IconButton tip label="收起会话列表" onClick={onToggleSidebar}>
-                <PanelLeftClose />
-              </IconButton>
-            </TooltipGroup>
-          </div>
+          <IconButton tip label="收起会话列表" onClick={onToggleSidebar}>
+            <PanelLeftClose />
+          </IconButton>
         </div>
         {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
-        <label className={styles.search}>
-          <Search size={14} aria-hidden="true" />
-          <input
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-            placeholder="搜索会话"
-            aria-label="搜索会话"
-          />
-        </label>
+        <div className={styles.searchRow}>
+          <label className={styles.search}>
+            <Search size={14} aria-hidden="true" />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="搜索会话"
+              aria-label="搜索会话"
+            />
+          </label>
+          <IconButton tip variant="outline" label="新会话" disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
+            <MessageSquarePlus />
+          </IconButton>
+        </div>
 
         {[...byCwd.entries()].map(([cwd]) => (
           <div key={cwd} className={styles.group}>
@@ -240,6 +242,9 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                 <KeyRound />
               </IconButton>
               <IconButton tip label="扩展管理" disabled={!store.connected} onClick={() => setExtensionsOpen(true)}>
+                <Puzzle />
+              </IconButton>
+              <IconButton tip label="设置" onClick={() => setSettingsOpen(true)}>
                 <Settings />
               </IconButton>
             </TooltipGroup>
@@ -255,6 +260,15 @@ function SessionList({ onToggleSidebar }: SessionListProps) {
                 setNewSessionOpen(false)
                 setSidebarOpen(false)
               }}
+            />
+          )
+        : null}
+      {settingsOpen
+        ? (
+            <SettingsDialog
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              onClose={() => setSettingsOpen(false)}
             />
           )
         : null}
