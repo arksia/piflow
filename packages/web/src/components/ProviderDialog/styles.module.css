@@ -143,8 +143,8 @@ h2 {
 }
 
 .configured {
-  border-color: #70c49b;
-  background: #70c49b;
+  border-color: var(--c-success);
+  background: var(--c-success);
 }
 
 .identity,
@@ -190,5 +190,5 @@ h2 {
 }
 
 .error {
-  color: #f08a83;
+  color: var(--c-danger);
 }

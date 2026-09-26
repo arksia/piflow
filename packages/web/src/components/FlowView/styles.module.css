@@ -4,7 +4,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  background: var(--c-bg);
+  background: var(--c-canvas);
 }
 
 .bar {
@@ -14,9 +14,9 @@
   min-height: var(--chrome-h);
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   border-bottom: 1px solid var(--c-line);
-  background: var(--c-bg);
+  background: var(--c-canvas);
 }
 
 .heading {
@@ -49,11 +49,11 @@
 }
 
 .attention {
-  --attention-border: #4a2926;
-  --attention-bg: #211514;
-  --attention-ink: #ffb4ad;
-  --attention-strong: #ffd7d2;
-  --attention-muted: #dba39d;
+  --attention-border: var(--c-danger);
+  --attention-bg: var(--c-danger-tint);
+  --attention-ink: var(--c-danger);
+  --attention-strong: var(--c-danger);
+  --attention-muted: var(--c-danger);
 
   display: flex;
   min-height: 42px;
@@ -101,16 +101,16 @@
 }
 
 .attention-action:hover {
-  background: #ffffff0d;
-  color: #fff;
+  background: var(--c-press);
+  color: var(--c-ink);
 }
 
 .attention-needs-input {
-  --attention-border: #55401f;
-  --attention-bg: #211a0f;
-  --attention-ink: #e9ad55;
-  --attention-strong: #f4d29b;
-  --attention-muted: #c8a66e;
+  --attention-border: var(--c-warning);
+  --attention-bg: var(--c-warning-tint);
+  --attention-ink: var(--c-warning);
+  --attention-strong: var(--c-warning);
+  --attention-muted: var(--c-warning);
 }
 
 .add,
@@ -128,13 +128,13 @@
 }
 
 .connect {
-  background: var(--c-mid);
-  color: var(--c-bg);
+  background: var(--c-accent);
+  color: var(--c-accent-contrast);
   font-weight: 600;
 }
 
 .connect:hover {
-  background: var(--c-ink);
+  background: var(--c-accent-hover);
 }
 
 .cancel {
@@ -142,13 +142,13 @@
 }
 
 .cancel:hover {
-  background: #f851491c;
-  color: #ff9b92;
+  background: var(--c-danger-tint);
+  color: var(--c-danger);
 }
 
 .add {
-  background: var(--c-mid);
-  color: var(--c-bg);
+  background: var(--c-accent);
+  color: var(--c-accent-contrast);
   font-weight: 600;
 }
 
@@ -157,27 +157,27 @@
 }
 
 .add:hover {
-  background: var(--c-ink);
+  background: var(--c-accent-hover);
 }
 
 .delete {
-  color: #ff9b92;
+  color: var(--c-danger);
 }
 
 .delete:hover {
-  background: #f851491c;
+  background: var(--c-danger-tint);
 }
 
 .panel {
   position: absolute;
   z-index: 5;
-  top: 66px;
+  top: calc(var(--chrome-h) + 12px);
   right: 16px;
   width: min(340px, calc(100% - 32px));
   padding: 16px;
-  border: 1px solid #383838;
+  border: 1px solid var(--c-line-strong);
   border-radius: 8px;
-  background: #111;
+  background: var(--c-surface);
 }
 
 .panel label {
@@ -194,10 +194,10 @@
   display: block;
   width: 100%;
   margin-top: 5px;
-  border: 1px solid #383838;
+  border: 1px solid var(--c-line-strong);
   border-radius: 5px;
   outline: none;
-  background: #090909;
+  background: var(--c-canvas);
   color: var(--c-ink);
   font: inherit;
   font-size: 0.82rem;
@@ -222,7 +222,7 @@
 
 .panel input::placeholder,
 .panel textarea::placeholder {
-  color: #898989;
+  color: var(--c-faint);
 }
 
 .panel-actions {
@@ -244,14 +244,14 @@
 }
 
 .panel-actions .confirm {
-  background: var(--c-mid);
-  color: var(--c-bg);
+  background: var(--c-accent);
+  color: var(--c-accent-contrast);
   font-weight: 600;
 }
 
 .panel-actions .confirm:disabled {
-  background: #333;
-  color: #777;
+  background: var(--c-press);
+  color: var(--c-faint);
 }
 
 .error {
@@ -262,8 +262,8 @@
   max-width: min(520px, calc(100% - 32px));
   padding: 9px 12px;
   border-radius: 6px;
-  background: #321b1a;
-  color: #ffb4ad;
+  background: var(--c-danger-tint);
+  color: var(--c-danger);
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -284,20 +284,20 @@
 
 .workspace :global(.react-flow__controls),
 .workspace :global(.react-flow__minimap) {
-  border: 1px solid #303030;
+  border: 1px solid var(--c-line-strong);
   border-radius: 6px;
   overflow: hidden;
-  background: #101010;
+  background: var(--c-surface);
 }
 
 .workspace :global(.react-flow__controls-button) {
-  border-bottom-color: #303030;
-  background: #101010;
+  border-bottom-color: var(--c-line-strong);
+  background: var(--c-surface);
   fill: var(--c-mid);
 }
 
 .workspace :global(.react-flow__controls-button:hover) {
-  background: #202020;
+  background: var(--c-press);
 }
 
 .workspace :global(.react-flow__edge.selected path) {
@@ -321,7 +321,7 @@
   max-width: min(520px, calc(100% - 32px));
   padding: 8px 14px;
   border-radius: 6px;
-  background: #1a1a1a;
+  background: var(--c-surface);
   border: 1px solid var(--c-signal);
   color: var(--c-ink);
   font-size: 0.78rem;

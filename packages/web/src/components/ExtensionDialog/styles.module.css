@@ -122,11 +122,11 @@
 }
 
 .notice.warning {
-  border-color: #c9a254;
+  border-color: var(--c-warning);
 }
 
 .notice.error {
-  border-color: #f08a83;
+  border-color: var(--c-danger);
 }
 
 .notice-text {

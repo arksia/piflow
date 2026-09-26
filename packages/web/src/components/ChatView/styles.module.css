@@ -12,9 +12,9 @@
   height: var(--chrome-h);
   min-height: var(--chrome-h);
   gap: var(--space-2);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   border-bottom: 1px solid var(--c-line);
-  background: var(--c-bg);
+  background: var(--c-canvas);
 }
 
 .menu {
@@ -36,7 +36,7 @@
 .title {
   min-width: 0;
   color: var(--c-mid);
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -65,17 +65,17 @@
 }
 
 .status.failed {
-  --think-base: #f08a83;
-  --think-highlight: #ffd7d2;
+  --think-base: var(--c-danger);
+  --think-highlight: var(--c-ink);
 
-  color: #f08a83;
+  color: var(--c-danger);
 }
 
 .status.wait {
-  --think-base: #f0b35a;
-  --think-highlight: #f4d29b;
+  --think-base: var(--c-warning);
+  --think-highlight: var(--c-ink);
 
-  color: #f0b35a;
+  color: var(--c-warning);
 }
 
 .scroll {
@@ -98,10 +98,10 @@
   gap: 16px;
   margin: 12px auto 0;
   padding: 10px 12px;
-  border: 1px solid #8a6b2f;
+  border: 1px solid var(--c-warning);
   border-radius: 6px;
-  background: #332a18;
-  color: #e4cf9a;
+  background: var(--c-warning-tint);
+  color: var(--c-warning);
   font-size: 0.8rem;
 }
 
@@ -109,13 +109,13 @@
   flex: 0 0 auto;
   padding: 5px 9px;
   border-radius: 4px;
-  background: #e4cf9a;
-  color: #241d10;
+  background: var(--c-warning);
+  color: var(--c-accent-contrast);
   font-weight: 600;
 }
 
 .trust-error {
-  color: #ffa198;
+  color: var(--c-danger);
   font-size: 0.75rem;
 }
 
@@ -203,7 +203,7 @@
 }
 
 .error {
-  color: #ffa198;
+  color: var(--c-danger);
   font-size: 0.85rem;
   padding: 8px 0;
 }

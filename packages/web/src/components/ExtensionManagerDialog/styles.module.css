@@ -135,7 +135,7 @@ h2 {
 }
 
 .error {
-  color: #f08a83;
+  color: var(--c-danger);
 }
 
 .footer {
