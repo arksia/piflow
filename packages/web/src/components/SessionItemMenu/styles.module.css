@@ -1,9 +1,7 @@
 /* Visibility (hover-reveal / touch-always) is driven by the parent row via the
    className prop; this module owns layout and look. */
 .root {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+  position: relative;
 }
 
 .menu {
