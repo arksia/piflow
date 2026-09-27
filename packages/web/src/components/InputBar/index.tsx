@@ -3,13 +3,16 @@ import type { UsageWindow } from '@piflow/protocol'
 import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
+import type { DropdownItem } from '../Dropdown'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
-import { ArrowUp, ImagePlus, ListX, Square, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { TextSwap, usePresence, useTabsPill } from '../../motion'
+import { ArrowUp, ChevronDown, ListX, Plus, Square, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useTabsPill } from '../../motion'
 import { abort, abortCompaction, clearQueue, compact, requestUsage, sendPrompt, setAutoCompaction, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
+import BranchNavigator from '../BranchNavigator'
+import Dropdown from '../Dropdown'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
@@ -35,7 +38,6 @@ function formatWindow(window: UsageWindow) {
 export default function InputBar({ view, text, focusVersion, onTextChange, draftKey }: Props) {
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
-  const [thinkingOpen, setThinkingOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
   const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'followUp'>('steer')
@@ -43,13 +45,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const [compacting, setCompacting] = useState(false)
   const [images, setImages] = useState<DraftImage[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
-  const modelButtonRef = useRef<HTMLButtonElement>(null)
-  const thinkingRef = useRef<HTMLDivElement>(null)
   const streamingTabsRef = useRef<HTMLDivElement>(null)
   const streamingPillRef = useTabsPill(streamingTabsRef, view?.isStreaming ? streamingBehavior : '')
-  const modelMenu = usePresence(modelOpen, '--dropdown-close-dur', 150)
-  const thinkingMenu = usePresence(thinkingOpen, '--dropdown-close-dur', 150)
   const previousStreamingRef = useRef(view?.isStreaming)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
@@ -64,6 +63,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const usage = report?.supported ? report : null
   const quota = usage?.windows.length ? Math.min(...usage.windows.map(window => window.remaining)) : null
   const contextPercent = Math.round(view?.context?.percent ?? 0)
+  const contextRemaining = Math.max(0, 100 - contextPercent)
   const contextLevel = contextPercent >= 85 ? styles.danger : contextPercent >= 70 ? styles.warning : ''
   const canSend = store.connected && (text.trim().length > 0 || images.length > 0)
   const isLive = store.connected && !!view?.isStreaming
@@ -95,50 +95,30 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     setImages(readDraft(draftKey).images)
   }, [draftKey])
 
-  useEffect(() => {
-    if (!modelOpen && !thinkingOpen)
-      return
-    function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key !== 'Escape')
-        return
-      if (modelOpen) {
-        setModelOpen(false)
-        modelButtonRef.current?.focus()
-        return
-      }
-      setThinkingOpen(false)
-    }
-    function onPointerDown(event: PointerEvent) {
-      if (thinkingOpen && event.target instanceof Node && !thinkingRef.current?.contains(event.target))
-        setThinkingOpen(false)
-    }
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-    }
-  }, [modelOpen, thinkingOpen])
+  useLayoutEffect(() => {
+    const input = areaRef.current
+    const next = images.length > 0 || (input ? input.scrollHeight > 40 : false)
+    const wide = styles.wide
+    if (wide)
+      boxRef.current?.classList.toggle(wide, next)
+  }, [text, images.length])
 
   function pickModel(selectedProvider: string, modelId: string) {
     if (!view)
       return
     setOperationError(null)
     void setModel(view.key, selectedProvider, modelId).catch(error => setOperationError(errorMessage(error)))
-    setModelOpen(false)
   }
 
-  function toggleModels() {
-    setThinkingOpen(false)
-    setModelOpen(open => !open)
-    if (!modelOpen && view)
+  function onModelOpenChange(next: boolean) {
+    setModelOpen(next)
+    if (next && view)
       requestUsage(view.key)
   }
 
   function pickThinking(level: ThinkingLevel) {
     if (!view)
       return
-    setThinkingOpen(false)
     if (level === view.thinkingLevel)
       return
     setOperationError(null)
@@ -252,6 +232,45 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     }
   }
 
+  const menuItems: DropdownItem[] = []
+  if (view?.thinkingLevels.length) {
+    menuItems.push({
+      key: 'thinking',
+      label: '思考',
+      extra: thinkingLabel(view.thinkingLevel),
+      children: view.thinkingLevels.map(level => ({
+        key: level,
+        label: thinkingLabel(level),
+        selected: view.thinkingLevel === level,
+        onClick: () => pickThinking(level),
+      })),
+    })
+  }
+  if (view?.model) {
+    const current = view.model
+    menuItems.push({
+      key: 'model',
+      label: '模型',
+      extra: current.id,
+      children: [...modelGroups.entries()].map(([groupProvider, models]) => ({
+        key: groupProvider,
+        type: 'group' as const,
+        label: groupProvider,
+        children: models.map(model => ({
+          key: `${model.provider}/${model.id}`,
+          label: model.id,
+          extra: scopedModels.has(`${model.provider}/${model.id}`)
+            ? <small>{` · ${scopedModels.get(`${model.provider}/${model.id}`) ?? '固定'}`}</small>
+            : undefined,
+          selected: current.id === model.id && current.provider === model.provider,
+          onClick: () => pickModel(model.provider, model.id),
+        })),
+      })),
+    })
+  }
+  for (const diagnostic of view?.modelDiagnostics ?? [])
+    menuItems.push({ key: diagnostic.message, label: diagnostic.message, disabled: true })
+
   return (
     <div className={styles.bar}>
       <div className={styles.column}>
@@ -274,29 +293,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             )
           : null}
 
-        <div className={`${styles.box} ${isLive ? styles.streaming : ''}`}>
-          <textarea
-            ref={areaRef}
-            value={text}
-            rows={2}
-            placeholder="和 pi 说点什么…"
-            onChange={(event) => {
-              onTextChange(event.target.value)
-              saveDraftText(draftKey, event.target.value)
-            }}
-            onKeyDown={onKeyDown}
-            onPaste={event => addFiles([...event.clipboardData.files])}
-            onDragOver={event => event.preventDefault()}
-            onDrop={dropImages}
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={pickImages}
-          />
+        <div ref={boxRef} className={`${styles.box} ${isLive ? styles.streaming : ''}`}>
           {images.length
             ? (
                 <div className={styles.images}>
@@ -309,173 +306,123 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                 </div>
               )
             : null}
-          <div className={styles.footer}>
-            <div className={styles.left}>
-              {isLive
-                ? (
-                    <div ref={streamingTabsRef} className={`t-tabs ${styles.streamingMode}`} aria-label="运行中消息发送方式">
-                      <span ref={streamingPillRef} className="t-tabs-pill" aria-hidden="true" />
-                      <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
-                      <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
-                    </div>
-                  )
-                : view?.thinkingLevels.length
-                  ? (
-                      <div ref={thinkingRef} className={styles.thinking}>
-                        <button
-                          type="button"
-                          className={styles.thinkingTrigger}
-                          title="思考强度"
-                          aria-label={`思考强度，当前${thinkingLabel(view.thinkingLevel)}`}
-                          aria-haspopup="menu"
-                          aria-expanded={thinkingOpen}
-                          onClick={() => {
-                            setModelOpen(false)
-                            setThinkingOpen(open => !open)
-                          }}
-                        >
-                          思考 ·
-                          {' '}
-                          <TextSwap text={thinkingLabel(view.thinkingLevel)} />
-                        </button>
-                        {thinkingMenu.mounted
-                          ? (
-                              <div className={`${styles.thinkingMenu} t-dropdown ${thinkingMenu.className}`} data-origin="bottom-left" role="menu" aria-label="思考强度">
-                                {view.thinkingLevels.map(level => (
-                                  <button
-                                    key={level}
-                                    type="button"
-                                    role="menuitemradio"
-                                    aria-checked={view.thinkingLevel === level}
-                                    onClick={() => pickThinking(level)}
-                                  >
-                                    {thinkingLabel(level)}
-                                  </button>
-                                ))}
-                              </div>
-                            )
-                          : null}
-                      </div>
-                    )
-                  : null}
-            </div>
-            <div className={styles.right}>
-              {view?.context
-                ? (
-                    <div className={styles.meter} onMouseEnter={() => viewKey && requestUsage(viewKey)}>
-                      <button type="button" className={`${styles.meterTrigger} ${contextLevel}`} aria-label={`上下文 ${contextPercent}%`} aria-describedby="composer-usage">
-                        {`${contextPercent}%`}
-                      </button>
-                      <div className={styles.meterTip} id="composer-usage" role="tooltip">
-                        {quota !== null
-                          ? (
-                              <div>
-                                额度
-                                {' '}
-                                {quota}
-                                %
-                              </div>
-                            )
-                          : null}
-                        {usage?.windows.map(window => (
-                          <div key={`${window.minutes}:${window.limit}:${window.resetTime ?? ''}`}>{formatWindow(window)}</div>
-                        ))}
-                        <div>
-                          上下文
-                          {' '}
-                          {contextPercent}
-                          %
-                          {' · '}
-                          {formatTokens(view.context.tokens ?? 0)}
-                          {' / '}
-                          {formatTokens(view.context.contextWindow)}
-                        </div>
-                        {isLive
-                          ? null
-                          : (
-                              <div className={styles.sessionActions}>
-                                <button
-                                  type="button"
-                                  className={styles.chip}
-                                  aria-pressed={view.autoCompactionEnabled}
-                                  onClick={toggleAutoCompaction}
-                                >
-                                  {view.autoCompactionEnabled ? '自动压缩开' : '自动压缩关'}
-                                </button>
-                                <button type="button" className={styles.chip} disabled={compacting || view.isCompacting} onClick={runCompact}>
-                                  {compacting || view.isCompacting ? '压缩中…' : '压缩上下文'}
-                                </button>
-                              </div>
-                            )}
-                      </div>
-                    </div>
-                  )
-                : null}
-              {view?.model
-                ? (
-                    <button
-                      ref={modelButtonRef}
-                      className={styles.model}
-                      aria-haspopup="dialog"
-                      aria-expanded={modelOpen}
-                      aria-label={`选择模型，当前 ${view.model.id}`}
-                      onClick={toggleModels}
-                    >
-                      {view.model.id}
-                    </button>
-                  )
-                : null}
-              <IconButton label="添加图片" onClick={() => fileRef.current?.click()}>
-                <ImagePlus />
-              </IconButton>
-              <button
-                type="button"
-                className={`${styles.button} ${stopping ? styles.stop : `${styles.send} ${canSend ? styles.ready : ''}`}`}
-                title={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复') : '发送'}
-                aria-label={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断回复' : '中断回复') : '发送'}
-                disabled={stopping ? aborting : !canSend}
-                onClick={stopping ? (view?.isCompacting ? stopCompaction : stop) : () => void submit()}
-              >
-                <span className={styles.core}>
-                  <span className="t-icon-swap" data-state={stopping ? 'b' : 'a'}>
-                    <span className="t-icon" data-icon="a"><ArrowUp size={14} /></span>
-                    <span className="t-icon" data-icon="b"><Square size={10} fill="currentColor" strokeWidth={0} /></span>
-                  </span>
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {modelMenu.mounted
-            ? (
-                <>
-                  <div className={styles.scrim} aria-hidden onClick={() => setModelOpen(false)} />
-                  <div className={`${styles.popover} t-dropdown ${modelMenu.className}`} data-origin="bottom-right" role="dialog" aria-label="选择模型">
-                    {[...modelGroups.entries()].map(([groupProvider, models]) => (
-                      <div key={groupProvider} className={styles.providerGroup}>
-                        <div className={styles.providerName}>{groupProvider}</div>
-                        {models.map(model => (
-                          <button
-                            key={model.id}
-                            className={`${styles.providerItem} ${view?.model?.id === model.id ? styles.current : ''}`}
-                            onClick={() => pickModel(model.provider, model.id)}
-                          >
-                            {model.id}
-                            {scopedModels.has(`${model.provider}/${model.id}`)
-                              ? (
-                                  <small>
-                                    {' · '}
-                                    {scopedModels.get(`${model.provider}/${model.id}`) ?? '固定'}
-                                  </small>
-                                )
-                              : null}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                    {view?.modelDiagnostics.map(diagnostic => <div key={diagnostic.message} className={styles.diag}>{diagnostic.message}</div>)}
+          <div className={styles.composer}>
+            <IconButton className={styles.plus} label="添加图片" onClick={() => fileRef.current?.click()}>
+              <Plus size={16} strokeWidth={2} />
+            </IconButton>
+            <textarea
+              ref={areaRef}
+              value={text}
+              rows={1}
+              placeholder="和 pi 说点什么…"
+              onChange={(event) => {
+                onTextChange(event.target.value)
+                saveDraftText(draftKey, event.target.value)
+              }}
+              onKeyDown={onKeyDown}
+              onPaste={event => addFiles([...event.clipboardData.files])}
+              onDragOver={event => event.preventDefault()}
+              onDrop={dropImages}
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={pickImages}
+            />
+            {isLive
+              ? (
+                  <div ref={streamingTabsRef} className={`t-tabs ${styles.streamingMode}`} aria-label="运行中消息发送方式">
+                    <span ref={streamingPillRef} className="t-tabs-pill" aria-hidden="true" />
+                    <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
+                    <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
                   </div>
-                </>
+                )
+              : null}
+            {view && (view.model || view.thinkingLevels.length > 0)
+              ? (
+                  <Dropdown
+                    menu={{ items: menuItems }}
+                    open={modelOpen}
+                    placement="topRight"
+                    trigger={['click']}
+                    onOpenChange={onModelOpenChange}
+                  >
+                    <button
+                      type="button"
+                      className={styles.model}
+                      aria-label={view.model ? `模型和思考，当前 ${view.model.id}，${thinkingLabel(view.thinkingLevel)}` : `思考强度，当前${thinkingLabel(view.thinkingLevel)}`}
+                    >
+                      <span>{view.model?.id ?? thinkingLabel(view.thinkingLevel)}</span>
+                      <ChevronDown size={12} />
+                    </button>
+                  </Dropdown>
+                )
+              : null}
+            <button
+              type="button"
+              className={`${styles.button} ${stopping ? styles.stop : `${styles.send} ${canSend ? styles.ready : ''}`}`}
+              title={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复') : '发送'}
+              aria-label={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断回复' : '中断回复') : '发送'}
+              disabled={stopping ? aborting : !canSend}
+              onClick={stopping ? (view?.isCompacting ? stopCompaction : stop) : () => void submit()}
+            >
+              <span className={styles.core}>
+                <span className="t-icon-swap" data-state={stopping ? 'b' : 'a'}>
+                  <span className="t-icon" data-icon="a"><ArrowUp size={14} /></span>
+                  <span className="t-icon" data-icon="b"><Square size={10} fill="currentColor" strokeWidth={0} /></span>
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.meta}>
+          <div className={styles.metaLead}>
+            {store.activeKey ? <BranchNavigator path={store.activeKey} placement="up" /> : null}
+            {quota !== null ? <span className={styles.metaStat}>{`额度 剩 ${quota}%`}</span> : null}
+            {view?.context
+              ? (
+                  <div className={styles.meter} onMouseEnter={() => viewKey && requestUsage(viewKey)}>
+                    <button type="button" className={`${styles.meterTrigger} ${contextLevel}`} aria-label={`上下文余量 ${contextRemaining}%`} aria-describedby="composer-usage">
+                      {`上下文 剩 ${contextRemaining}%`}
+                    </button>
+                    <div className={styles.meterTip} id="composer-usage" role="tooltip">
+                      {usage?.windows.map(window => (
+                        <div key={`${window.minutes}:${window.limit}:${window.resetTime ?? ''}`}>{formatWindow(window)}</div>
+                      ))}
+                      <div>
+                        已用
+                        {' '}
+                        {contextPercent}
+                        %
+                        {' · '}
+                        {formatTokens(view.context.tokens ?? 0)}
+                        {' / '}
+                        {formatTokens(view.context.contextWindow)}
+                      </div>
+                    </div>
+                  </div>
+                )
+              : null}
+          </div>
+          {view && !isLive
+            ? (
+                <div className={styles.metaActions}>
+                  <button
+                    type="button"
+                    className={styles.chip}
+                    aria-pressed={view.autoCompactionEnabled}
+                    onClick={toggleAutoCompaction}
+                  >
+                    {view.autoCompactionEnabled ? '自动压缩开' : '自动压缩关'}
+                  </button>
+                  <button type="button" className={styles.chip} disabled={compacting || view.isCompacting} onClick={runCompact}>
+                    {compacting || view.isCompacting ? '压缩中…' : '压缩上下文'}
+                  </button>
+                </div>
               )
             : null}
         </div>

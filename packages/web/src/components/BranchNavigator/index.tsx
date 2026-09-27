@@ -5,7 +5,7 @@ import { usePresence } from '../../motion'
 import { fetchSessionTree, navigateSessionTree } from '../../session/actions'
 import styles from './styles.module.css'
 
-export default function BranchNavigator({ path }: { path: string }) {
+export default function BranchNavigator({ path, placement = 'down' }: { path: string, placement?: 'down' | 'up' }) {
   const [tree, setTree] = useState<SessionTreeNode[] | null>(null)
   const [leafId, setLeafId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -34,7 +34,7 @@ export default function BranchNavigator({ path }: { path: string }) {
   }
 
   return (
-    <div className={styles.root}>
+    <div className={`${styles.root} ${placement === 'up' ? styles.up : ''}`}>
       <button
         type="button"
         className={styles.toggle}
@@ -49,7 +49,7 @@ export default function BranchNavigator({ path }: { path: string }) {
       </button>
       {menu.mounted
         ? (
-            <div className={`${styles.menu} t-dropdown ${menu.className}`} data-origin="top-right" role="menu">
+            <div className={`${styles.menu} t-dropdown ${menu.className}`} data-origin={placement === 'up' ? 'bottom-left' : 'top-right'} role="menu">
               {tree.map(node => <BranchNode key={node.entry.id} node={node} leafId={leafId} onSelect={select} />)}
             </div>
           )
