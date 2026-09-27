@@ -199,11 +199,13 @@
   --morph-rotate: 45deg;
   --morph-scale: 0.97;
   --morph-blur: 2px;
-  /* Accordion expand */
-  --acc-expand: 250ms;
-  --acc-collapse: 250ms;
-  --acc-chevron: 250ms;
-  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Accordion: height and opacity together, no blur. Tool rows 300ms, thinking 400ms. */
+  --acc-expand: 300ms;
+  --acc-collapse: 300ms;
+  --acc-chevron: 300ms;
+  --acc-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --acc-trace: 400ms;
+  --acc-fold: 150ms;
   /* Toast open / close */
   --toast-open: 350ms;
   --toast-close: 250ms;

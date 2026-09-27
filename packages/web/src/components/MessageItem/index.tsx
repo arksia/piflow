@@ -1,6 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolState } from '../../session/state'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Wrench } from 'lucide-react'
 import { memo, useEffect, useRef, useState } from 'react'
 import { AccChevron } from '../../motion'
 import ContentImage from '../ContentImage'
@@ -23,6 +23,31 @@ type UserMessage = Extract<AgentMessage, { role: 'user' }>
 type UserBlock = Exclude<UserMessage['content'], string>[number]
 type MessageBlock = AssistantMessage['content'][number] | UserBlock
 type TextBlock = Extract<MessageBlock, { type: 'text' }>
+type ToolCallBlock = Extract<AssistantMessage['content'][number], { type: 'toolCall' }>
+type AssistantPart
+  = | { type: 'block', block: AssistantMessage['content'][number], index: number }
+    | { type: 'tools', calls: ToolCallBlock[] }
+
+function groupAssistant(blocks: AssistantMessage['content']) {
+  const parts: AssistantPart[] = []
+  let calls: ToolCallBlock[] = []
+  const flush = () => {
+    if (!calls.length)
+      return
+    parts.push({ type: 'tools', calls })
+    calls = []
+  }
+  blocks.forEach((block, index) => {
+    if (block.type === 'toolCall') {
+      calls.push(block)
+      return
+    }
+    flush()
+    parts.push({ type: 'block', block, index })
+  })
+  flush()
+  return parts
+}
 
 function time(timestamp?: number) {
   if (!timestamp)
@@ -62,7 +87,15 @@ function MessageItem({ message, toolResults, live = false }: Props) {
   if (message.role === 'assistant') {
     return (
       <div className={styles.message}>
-        {blocks.map((block, index) => {
+        {groupAssistant(message.content).map((part) => {
+          if (part.type === 'tools') {
+            if (part.calls.length === 1) {
+              const call = part.calls[0]
+              return <ToolCallCard key={call.id} call={call} state={toolResults[call.id]} />
+            }
+            return <ToolRunGroup key={part.calls[0].id} calls={part.calls} toolResults={toolResults} />
+          }
+          const { block, index } = part
           const key = live ? `live:${block.type}:${index}` : blockKey(block)
           if (block.type === 'text') {
             return live
@@ -71,8 +104,6 @@ function MessageItem({ message, toolResults, live = false }: Props) {
           }
           if (block.type === 'thinking')
             return <ThinkingBlock key={key} text={block.thinking} live={live} />
-          if (block.type === 'toolCall')
-            return <ToolCallCard key={block.id} call={block} state={toolResults[block.id]} />
           if (block.type === 'image')
             return <ContentImage key={key} image={block} alt="助手图片" />
           return null
@@ -101,6 +132,31 @@ function MessageItem({ message, toolResults, live = false }: Props) {
   return null
 }
 
+function ToolRunGroup({ calls, toolResults }: { calls: ToolCallBlock[], toolResults: Record<string, ToolState> }) {
+  const running = calls.some(call => toolResults[call.id]?.running)
+  const failed = calls.filter(call => toolResults[call.id]?.isError).length
+  const label = running
+    ? '正在调用工具'
+    : failed
+      ? `调用了 ${calls.length} 个工具，${failed} 个失败`
+      : `调用了 ${calls.length} 个工具`
+  return (
+    <div className={styles.tools}>
+      <div className={styles.toolsLabel}>
+        <Wrench size={14} aria-hidden="true" />
+        {running
+          ? <span className="t-shimmer" role="status" data-text={label}>{label}</span>
+          : <span role="status">{label}</span>}
+      </div>
+      <div className={styles.toolsList}>
+        {calls.map(call => (
+          <ToolCallCard key={call.id} plain call={call} state={toolResults[call.id]} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ThinkingBlock({ text, live }: { text: string, live: boolean }) {
   const [manual, setManual] = useState<boolean | null>(null)
   const startedRef = useRef(0)
@@ -120,7 +176,7 @@ function ThinkingBlock({ text, live }: { text: string, live: boolean }) {
 
   const label = live ? '思考中' : seconds ? `思考了 ${seconds} 秒` : '已思考'
   return (
-    <div className={`${styles.thinking} t-acc`} data-open={String(expanded)}>
+    <div className={`${styles.thinking} t-acc t-acc-trace`} data-open={String(expanded)}>
       <button
         type="button"
         className={`${styles.thinkingHead} t-acc-head`}

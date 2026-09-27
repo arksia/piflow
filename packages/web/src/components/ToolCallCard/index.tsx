@@ -8,9 +8,11 @@ import styles from './styles.module.css'
 interface Props {
   call: { id: string, name: string, arguments?: Record<string, unknown> }
   state?: ToolState
+  /** Row inside a run group. Diff stays one click away; failures still open. */
+  plain?: boolean
 }
 
-export default function ToolCallCard({ call, state }: Props) {
+export default function ToolCallCard({ call, state, plain = false }: Props) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const [expanded, setExpanded] = useState(false)
   const args = call.arguments ?? {}
@@ -46,12 +48,12 @@ export default function ToolCallCard({ call, state }: Props) {
   const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput
   const status = state?.running ? 'running' : state?.isError ? 'error' : state?.result ? 'done' : 'pending'
   const expandable = Boolean(diff || rawOutput || images.length)
-  const defaultOpen = reviewOpenByDefault(status === 'error' ? 'error' : 'done', Boolean(diff))
+  const defaultOpen = reviewOpenByDefault(status === 'error' ? 'error' : 'done', !plain && Boolean(diff))
   const open = expandable && (userOpen ?? defaultOpen)
   const kind = toolKind(call.name)
 
   return (
-    <article className={`${styles.tool} ${styles[status]} ${expandable ? 't-acc' : ''}`} data-open={expandable ? String(open) : undefined}>
+    <article className={`${styles.tool} ${styles[status]} ${plain ? styles.plain : ''} ${expandable ? 't-acc t-acc-fold' : ''}`} data-open={expandable ? String(open) : undefined}>
       <div className={styles.headRow}>
         {expandable
           ? (
