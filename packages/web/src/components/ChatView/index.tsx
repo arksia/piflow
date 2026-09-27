@@ -8,7 +8,6 @@ import { trustProject } from '../../session/actions'
 import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
-import BranchNavigator from '../BranchNavigator'
 import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
@@ -243,7 +242,6 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
             text={status.label}
             sizer="压缩上下文"
           />
-          {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
           <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
         </div>
       </header>

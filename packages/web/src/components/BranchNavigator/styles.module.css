@@ -5,12 +5,12 @@
 
 .toggle {
   display: inline-flex;
-  height: var(--control);
+  height: 24px;
   align-items: center;
-  gap: var(--space-1);
-  padding: 0 8px;
+  gap: 4px;
+  padding: 0 4px;
   border-radius: var(--radius-control);
-  color: var(--c-muted);
+  color: var(--c-faint);
   font-size: 0.75rem;
 }
 
@@ -49,7 +49,7 @@
 
 .menu {
   position: absolute;
-  z-index: 2;
+  z-index: 32;
   top: calc(100% + var(--space-1));
   right: 0;
   left: auto;
@@ -61,6 +61,11 @@
   border-radius: var(--radius-control);
   background: var(--c-bg);
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.up .menu {
+  top: auto;
+  bottom: calc(100% + var(--space-1));
 }
 
 .node + div {
