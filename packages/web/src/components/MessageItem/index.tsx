@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolState } from '../../session/state'
-import { memo, useState } from 'react'
+import { Sparkles } from 'lucide-react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { AccChevron } from '../../motion'
 import ContentImage from '../ContentImage'
 import MarkdownView from '../MarkdownView'
@@ -69,7 +70,7 @@ function MessageItem({ message, toolResults, live = false }: Props) {
               : <MarkdownView key={key} text={block.text} />
           }
           if (block.type === 'thinking')
-            return <ThinkingBlock key={key} text={block.thinking} />
+            return <ThinkingBlock key={key} text={block.thinking} live={live} />
           if (block.type === 'toolCall')
             return <ToolCallCard key={block.id} call={block} state={toolResults[block.id]} />
           if (block.type === 'image')
@@ -100,16 +101,42 @@ function MessageItem({ message, toolResults, live = false }: Props) {
   return null
 }
 
-function ThinkingBlock({ text }: { text: string }) {
-  const [open, setOpen] = useState(false)
+function ThinkingBlock({ text, live }: { text: string, live: boolean }) {
+  const [manual, setManual] = useState<boolean | null>(null)
+  const startedRef = useRef(0)
+  const [seconds, setSeconds] = useState<number | null>(null)
+  const expanded = manual ?? live
+
+  useEffect(() => {
+    if (live) {
+      if (!startedRef.current)
+        startedRef.current = Date.now()
+      return
+    }
+    if (!startedRef.current)
+      return
+    setSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)))
+  }, [live])
+
+  const label = live ? '思考中' : seconds ? `思考了 ${seconds} 秒` : '已思考'
   return (
-    <div className={`${styles.thinking} t-acc`} data-open={String(open)}>
-      <button type="button" className={`${styles.thinkingHead} t-acc-head`} aria-expanded={open} onClick={() => setOpen(value => !value)}>
-        思考过程
+    <div className={`${styles.thinking} t-acc`} data-open={String(expanded)}>
+      <button
+        type="button"
+        className={`${styles.thinkingHead} t-acc-head`}
+        aria-expanded={expanded}
+        onClick={() => setManual(value => !(value ?? live))}
+      >
+        <Sparkles size={14} aria-hidden="true" />
+        {live
+          ? <span className="t-shimmer" role="status" data-text="思考中">思考中</span>
+          : <span role="status">{label}</span>}
         <AccChevron />
       </button>
       <div className="t-acc-panel">
-        <div className={`t-acc-panel-inner ${styles.thinkingBody}`}>{text}</div>
+        <div className="t-acc-panel-inner">
+          <div className={styles.thinkingBody}>{text}</div>
+        </div>
       </div>
     </div>
   )

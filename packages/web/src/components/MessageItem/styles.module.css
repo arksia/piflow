@@ -7,6 +7,12 @@
   contain-intrinsic-size: auto 160px;
 }
 
+/* Hover pill padding sits in here so its left radius is not clipped. */
+.message:not(.user) {
+  margin-left: -6px;
+  padding-left: 6px;
+}
+
 .user {
   display: flex;
   flex-direction: column;
@@ -39,26 +45,37 @@
 }
 
 .thinking {
-  margin: var(--space-2) 0;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-control);
-  background: var(--c-raise);
-  font-size: 0.85rem;
+  margin: 2px 0 8px;
   color: var(--c-muted);
 }
 
 .thinking-head {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: var(--control);
-  color: inherit;
-  font-size: inherit;
-  text-align: left;
+  gap: 6px;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--c-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
+}
+
+.thinking-head:hover {
+  background: var(--c-press);
+}
+
+.thinking-body {
+  margin: 2px 0 4px 6px;
+  padding: 2px 0 2px 12px;
+  border-left: 1px solid var(--c-line);
+  color: var(--c-muted);
+  font-size: 0.8rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .message-error {
@@ -72,14 +89,4 @@
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: break-word;
-}
-
-.thinking-body {
-  margin: 0 0 var(--space-2);
-  padding: var(--space-2);
-  border-radius: var(--radius-control);
-  background: var(--c-bg);
-  white-space: pre-wrap;
-  font-size: 0.82rem;
-  line-height: 1.6;
 }
