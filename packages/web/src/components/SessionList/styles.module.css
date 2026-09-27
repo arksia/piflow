@@ -21,21 +21,10 @@
 }
 
 .brand {
-  display: block;
   color: var(--c-ink);
   font-size: 0.84rem;
   font-weight: 650;
   line-height: 1.15;
-}
-
-.subtitle {
-  display: block;
-  margin-top: 1px;
-  color: var(--c-faint);
-  font-family: var(--font-mono);
-  font-size: 0.61rem;
-  line-height: 1.2;
-  text-transform: uppercase;
 }
 
 .search-row {
