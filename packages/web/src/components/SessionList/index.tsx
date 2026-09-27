@@ -157,10 +157,7 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
     <>
       <div className={styles.list}>
         <div className={styles.top}>
-          <div>
-            <span className={styles.brand}>piflow</span>
-            <span className={styles.subtitle}>coding workspace</span>
-          </div>
+          <span className={styles.brand}>piflow</span>
           <IconButton tip label="收起会话列表" onClick={onToggleSidebar}>
             <PanelLeftClose />
           </IconButton>
