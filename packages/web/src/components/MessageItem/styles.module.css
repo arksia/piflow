@@ -67,6 +67,28 @@
   background: var(--c-press);
 }
 
+.tools {
+  margin: 2px 0 8px;
+}
+
+.tools-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 2px 6px;
+  color: var(--c-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.tools-list {
+  margin: 2px 0 4px 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--c-line);
+}
+
 .thinking-body {
   margin: 2px 0 4px 6px;
   padding: 2px 0 2px 12px;
