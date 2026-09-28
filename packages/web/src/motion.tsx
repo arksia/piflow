@@ -22,8 +22,16 @@ export function usePresence(open: boolean, closeVar: string, fallback: number) {
     if (open) {
       setMounted(true)
       setPhase('idle')
-      const frame = requestAnimationFrame(() => setPhase('open'))
-      return () => cancelAnimationFrame(frame)
+      // Paint the pre-open scale before .is-open. A single frame races the
+      // mount commit and the transition never starts.
+      let inner = 0
+      const outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => setPhase('open'))
+      })
+      return () => {
+        cancelAnimationFrame(outer)
+        cancelAnimationFrame(inner)
+      }
     }
     setPhase('closing')
     const timer = window.setTimeout(setMounted, tokenMs(closeVar, fallback), false)
