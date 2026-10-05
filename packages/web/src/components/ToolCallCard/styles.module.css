@@ -4,7 +4,7 @@
   border: 1px solid var(--c-line);
   border-radius: var(--radius-control);
   background: var(--c-raise);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .tool.error {
@@ -34,6 +34,7 @@
   min-width: 0;
   text-align: left;
   padding: 0 4px;
+  font-size: inherit;
   border-radius: var(--radius-control);
   color: var(--c-muted);
 }
@@ -59,14 +60,12 @@ button.head:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
 }
 
 .live,
 .fail {
   flex-shrink: 0;
   margin-left: auto;
-  font-size: 0.75rem;
 }
 
 .fail {
@@ -88,8 +87,6 @@ button.head:hover {
   background: var(--c-code-bg);
   color: var(--c-body);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
-  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
@@ -101,8 +98,6 @@ button.head:hover {
   border-radius: var(--radius-control);
   background: var(--c-code-bg);
   font-family: var(--font-mono);
-  font-size: 0.78rem;
-  line-height: 1.5;
 }
 
 .diffLine {
@@ -128,7 +123,6 @@ button.head:hover {
 
 .none {
   color: var(--c-faint);
-  font-size: 0.8rem;
 }
 
 .images {
@@ -146,7 +140,6 @@ button.head:hover {
   padding: 0 4px;
   border-radius: var(--radius-control);
   color: var(--c-faint);
-  font-size: 0.75rem;
 }
 
 .action:hover {

@@ -114,7 +114,7 @@ function errorMessage(reason: unknown, fallback: string) {
   return reason instanceof Error ? reason.message : fallback
 }
 
-function ForkDialog({ session, label, onClose }: { session: SessionInfoLite, label: string, onClose: () => void }) {
+export function ForkDialog({ session, label, onClose }: { session: SessionInfoLite, label: string, onClose: () => void }) {
   const [points, setPoints] = useState<ForkPoint[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

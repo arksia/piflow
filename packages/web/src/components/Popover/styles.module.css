@@ -1,0 +1,21 @@
+.trigger {
+  display: inline-flex;
+}
+
+.popup {
+  position: fixed;
+  z-index: 30;
+  width: max-content;
+  padding-bottom: 4px;
+}
+
+.card {
+  min-width: 168px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-raise);
+  box-shadow: 0 10px 34px rgb(0 0 0 / 50%);
+  color: var(--c-body);
+  font-size: 0.75rem;
+}

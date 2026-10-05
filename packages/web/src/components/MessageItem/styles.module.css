@@ -28,25 +28,72 @@
   background: var(--c-raise);
   border: 1px solid var(--c-line);
   border-radius: 14px 14px 4px;
-  line-height: 1.6;
 }
 
 .user-text {
-  color: var(--c-ink);
+  color: var(--c-body);
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
 
-.time {
-  display: inline-block;
-  margin-right: 4px;
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
   color: var(--c-faint);
-  font-size: 0.72rem;
+}
+
+.age {
+  padding: 0 6px;
+  color: var(--c-faint);
+  font-size: 0.75rem;
+  line-height: 24px;
+  opacity: 0;
+  transition: opacity var(--tt-out-dur) var(--tt-out-ease);
+}
+
+.age:hover {
+  color: var(--c-muted);
+}
+
+.age[data-show],
+[data-open] .age {
+  opacity: 1;
+}
+
+.message:hover .age,
+.message:focus-within .age {
+  opacity: 1;
+  transition: opacity var(--tt-in-dur) var(--tt-in-ease) var(--tt-delay);
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.fact {
+  display: contents;
+}
+
+.rows dt {
+  color: var(--c-faint);
+}
+
+.rows dd {
+  margin: 0;
+  color: var(--c-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .thinking {
   margin: 2px 0 8px;
   color: var(--c-muted);
+  font-size: 0.875rem;
 }
 
 .thinking-head {
@@ -58,7 +105,7 @@
   padding: 2px 6px;
   border-radius: 6px;
   color: var(--c-muted);
-  font-size: 0.82rem;
+  font-size: inherit;
   font-weight: 500;
   cursor: pointer;
 }
@@ -69,6 +116,7 @@
 
 .tools {
   margin: 2px 0 8px;
+  font-size: 0.875rem;
 }
 
 .tools-label {
@@ -79,7 +127,6 @@
   margin-left: -6px;
   padding: 2px 6px;
   color: var(--c-muted);
-  font-size: 0.82rem;
   font-weight: 500;
 }
 
@@ -94,8 +141,6 @@
   padding: 2px 0 2px 12px;
   border-left: 1px solid var(--c-line);
   color: var(--c-muted);
-  font-size: 0.8rem;
-  line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
@@ -107,8 +152,6 @@
   background: var(--c-danger-tint);
   border-radius: 0 6px 6px 0;
   color: var(--c-danger);
-  font-size: 0.82rem;
-  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }

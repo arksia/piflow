@@ -57,6 +57,13 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
   const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
   const draftKey = store.activeKey ?? `new:${store.cwd}`
+  let userCount = -1
+  const shown = view?.live ? [...view.messages, view.live] : view?.messages ?? []
+  let lastOutput = -1
+  shown.forEach((message, index) => {
+    if (message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text.trim()))
+      lastOutput = index
+  })
 
   useEffect(() => {
     // Session changes replace the controlled composer with that session's draft.
@@ -270,14 +277,32 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
             )
           : (
               <div ref={setColumn} className={styles.column}>
-                {view.messages.map(message => (
-                  <MessageItem
-                    key={messageKey(message)}
-                    message={message}
-                    toolResults={view.toolResults}
-                  />
-                ))}
-                {view.live ? <MessageItem message={view.live} toolResults={view.toolResults} live /> : null}
+                {view.messages.map((message, index) => {
+                  if (message.role === 'user')
+                    userCount += 1
+                  return (
+                    <MessageItem
+                      key={messageKey(message)}
+                      message={message}
+                      toolResults={view.toolResults}
+                      showTime={index === lastOutput}
+                      sessionPath={store.activeKey ?? undefined}
+                      forkOrdinal={userCount}
+                    />
+                  )
+                })}
+                {view.live
+                  ? (
+                      <MessageItem
+                        message={view.live}
+                        toolResults={view.toolResults}
+                        live
+                        showTime={lastOutput === view.messages.length}
+                        sessionPath={store.activeKey ?? undefined}
+                        forkOrdinal={userCount}
+                      />
+                    )
+                  : null}
                 {isLive && !view.live
                   ? (
                       <div className={styles.pending}>
@@ -291,22 +316,6 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                     {compactionNoticeLabel(view.compactionNotice)}
                   </div>
                 )}
-                {view.stats
-                  ? (
-                      <div className={styles.stats} title="本 session 累计统计，不含 Provider quota">
-                        {formatTokens(view.stats.tokens.total)}
-                        {' tokens · $'}
-                        {view.stats.cost.toFixed(4)}
-                        {' · '}
-                        {view.stats.userMessages}
-                        {' 用户消息 · '}
-                        {view.stats.assistantMessages}
-                        {' 回复 · '}
-                        {view.stats.toolCalls}
-                        {' 工具调用'}
-                      </div>
-                    )
-                  : null}
                 {view.error ? <div className={styles.error}>{view.error}</div> : null}
               </div>
             )}
