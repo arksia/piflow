@@ -24,6 +24,8 @@ interface Props {
   sessionPath?: string
   /** Index among user messages at or before this one. -1 when there is nothing to fork. */
   forkOrdinal?: number
+  /** Tool calls in this reply, including the tool-call message that precedes the text. */
+  tools?: number
 }
 
 type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
@@ -71,7 +73,7 @@ function time(timestamp?: number) {
   return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function MessageItem({ message, toolResults, live = false, showTime = false, sessionPath, forkOrdinal = -1 }: Props) {
+function MessageItem({ message, toolResults, live = false, showTime = false, sessionPath, forkOrdinal = -1, tools = 0 }: Props) {
   const content = 'content' in message ? message.content : ''
   const blocks = Array.isArray(content) ? content : []
   const userText = typeof content === 'string'
@@ -115,7 +117,7 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
           return (
             <Fragment key={node.key}>
               {node}
-              <MessageActions message={message} showTime={showTime} sessionPath={sessionPath} forkOrdinal={forkOrdinal} />
+              <MessageActions message={message} showTime={showTime} sessionPath={sessionPath} forkOrdinal={forkOrdinal} tools={tools} />
             </Fragment>
           )
         })}
@@ -232,7 +234,7 @@ function ThinkingBlock({ text, live }: { text: string, live: boolean }) {
 }
 
 export default memo(MessageItem, (prev, next) => {
-  if (prev.message !== next.message || prev.live !== next.live || prev.showTime !== next.showTime || prev.sessionPath !== next.sessionPath || prev.forkOrdinal !== next.forkOrdinal)
+  if (prev.message !== next.message || prev.live !== next.live || prev.showTime !== next.showTime || prev.sessionPath !== next.sessionPath || prev.forkOrdinal !== next.forkOrdinal || prev.tools !== next.tools)
     return false
   if (prev.toolResults === next.toolResults)
     return true
@@ -262,8 +264,7 @@ function messageBody(message: AssistantMessage) {
   return message.content.map(block => block.type === 'text' ? block.text : '').filter(Boolean).join('\n')
 }
 
-function messageFacts(message: AssistantMessage): [string, string][] {
-  const tools = message.content.filter(block => block.type === 'toolCall').length
+function messageFacts(message: AssistantMessage, tools: number): [string, string][] {
   return [
     ['tokens', message.usage.totalTokens.toLocaleString('zh-CN')],
     ['费用', `$${message.usage.cost.total.toFixed(4)}`],
@@ -276,16 +277,18 @@ function MessageActions({
   showTime,
   sessionPath,
   forkOrdinal,
+  tools,
 }: {
   message: AssistantMessage
   showTime: boolean
   sessionPath?: string
   forkOrdinal: number
+  tools: number
 }) {
   const [copied, setCopied] = useState(false)
   const [forkFailed, setForkFailed] = useState(false)
   const text = messageBody(message).trim()
-  const facts = messageFacts(message)
+  const facts = messageFacts(message, tools)
 
   async function copyMessage() {
     if (!text)
