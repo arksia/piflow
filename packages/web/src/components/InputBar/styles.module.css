@@ -103,8 +103,8 @@
   background: none;
   color: var(--c-ink);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 1.55;
   padding: 5px 4px;
 }
 

@@ -82,8 +82,8 @@
   position: relative;
   flex: 1;
   overflow-y: auto;
-  font-size: 1rem;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .scroll.centered {

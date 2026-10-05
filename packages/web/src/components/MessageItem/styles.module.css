@@ -93,7 +93,7 @@
 .thinking {
   margin: 2px 0 8px;
   color: var(--c-muted);
-  font-size: 0.875rem;
+  font-size: 13px;
 }
 
 .thinking-head {
@@ -105,7 +105,7 @@
   padding: 2px 6px;
   border-radius: 6px;
   color: var(--c-muted);
-  font-size: inherit;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -116,7 +116,7 @@
 
 .tools {
   margin: 2px 0 8px;
-  font-size: 0.875rem;
+  font-size: 13px;
 }
 
 .tools-label {
@@ -127,6 +127,7 @@
   margin-left: -6px;
   padding: 2px 6px;
   color: var(--c-muted);
+  font-size: 14px;
   font-weight: 500;
 }
 
