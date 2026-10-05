@@ -2,6 +2,7 @@ import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { Children, cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usePresence } from '../../motion'
+import Glide from '../Glide'
 import styles from './styles.module.css'
 
 type Placement = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
@@ -102,12 +103,12 @@ function flipPlacement(preferred: Placement, target: DOMRect, width: number, hei
   return current
 }
 
-/** rc-menu submenu starts at rightTop and flips with adjustX / adjustY. */
-function flipSubmenu(row: DOMRect, width: number, height: number) {
+/** rc-menu rightTop. Flip down only when the full panel would leave the viewport. */
+function flipSubmenu(row: DOMRect, width: number, height: number, insetTop: number, insetBottom: number) {
   const view = viewport()
   const boxOf = (side: Side, align: AlignY): Box => ({
     x: side === 'right' ? row.right + GAP : row.left - GAP - width,
-    y: align === 'top' ? row.top : row.bottom - height,
+    y: align === 'top' ? row.top - insetTop : row.bottom + insetBottom - height,
     w: width,
     h: height,
   })
@@ -119,8 +120,7 @@ function flipSubmenu(row: DOMRect, width: number, height: number) {
     align = 'bottom'
   if (origin.x + origin.w > view.r && visibleArea(boxOf('left', align), view) > originArea)
     side = 'left'
-  const originName = `${align === 'top' ? 'top' : 'bottom'}-${side === 'right' ? 'left' : 'right'}` as const
-  return { side, align, origin: originName }
+  return { side, align }
 }
 
 export default function Dropdown({
@@ -170,6 +170,10 @@ export default function Dropdown({
   function scheduleOpen(key: string, target: HTMLElement) {
     clearTimers()
     anchorRef.current = target
+    if (openKey) {
+      setOpenKey(key)
+      return
+    }
     openTimerRef.current = window.setTimeout(openSubmenu, SUBMENU_DELAY, key)
   }
 
@@ -285,37 +289,40 @@ export default function Dropdown({
               }}
             >
               <div className={styles.menu} role="menu">
-                {menu.items.map(item => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    role="menuitem"
-                    className={styles.item}
-                    disabled={item.disabled}
-                    aria-haspopup={item.children?.length ? 'menu' : undefined}
-                    aria-expanded={item.children?.length ? openKey === item.key : undefined}
-                    onMouseEnter={event => activate(item, event.currentTarget)}
-                    onMouseLeave={() => item.children?.length && scheduleClose()}
-                    onFocus={event => activate(item, event.currentTarget)}
-                    onClick={() => pick(item)}
-                  >
-                    <span className={styles.label}>{item.label}</span>
-                    {(item.extra || item.children?.length)
-                      ? (
-                          <span className={styles.extra}>
-                            {item.extra ? <span>{item.extra}</span> : null}
-                            {item.children?.length ? <ChevronRight size={14} /> : null}
-                          </span>
-                        )
-                      : null}
-                  </button>
-                ))}
+                <Glide className={styles.list}>
+                  {menu.items.map(item => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="menuitem"
+                      data-glide=""
+                      className={styles.item}
+                      disabled={item.disabled}
+                      aria-haspopup={item.children?.length ? 'menu' : undefined}
+                      aria-expanded={item.children?.length ? openKey === item.key : undefined}
+                      onMouseEnter={event => activate(item, event.currentTarget)}
+                      onMouseLeave={() => item.children?.length && scheduleClose()}
+                      onFocus={event => activate(item, event.currentTarget)}
+                      onClick={() => pick(item)}
+                    >
+                      <span className={styles.label}>{item.label}</span>
+                      {(item.extra || item.children?.length)
+                        ? (
+                            <span className={styles.extra}>
+                              {item.extra ? <span>{item.extra}</span> : null}
+                              {item.children?.length ? <ChevronRight size={14} /> : null}
+                            </span>
+                          )
+                        : null}
+                    </button>
+                  ))}
+                </Glide>
               </div>
               {openItem?.children?.length
                 ? (
                     <Flyout
-                      key={openItem.key}
                       anchor={anchorRef.current}
+                      itemKey={openItem.key}
                       label={typeof openItem.label === 'string' ? openItem.label : openItem.key}
                       onEnter={clearTimers}
                       onLeave={scheduleClose}
@@ -333,54 +340,98 @@ export default function Dropdown({
 
 function Flyout({
   anchor,
+  itemKey,
   label,
   onEnter,
   onLeave,
   children,
 }: {
   anchor: HTMLElement | null
+  itemKey: string
   label: string
   onEnter: () => void
   onLeave: () => void
   children: ReactNode
 }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const shownRef = useRef(false)
   const presence = usePresence(true, '--dropdown-close-dur', 150)
   useLayoutEffect(() => {
-    const el = ref.current
-    if (!el || !anchor)
+    const frame = frameRef.current
+    const panel = panelRef.current
+    const scroller = scrollerRef.current
+    if (!frame || !panel || !scroller || !anchor)
       return
     function align() {
-      if (!el || !anchor)
+      if (!frame || !panel || !scroller || !anchor)
         return
+      const animate = shownRef.current
+      if (!animate)
+        frame.style.transition = 'none'
+      const width = frame.offsetWidth || 240
+      const saved = scroller.scrollTop
+      scroller.style.height = 'auto'
+      const contentHeight = scroller.offsetHeight
+      scroller.style.height = ''
+      const panelStyle = getComputedStyle(panel)
+      const insetTop = Number.parseFloat(panelStyle.borderTopWidth) + Number.parseFloat(panelStyle.paddingTop)
+      const insetBottom = Number.parseFloat(panelStyle.borderBottomWidth) + Number.parseFloat(panelStyle.paddingBottom)
       const row = anchor.getBoundingClientRect()
-      const placed = flipSubmenu(row, el.offsetWidth, el.offsetHeight)
-      const top = placed.align === 'top' ? anchor.offsetTop : anchor.offsetTop + anchor.offsetHeight - el.offsetHeight
+      const host = frame.offsetParent instanceof HTMLElement ? frame.offsetParent.getBoundingClientRect() : new DOMRect()
+      const height = Math.min(320, contentHeight + insetTop + insetBottom)
+      const placed = flipSubmenu(row, width, height, insetTop, insetBottom)
+      const frameTop = placed.align === 'top'
+        ? row.top - insetTop
+        : row.bottom + insetBottom - height
+      const top = frameTop - host.top
       const left = placed.side === 'right'
-        ? anchor.offsetLeft + anchor.offsetWidth + GAP
-        : anchor.offsetLeft - GAP - el.offsetWidth
-      el.style.top = `${top}px`
-      el.style.left = `${left}px`
-      el.dataset.origin = placed.origin
+        ? row.right - host.left + GAP
+        : row.left - host.left - GAP - width
+      frame.style.height = `${height}px`
+      frame.style.top = `${top}px`
+      frame.style.left = `${left}px`
+      panel.dataset.origin = `${placed.align === 'top' ? 'top' : 'bottom'}-${placed.side === 'right' ? 'left' : 'right'}`
+      scroller.scrollTop = saved
+      if (!animate) {
+        void frame.offsetWidth
+        frame.style.transition = ''
+        shownRef.current = true
+      }
     }
     align()
+    function onScroll(event: Event) {
+      if (event.target instanceof Node && frame.contains(event.target))
+        return
+      align()
+    }
     window.addEventListener('resize', align)
-    window.addEventListener('scroll', align, true)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       window.removeEventListener('resize', align)
-      window.removeEventListener('scroll', align, true)
+      window.removeEventListener('scroll', onScroll, true)
     }
-  }, [anchor])
+  }, [anchor, itemKey])
   return (
     <div
-      ref={ref}
-      className={`${styles.submenu} t-dropdown ${presence.className}`}
-      role="menu"
-      aria-label={label}
+      ref={frameRef}
+      className={`${styles.submenu} t-resize`}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      {children}
+      <div
+        ref={panelRef}
+        className={`${styles.panel} t-dropdown ${presence.className}`}
+        role="menu"
+        aria-label={label}
+      >
+        <div ref={scrollerRef} className={styles.scroller}>
+          <Glide className={styles.list} pin={itemKey}>
+            {children}
+          </Glide>
+        </div>
+      </div>
     </div>
   )
 }
@@ -401,6 +452,7 @@ function ItemList({ items, onPick }: { items: DropdownItem[], onPick: (item: Dro
         type="button"
         role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
         aria-checked={item.selected}
+        data-glide=""
         className={styles.item}
         disabled={item.disabled}
         onClick={() => onPick(item)}

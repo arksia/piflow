@@ -82,6 +82,8 @@
   position: relative;
   flex: 1;
   overflow-y: auto;
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
 .scroll.centered {
@@ -102,7 +104,6 @@
   border-radius: 6px;
   background: var(--c-warning-tint);
   color: var(--c-warning);
-  font-size: 0.8rem;
 }
 
 .trust button {
@@ -116,7 +117,6 @@
 
 .trust-error {
   color: var(--c-danger);
-  font-size: 0.75rem;
 }
 
 .extension-state {
@@ -129,13 +129,6 @@
   color: var(--c-muted);
   font-family: var(--font-mono);
   font-size: 0.72rem;
-}
-
-.stats {
-  padding: 8px 0;
-  color: var(--c-faint);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
 }
 
 .column {
@@ -184,7 +177,6 @@
 .dim {
   margin-top: 24px;
   color: var(--c-faint);
-  font-size: 0.82rem;
 }
 
 .pending {
@@ -193,18 +185,15 @@
   gap: 8px;
   padding: 8px 0;
   color: var(--c-muted);
-  font-size: 0.85rem;
 }
 
 .note {
   color: var(--c-muted);
-  font-size: 0.85rem;
   padding: 8px 0;
 }
 
 .error {
   color: var(--c-danger);
-  font-size: 0.85rem;
   padding: 8px 0;
 }
 

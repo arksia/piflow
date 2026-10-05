@@ -96,15 +96,16 @@
 }
 
 .session-row {
-  transition: background 0.15s var(--ease);
-}
-
-.session-row:hover {
-  background: var(--c-raise);
+  position: relative;
+  z-index: 1;
 }
 
 .session-row:has(.active) {
-  background: var(--c-press);
+  background: color-mix(in srgb, var(--c-press) 60%, transparent);
+}
+
+.rows[data-live] .session-row:has(.active) {
+  background: transparent;
 }
 
 .project-name {

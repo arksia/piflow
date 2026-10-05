@@ -9,6 +9,7 @@ import { setSidebarOpen } from '../../session/store'
 import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
+import Glide from '../Glide'
 import IconButton from '../IconButton'
 import NewSessionDialog from '../NewSessionDialog'
 import ProviderDialog from '../ProviderDialog'
@@ -200,29 +201,31 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
                     {creatingCwd === cwd ? <span className={styles.busy}>…</span> : <Plus />}
                   </IconButton>
                 </div>
-                {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
-                  const session = node.session
-                  return (
-                    <SessionRow
-                      key={session.path}
-                      session={session}
-                      active={store.activeKey === session.path}
-                      streaming={store.statuses[session.path]?.status === 'running'}
-                      attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
-                      connected={store.connected}
-                      opening={openingPath === session.path}
-                      editing={editingPath === session.path}
-                      indent={indent}
-                      hasChildren={hasChildren}
-                      isCollapsed={collapsed.has(session.path)}
-                      lineage={sessionLineage(store.sessions, session.path)}
-                      onPick={() => void pick(session)}
-                      onRenameStart={() => setEditingPath(session.path)}
-                      onRenameEnd={() => setEditingPath(null)}
-                      onToggle={() => toggleCollapsed(session.path)}
-                    />
-                  )
-                })}
+                <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
+                  {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
+                    const session = node.session
+                    return (
+                      <SessionRow
+                        key={session.path}
+                        session={session}
+                        active={store.activeKey === session.path}
+                        streaming={store.statuses[session.path]?.status === 'running'}
+                        attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                        connected={store.connected}
+                        opening={openingPath === session.path}
+                        editing={editingPath === session.path}
+                        indent={indent}
+                        hasChildren={hasChildren}
+                        isCollapsed={collapsed.has(session.path)}
+                        lineage={sessionLineage(store.sessions, session.path)}
+                        onPick={() => void pick(session)}
+                        onRenameStart={() => setEditingPath(session.path)}
+                        onRenameEnd={() => setEditingPath(null)}
+                        onToggle={() => toggleCollapsed(session.path)}
+                      />
+                    )
+                  })}
+                </Glide>
               </div>
             )
           })}
@@ -302,7 +305,12 @@ function SessionRow({ session, active, streaming, attention, connected, opening,
     attention?.label ?? '',
   ].filter(Boolean).join('\n')
   return (
-    <div className={styles.sessionRow} style={indent ? { paddingLeft: indent * 12 + 2 } : undefined}>
+    <div
+      className={styles.sessionRow}
+      data-glide=""
+      aria-current={active ? 'page' : undefined}
+      style={indent ? { paddingLeft: indent * 12 + 2 } : undefined}
+    >
       <span className={styles.rail}>
         {hasChildren
           ? (
