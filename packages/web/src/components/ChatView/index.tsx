@@ -11,6 +11,7 @@ import { useStore } from '../../session/use-store'
 import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
+import { turnToolCount } from '../MessageItem/facts'
 import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
 
@@ -288,6 +289,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                       showTime={index === lastOutput}
                       sessionPath={store.activeKey ?? undefined}
                       forkOrdinal={userCount}
+                      tools={turnToolCount(view.messages, index)}
                     />
                   )
                 })}
@@ -300,6 +302,7 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
                         showTime={lastOutput === view.messages.length}
                         sessionPath={store.activeKey ?? undefined}
                         forkOrdinal={userCount}
+                        tools={turnToolCount([...view.messages, view.live], view.messages.length)}
                       />
                     )
                   : null}
