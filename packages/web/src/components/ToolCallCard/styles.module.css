@@ -4,7 +4,7 @@
   border: 1px solid var(--c-line);
   border-radius: var(--radius-control);
   background: var(--c-raise);
-  font-size: 0.875rem;
+  font-size: 14px;
 }
 
 .tool.error {
@@ -76,6 +76,7 @@ button.head:hover {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-1) 0 0;
+  font-size: 13px;
 }
 
 .output {
