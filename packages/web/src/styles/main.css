@@ -4,8 +4,8 @@
 :root {
   color-scheme: dark;
 
-  /* Three surfaces: shell, workspace canvas, raised controls. */
-  --c-bg: #000;
+  /* Only the pure-black page background is lifted. */
+  --c-bg: #0b0d11;
   --c-canvas: #080808;
   --c-surface: #0f0f0f;
   --c-ink: #fff;

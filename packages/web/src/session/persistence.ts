@@ -106,3 +106,19 @@ export function readCollapsedSessions(): Set<string> {
 export function saveCollapsedSessions(collapsed: ReadonlySet<string>) {
   localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]))
 }
+
+const COLLAPSED_PROJECTS_KEY = 'piflow.collapsed-projects'
+
+export function readCollapsedProjects(): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLLAPSED_PROJECTS_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(saved) ? saved.filter((cwd): cwd is string => typeof cwd === 'string') : [])
+  }
+  catch {
+    return new Set()
+  }
+}
+
+export function saveCollapsedProjects(collapsed: ReadonlySet<string>) {
+  localStorage.setItem(COLLAPSED_PROJECTS_KEY, JSON.stringify([...collapsed]))
+}

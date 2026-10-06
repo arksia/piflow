@@ -118,7 +118,14 @@ export default function App() {
         className={`${styles.sidebar} ${store.sidebarOpen ? styles.open : ''} ${sidebarCollapsed ? styles.collapsed : ''} ${isResizing ? styles.resizing : ''}`}
         style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
       >
-        <SessionList theme={theme} onToggleTheme={toggleTheme} onToggleSidebar={toggleWorkspaceSidebar} />
+        <SessionList
+          theme={theme}
+          view={view}
+          onShowChat={onShowChat}
+          onShowFlow={onShowFlow}
+          onToggleTheme={toggleTheme}
+          onToggleSidebar={toggleWorkspaceSidebar}
+        />
       </aside>
       <div
         className={`${styles.resizer} ${sidebarCollapsed ? styles.resizerHidden : ''}`}
@@ -135,7 +142,7 @@ export default function App() {
         : null}
       <main className={styles.main}>
         <div className={`${styles.pane} ${view !== 'chat' ? styles.paneHidden : ''}`}>
-          <ChatView onShowFlow={onShowFlow} onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
+          <ChatView onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
         </div>
         {flowReady
           ? (

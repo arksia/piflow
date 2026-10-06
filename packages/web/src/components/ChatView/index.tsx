@@ -12,7 +12,6 @@ import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
 import { turnToolCount } from '../MessageItem/facts'
-import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
 
 const SCROLL_KEY = 'piflow.scroll'
@@ -30,12 +29,11 @@ function readScrollMap(): Record<string, number> {
 }
 
 interface ChatViewProps {
-  onShowFlow: () => void
   onToggleSidebar: () => void
   sidebarCollapsed: boolean
 }
 
-export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed }: ChatViewProps) {
+export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatViewProps) {
   const store = useStore()
   const view = store.activeKey ? (store.views[store.activeKey] ?? null) : null
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -250,7 +248,6 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
             text={status.label}
             sizer="压缩上下文"
           />
-          <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
         </div>
       </header>
 
