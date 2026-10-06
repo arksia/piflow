@@ -3,6 +3,7 @@ import type { SessionTreeRow } from '../../session/tree'
 import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
 import { memo, useMemo, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
+import { shortenPath } from '../../path'
 import { newSessionIn, openSession, renameSession } from '../../session/actions'
 import { readCollapsedSessions, saveCollapsedSessions } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -189,7 +190,7 @@ function SessionList({ theme, onToggleTheme, onToggleSidebar }: SessionListProps
                     <span className="t-icon" data-icon="a"><Folder size={14} /></span>
                     <span className="t-icon" data-icon="b"><FolderOpen size={14} /></span>
                   </span>
-                  <div className={styles.projectName} title={cwd}>
+                  <div className={styles.projectName} title={shortenPath(cwd)}>
                     <span className={styles.projectLabel}>{projectName(cwd)}</span>
                   </div>
                   <IconButton
