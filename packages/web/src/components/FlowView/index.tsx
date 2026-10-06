@@ -72,7 +72,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  const poll = useRef({ start() {}, stop() {} })
+  const pollRef = useRef({ start() {}, stop() {} })
   const focusSession = useCallback(async (path: string) => {
     try {
       await openSession(path)
@@ -223,7 +223,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         start()
     }
 
-    poll.current = { start, stop }
+    pollRef.current = { start, stop }
     start()
     window.document.addEventListener('visibilitychange', handleVisibility)
     return () => {
@@ -240,9 +240,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
   useEffect(() => {
     if (active)
-      poll.current.start()
+      pollRef.current.start()
     else
-      poll.current.stop()
+      pollRef.current.stop()
   }, [active])
 
   useEffect(() => {
@@ -254,6 +254,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     else if (document)
       void instance.setViewport(document.viewport)
     // ponytail: refit when the canvas first has nodes; later topology edits stay put
+    // eslint-disable-next-line react/exhaustive-deps -- reading the latest session here would refit on every edit
   }, [active, instance, nodes.length])
 
   // Re-render edges when topology, active message events, selection, or motion preference change.
