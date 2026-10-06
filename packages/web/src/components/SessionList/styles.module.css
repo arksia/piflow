@@ -320,8 +320,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
 }
 
 .age {
@@ -357,8 +357,16 @@
 .swap {
   grid-column: 2;
   grid-row: 1;
+  width: 32px;
+  height: 32px;
   place-self: center end;
+  margin-right: calc(var(--row-pad) * -1);
   pointer-events: none;
+}
+
+.swap button {
+  width: 32px;
+  height: 32px;
 }
 
 .swap:has([data-open]) {

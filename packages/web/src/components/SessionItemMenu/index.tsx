@@ -45,7 +45,6 @@ export default function SessionItemMenu({ session, label, streaming, className, 
   return (
     <span ref={rootRef} className={`${styles.root} ${className ?? ''}`} data-open={menuOpen || menu.mounted || undefined}>
       <IconButton
-        size="compact"
         label={`会话操作：${label}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
