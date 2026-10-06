@@ -1,4 +1,5 @@
 import type { ToolState } from '../../session/state'
+import { FilePen, FileText, Folder, Pencil, Search, Terminal, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { AccChevron } from '../../motion'
 import ContentImage from '../ContentImage'
@@ -59,12 +60,12 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
           ? (
               <button
                 type="button"
-                className={`${styles.head} t-acc-head`}
+                className={`${styles.head} t-acc-head t-tool`}
                 aria-expanded={open}
                 aria-label={`${open ? '收起' : '展开'} ${kind}${rawSummary ? ` ${rawSummary}` : ''}`}
                 onClick={() => setUserOpen(!(userOpen ?? defaultOpen))}
               >
-                <AccChevron />
+                <ToolMark name={call.name} open={open} />
                 <span className={styles.kind}>{kind}</span>
                 {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
                 {status === 'running' ? <span className={styles.live}>运行中</span> : null}
@@ -73,6 +74,7 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
             )
           : (
               <div className={`${styles.head} ${styles.static}`}>
+                <ToolMark name={call.name} open={null} />
                 <span className={styles.kind}>{kind}</span>
                 {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
                 {status === 'running' ? <span className={styles.live}>运行中</span> : null}
@@ -139,4 +141,32 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
         : null}
     </article>
   )
+}
+
+function ToolMark({ name, open }: { name: string, open: boolean | null }) {
+  const glyph = <ToolGlyph name={name} />
+  if (open === null)
+    return <span className={styles.slot}>{glyph}</span>
+  return (
+    <span className={`t-icon-swap ${styles.slot}`} data-state={open ? 'b' : 'a'}>
+      <span className="t-icon" data-icon="a">{glyph}</span>
+      <span className="t-icon" data-icon="b"><AccChevron /></span>
+    </span>
+  )
+}
+
+const TOOL_ICONS: Record<string, typeof FileText> = {
+  read: FileText,
+  write: FilePen,
+  edit: Pencil,
+  bash: Terminal,
+  ls: Folder,
+  grep: Search,
+  find: Search,
+  glob: Search,
+}
+
+function ToolGlyph({ name }: { name: string }) {
+  const Icon = TOOL_ICONS[name] ?? Wrench
+  return <Icon size={13} aria-hidden="true" />
 }

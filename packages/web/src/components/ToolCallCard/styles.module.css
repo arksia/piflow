@@ -17,6 +17,7 @@
   padding: 0;
   border: none;
   background: transparent;
+  font-size: 13px;
 }
 
 .headRow {
@@ -47,6 +48,14 @@ button.head:hover {
 .head.static {
   cursor: default;
   padding-left: 0;
+}
+
+.slot {
+  display: inline-grid;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  color: var(--c-faint);
 }
 
 .kind {
