@@ -202,7 +202,7 @@
   align-items: center;
   column-gap: var(--slot-gap);
   min-height: 32px;
-  padding: 0 var(--row-pad);
+  padding-left: var(--row-pad);
   border-radius: 8px;
 }
 
@@ -299,7 +299,7 @@
   gap: 5px;
   border-radius: 4px;
   text-align: left;
-  padding: 4px 24px 4px 0;
+  padding: 4px 32px 4px 0;
 }
 
 .label {
@@ -360,7 +360,6 @@
   width: 32px;
   height: 32px;
   place-self: center end;
-  margin-right: calc(var(--row-pad) * -1);
   pointer-events: none;
 }
 

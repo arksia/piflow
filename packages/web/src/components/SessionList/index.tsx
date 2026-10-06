@@ -57,6 +57,22 @@ function projectName(cwd: string) {
   return trimmed.split(/[\\/]/).pop() || cwd
 }
 
+function togglePersisted(
+  id: string,
+  save: (next: ReadonlySet<string>) => void,
+  set: (update: (current: ReadonlySet<string>) => ReadonlySet<string>) => void,
+) {
+  set((current) => {
+    const next = new Set(current)
+    if (next.has(id))
+      next.delete(id)
+    else
+      next.add(id)
+    save(next)
+    return next
+  })
+}
+
 interface SessionListProps {
   theme: 'dark' | 'light'
   view: 'chat' | 'flow'
@@ -138,27 +154,11 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
   }
 
   function toggleCollapsed(path: string) {
-    setCollapsed((current) => {
-      const next = new Set(current)
-      if (next.has(path))
-        next.delete(path)
-      else
-        next.add(path)
-      saveCollapsedSessions(next)
-      return next
-    })
+    togglePersisted(path, saveCollapsedSessions, setCollapsed)
   }
 
   function toggleProject(cwd: string) {
-    setCollapsedProjects((current) => {
-      const next = new Set(current)
-      if (next.has(cwd))
-        next.delete(cwd)
-      else
-        next.add(cwd)
-      saveCollapsedProjects(next)
-      return next
-    })
+    togglePersisted(cwd, saveCollapsedProjects, setCollapsedProjects)
   }
 
   function closeSearch() {
