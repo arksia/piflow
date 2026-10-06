@@ -29,7 +29,6 @@ import { createBackgroundSession, openSession } from '../../session/actions'
 import { useStore } from '../../session/use-store'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
-import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
@@ -479,7 +478,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
           : null}
         <button className={styles.add} disabled={!document} aria-expanded={panelOpen} onClick={() => setPanelOpen(open => !open)}>添加节点</button>
-        <ViewSwitch active="flow" onChange={view => view === 'chat' && onShowChat()} />
       </header>
 
       {attentionItems.length

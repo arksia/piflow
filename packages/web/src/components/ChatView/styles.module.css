@@ -35,7 +35,7 @@
 
 .title {
   min-width: 0;
-  color: var(--c-mid);
+  color: var(--c-ink);
   font-size: 0.8rem;
   font-weight: 600;
   overflow: hidden;

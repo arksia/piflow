@@ -12,10 +12,10 @@ export default function ViewSwitch({ active, onChange }: ViewSwitchProps) {
   const pillRef = useTabsPill(barRef, active)
 
   return (
-    <div ref={barRef} className={`t-tabs ${styles.switcher}`} role="tablist" aria-label="工作区视图">
+    <div ref={barRef} className={`t-tabs ${styles.switcher}`} role="tablist" aria-label="会话和画布">
       <span ref={pillRef} className={`t-tabs-pill ${styles.pill}`} aria-hidden="true" />
-      <button className={`t-tab ${styles.tab}`} role="tab" aria-selected={active === 'chat'} onClick={() => onChange('chat')}>聊天</button>
-      <button className={`t-tab ${styles.tab} ${styles.flow}`} role="tab" aria-selected={active === 'flow'} onClick={() => onChange('flow')}>Flow</button>
+      <button className={`t-tab ${styles.tab}`} role="tab" aria-selected={active === 'chat'} onClick={() => onChange('chat')}>会话</button>
+      <button className={`t-tab ${styles.tab} ${styles.flow}`} role="tab" aria-selected={active === 'flow'} onClick={() => onChange('flow')}>画布</button>
     </div>
   )
 }
