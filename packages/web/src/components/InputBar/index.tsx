@@ -346,7 +346,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             />
             {isLive
               ? (
-                  <div ref={streamingTabsRef} className={`t-tabs ${styles.streamingMode}`} aria-label="运行中消息发送方式">
+                  <div ref={streamingTabsRef} className={`t-tabs t-tabs-sm ${styles.streamingMode}`} aria-label="运行中消息发送方式">
                     <span ref={streamingPillRef} className="t-tabs-pill" aria-hidden="true" />
                     <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
                     <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
