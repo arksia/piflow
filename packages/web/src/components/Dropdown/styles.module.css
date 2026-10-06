@@ -40,7 +40,48 @@
 }
 
 .menu {
-  width: 220px;
+  width: max-content;
+  min-width: 220px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--c-press);
+  color: var(--c-faint);
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--c-ink);
+  font-size: 0.78rem;
+}
+
+.search input::placeholder {
+  color: var(--c-faint);
+}
+
+.search button {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--c-faint);
+}
+
+.empty {
+  padding: 8px;
+  color: var(--c-faint);
+  font-size: 0.75rem;
 }
 
 .submenu {

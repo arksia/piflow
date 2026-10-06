@@ -1,8 +1,9 @@
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
-import { Check, ChevronRight } from 'lucide-react'
+import { Check, ChevronRight, Search, X } from 'lucide-react'
 import { Children, cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usePresence } from '../../motion'
 import Glide from '../Glide'
+import { filterDropdownItems } from './filter'
 import styles from './styles.module.css'
 
 type Placement = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
@@ -25,6 +26,8 @@ interface Props {
   open?: boolean
   onOpenChange?: (open: boolean, info: { source: Source }) => void
   placement?: Placement
+  /** Menu grows with its labels, at least 220px, and stops at this width. */
+  maxWidth?: number
   trigger?: Array<'click' | 'hover'>
   children: ReactElement<{
     onClick?: (event: MouseEvent<HTMLElement>) => void
@@ -128,6 +131,7 @@ export default function Dropdown({
   open,
   onOpenChange,
   placement = 'bottomLeft',
+  maxWidth,
   trigger = ['click'],
   children,
 }: Props) {
@@ -135,7 +139,9 @@ export default function Dropdown({
   const popupRef = useRef<HTMLDivElement>(null)
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const anchorRef = useRef<HTMLElement | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const openTimerRef = useRef<number | null>(null)
   const closeTimerRef = useRef<number | null>(null)
   const onOpenChangeRef = useRef(onOpenChange)
@@ -147,8 +153,10 @@ export default function Dropdown({
   const child = Children.only(children) // eslint-disable-line react/no-children-only -- antd Dropdown requires exactly one trigger element
 
   function setMergedOpen(next: boolean, source: Source) {
-    if (!next)
+    if (!next) {
       setOpenKey(null)
+      setQuery('')
+    }
     onOpenChangeRef.current?.(next, { source })
     if (!controlledRef.current)
       setUncontrolledOpen(next)
@@ -190,6 +198,7 @@ export default function Dropdown({
       return
     function closeFromTrigger() {
       setOpenKey(null)
+      setQuery('')
       onOpenChangeRef.current?.(false, { source: 'trigger' })
       if (!controlledRef.current)
         setUncontrolledOpen(false)
@@ -239,7 +248,7 @@ export default function Dropdown({
       window.removeEventListener('resize', align)
       window.removeEventListener('scroll', align, true)
     }
-  }, [mergedOpen, presence.mounted, placement, menu.items])
+  }, [mergedOpen, presence.mounted, placement, menu.items, query])
 
   function pick(item: DropdownItem) {
     if (item.disabled)
@@ -250,7 +259,13 @@ export default function Dropdown({
     setMergedOpen(false, 'menu')
   }
 
-  const openItem = menu.items.find(item => item.key === openKey)
+  const visibleItems = filterDropdownItems(menu.items, query)
+  const openItem = visibleItems.find(item => item.key === openKey)
+
+  useLayoutEffect(() => {
+    if (mergedOpen)
+      searchRef.current?.focus()
+  }, [mergedOpen, presence.mounted])
 
   return (
     <span
@@ -288,35 +303,66 @@ export default function Dropdown({
                 scheduleClose()
               }}
             >
-              <div className={styles.menu} role="menu">
-                <Glide className={styles.list}>
-                  {menu.items.map(item => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      role="menuitem"
-                      data-glide=""
-                      className={styles.item}
-                      disabled={item.disabled}
-                      aria-haspopup={item.children?.length ? 'menu' : undefined}
-                      aria-expanded={item.children?.length ? openKey === item.key : undefined}
-                      onMouseEnter={event => activate(item, event.currentTarget)}
-                      onMouseLeave={() => item.children?.length && scheduleClose()}
-                      onFocus={event => activate(item, event.currentTarget)}
-                      onClick={() => pick(item)}
-                    >
-                      <span className={styles.label}>{item.label}</span>
-                      {(item.extra || item.children?.length)
-                        ? (
-                            <span className={styles.extra}>
-                              {item.extra ? <span>{item.extra}</span> : null}
-                              {item.children?.length ? <ChevronRight size={14} /> : null}
-                            </span>
-                          )
-                        : null}
-                    </button>
-                  ))}
-                </Glide>
+              <div className={styles.menu} style={maxWidth === undefined ? undefined : { maxWidth }}>
+                <div className={styles.search}>
+                  <Search size={14} />
+                  <input
+                    ref={searchRef}
+                    value={query}
+                    placeholder="搜索"
+                    aria-label="搜索"
+                    onChange={event => setQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape' && query) {
+                        event.stopPropagation()
+                        setQuery('')
+                      }
+                    }}
+                  />
+                  {query
+                    ? (
+                        <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}>
+                          <X size={12} />
+                        </button>
+                      )
+                    : null}
+                </div>
+                <div role="menu">
+                  {visibleItems.length
+                    ? (
+                        <Glide className={styles.list}>
+                          {visibleItems.map(item => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              data-glide=""
+                              className={styles.item}
+                              disabled={item.disabled}
+                              role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
+                              aria-checked={item.selected}
+                              aria-haspopup={item.children?.length ? 'menu' : undefined}
+                              aria-expanded={item.children?.length ? openKey === item.key : undefined}
+                              onMouseEnter={event => activate(item, event.currentTarget)}
+                              onMouseLeave={() => item.children?.length && scheduleClose()}
+                              onFocus={event => activate(item, event.currentTarget)}
+                              onClick={() => pick(item)}
+                            >
+                              <span className={styles.label}>{item.label}</span>
+                              {(item.extra || item.children?.length)
+                                ? (
+                                    <span className={styles.extra}>
+                                      {item.extra ? <span>{item.extra}</span> : null}
+                                      {item.children?.length ? <ChevronRight size={14} /> : null}
+                                    </span>
+                                  )
+                                : null}
+                              {item.selected ? <Check size={14} /> : null}
+                            </button>
+                          ))}
+                        </Glide>
+                      )
+                    : <div className={styles.empty}>没有匹配</div>}
+                </div>
               </div>
               {openItem?.children?.length
                 ? (

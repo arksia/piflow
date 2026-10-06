@@ -180,23 +180,6 @@
   pointer-events: none;
 }
 
-.t-tabs.t-tabs-sm {
-  padding: 2px;
-}
-
-.t-tabs.t-tabs-sm .t-tab,
-.t-tabs.t-tabs-sm .t-tabs-pill {
-  height: 24px;
-}
-
-.t-tabs.t-tabs-sm .t-tab {
-  padding: 0 12px;
-}
-
-.t-tabs.t-tabs-sm .t-tabs-pill {
-  top: 2px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .t-tabs-pill, .t-tab { transition: none !important; }
 }

@@ -328,7 +328,7 @@ button:disabled {
 .streaming-tail {
   display: inline-block;
   margin-left: 2px;
-  color: var(--c-signal);
+  color: var(--c-faint);
   animation: streaming-tail-breathe 1.2s ease-in-out infinite;
 }
 

@@ -15,6 +15,7 @@ export const API_FLOW_PATH = '/api/flow'
 export const API_EXTENSIONS_PATH = '/api/extensions'
 export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
 export const API_PROJECT_TRUST_PATH = '/api/project-trust'
+export const API_GIT_PATH = '/api/git'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 export const MAX_PROMPT_IMAGES = 10
@@ -88,6 +89,16 @@ export interface TrustProjectRequest {
   cwd: string
 }
 
+export interface GitBranchesResponse {
+  current: string | null
+  branches: string[]
+}
+
+export interface GitCheckoutRequest {
+  cwd: string
+  branch: string
+}
+
 export function buildAuthPath(token?: string): string {
   if (!token)
     return AUTH_PATH
@@ -97,6 +108,10 @@ export function buildAuthPath(token?: string): string {
 
 export function buildDirectoriesPath(path: string): string {
   return buildPathWithSearch(API_DIRECTORIES_PATH, { path })
+}
+
+export function buildGitPath(cwd: string): string {
+  return buildPathWithSearch(API_GIT_PATH, { cwd })
 }
 
 export function buildUsagePath(options: { key?: string, provider?: string, fresh?: boolean } = {}): string {
