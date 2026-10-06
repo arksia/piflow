@@ -1,8 +1,3 @@
-interface TextNode {
-  type: 'text'
-  value: string
-}
-
 interface ElementNode {
   type: 'element'
   tagName: string
@@ -22,12 +17,8 @@ interface ParentNode extends HastNode {
   children: HastNode[]
 }
 
-const SKIP_TAGS = new Set(['code', 'pre', 'script', 'style', 'stream-text'])
+const SKIP_TAGS = new Set(['code', 'pre', 'script', 'style'])
 const TAIL_PARENT_TAGS = new Set(['p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-
-function isTextNode(node: HastNode): node is TextNode {
-  return node.type === 'text' && typeof node.value === 'string' && node.value.length > 0
-}
 
 function isElementNode(node: HastNode): node is ElementNode {
   return node.type === 'element' && typeof node.tagName === 'string' && Array.isArray(node.children)
@@ -40,32 +31,6 @@ function isParentNode(node: HastNode): node is ParentNode {
 function hasClass(node: ElementNode, className: string): boolean {
   const value = node.properties?.className
   return Array.isArray(value) ? value.includes(className) : value === className
-}
-
-function transformChildren(parent: ParentNode, insideSkippedElement: boolean) {
-  const skip = insideSkippedElement || (
-    isElementNode(parent)
-    && (SKIP_TAGS.has(parent.tagName) || hasClass(parent, 'katex'))
-  )
-  const children: HastNode[] = []
-
-  for (const child of parent.children) {
-    if (isTextNode(child) && child.value.trim() && !skip) {
-      children.push({
-        type: 'element',
-        tagName: 'stream-text',
-        properties: {},
-        children: [{ type: 'text', value: child.value }],
-      })
-      continue
-    }
-
-    if (isElementNode(child))
-      transformChildren(child, skip)
-    children.push(child)
-  }
-
-  parent.children = children
 }
 
 function tailNode(): ElementNode {
@@ -97,7 +62,6 @@ function appendTail(parent: ParentNode): boolean {
 export function rehypeStreamingText(options?: { tail?: boolean }) {
   return (tree: HastNode) => {
     if (isParentNode(tree)) {
-      transformChildren(tree, false)
       if (options?.tail && !appendTail(tree))
         tree.children.push(tailNode())
     }
