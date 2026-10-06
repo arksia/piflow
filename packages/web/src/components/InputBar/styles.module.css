@@ -52,6 +52,12 @@
   font-size: 0.78rem;
 }
 
+.notice {
+  padding: 0 4px 8px;
+  color: var(--c-muted);
+  font-size: 0.78rem;
+}
+
 .box {
   position: relative;
   display: flex;

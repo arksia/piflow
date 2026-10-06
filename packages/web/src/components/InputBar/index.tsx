@@ -68,6 +68,11 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const canSend = store.connected && (text.trim().length > 0 || images.length > 0)
   const isLive = store.connected && !!view?.isStreaming
   const stopping = Boolean(view?.isCompacting || isLive)
+  const offlineLabel = store.connectionState === 'reconnecting' ? '重连中，发送暂不可用' : '连接中，发送暂不可用'
+  const sendLabel = stopping
+    ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复')
+    : store.connected ? '发送' : offlineLabel
+  const sendAria = stopping && !view?.isCompacting && aborting ? '正在中断回复' : sendLabel
 
   const viewKey = view?.key
   const modelId = view?.model?.id
@@ -275,6 +280,13 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     <div className={styles.bar}>
       <div className={styles.column}>
         {operationError ? <div className={styles.error} role="alert">{operationError}</div> : null}
+        {!store.connected
+          ? (
+              <div className={styles.notice} role="status">
+                {`${store.connectionState === 'reconnecting' ? '重连中' : '连接中'}，已输入的内容会保留`}
+              </div>
+            )
+          : null}
         {view && (view.queue.steering.length || view.queue.followUp.length)
           ? (
               <div className={styles.queue}>
@@ -364,8 +376,8 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             <button
               type="button"
               className={`${styles.button} ${stopping ? styles.stop : `${styles.send} ${canSend ? styles.ready : ''}`}`}
-              title={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复') : '发送'}
-              aria-label={stopping ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断回复' : '中断回复') : '发送'}
+              title={sendLabel}
+              aria-label={sendAria}
               disabled={stopping ? aborting : !canSend}
               onClick={stopping ? (view?.isCompacting ? stopCompaction : stop) : () => void submit()}
             >

@@ -24,6 +24,7 @@ import { ArrowRight, CircleAlert, PanelLeft } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
+import { shortenPath } from '../../path'
 import { createBackgroundSession, openSession } from '../../session/actions'
 import { useStore } from '../../session/use-store'
 import FlowSessionNode from '../FlowSessionNode'
@@ -467,7 +468,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           : null}
         <div className={styles.heading}>
           <strong>Flow</strong>
-          <span title={projectPath}>{shorten(projectPath)}</span>
+          <span title={projectPath}>{shortenPath(projectPath)}</span>
         </div>
         {saving ? <span className={styles.saving}><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
         {selection.nodes.length || selection.edges.length ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button> : null}
@@ -635,8 +636,4 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
 
 function sessionLabel(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
-}
-
-function shorten(path: string) {
-  return path.replace(/^\/Users\/[^/]+/, '~')
 }

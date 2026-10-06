@@ -30,6 +30,16 @@ export default function App() {
   const sidebarRef = useRef<HTMLElement>(null)
   const sidebarWidthRef = useRef(sidebarWidth)
   const [isResizing, setIsResizing] = useState(false)
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(width <= 768px)').matches)
+  // ponytail: Flow's chrome is display:none on this breakpoint, so show chat without clearing the saved view
+  const view = narrow ? 'chat' : workspaceView
+
+  useEffect(() => {
+    const media = window.matchMedia('(width <= 768px)')
+    const onChange = () => setNarrow(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
 
   const toggleWorkspaceSidebar = useCallback(() => {
     setSidebarCollapsed((collapsed) => {
@@ -124,15 +134,15 @@ export default function App() {
         ? <button type="button" className={styles.scrim} aria-label="关闭会话列表" onClick={() => setSidebarOpen(false)} />
         : null}
       <main className={styles.main}>
-        <div className={`${styles.pane} ${workspaceView !== 'chat' ? styles.paneHidden : ''}`}>
+        <div className={`${styles.pane} ${view !== 'chat' ? styles.paneHidden : ''}`}>
           <ChatView onShowFlow={onShowFlow} onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
         </div>
         {flowReady
           ? (
-              <div className={`${styles.pane} ${workspaceView !== 'flow' ? styles.paneHidden : ''}`}>
+              <div className={`${styles.pane} ${view !== 'flow' ? styles.paneHidden : ''}`}>
                 <Suspense fallback={<div className={styles.loading}>正在加载 Flow…</div>}>
                   <FlowView
-                    active={workspaceView === 'flow'}
+                    active={view === 'flow'}
                     onShowChat={onShowChat}
                     onToggleSidebar={toggleWorkspaceSidebar}
                     sidebarCollapsed={sidebarCollapsed}
