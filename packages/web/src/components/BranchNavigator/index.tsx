@@ -1,75 +1,64 @@
-import type { SessionTreeNode } from '@earendil-works/pi-coding-agent'
-import { GitBranch } from 'lucide-react'
+import type { GitBranchesResponse } from '@piflow/protocol'
+import { ChevronDown, GitBranch } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { usePresence } from '../../motion'
-import { fetchSessionTree, navigateSessionTree } from '../../session/actions'
+import { checkoutGitBranch, fetchGitBranches } from '../../session/actions'
+import Dropdown from '../Dropdown'
 import styles from './styles.module.css'
 
-export default function BranchNavigator({ path, placement = 'down' }: { path: string, placement?: 'down' | 'up' }) {
-  const [tree, setTree] = useState<SessionTreeNode[] | null>(null)
-  const [leafId, setLeafId] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  const menu = usePresence(open, '--dropdown-close-dur', 150)
+export default function BranchNavigator({ cwd }: { cwd: string }) {
+  const [info, setInfo] = useState<GitBranchesResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    void fetchSessionTree(path).then((result) => {
-      if (!cancelled) {
-        setTree(result.tree)
-        setLeafId(result.leafId)
-      }
+    void fetchGitBranches(cwd).then((result) => {
+      if (!cancelled)
+        setInfo(result)
     }).catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [path])
+  }, [cwd])
 
-  if (!tree || !isBranched(tree))
+  if (!info?.current)
     return null
 
-  async function select(id: string) {
-    await navigateSessionTree(path, id)
-    setLeafId(id)
-    setOpen(false)
+  async function select(branch: string) {
+    setError(null)
+    try {
+      setInfo(await checkoutGitBranch(cwd, branch))
+    }
+    catch (err) {
+      setError(err instanceof Error ? err.message : '切换失败')
+    }
   }
 
   return (
-    <div className={`${styles.root} ${placement === 'up' ? styles.up : ''}`}>
+    <Dropdown
+      placement="topLeft"
+      maxWidth={300}
+      menu={{
+        items: info.branches.map(branch => ({
+          key: branch,
+          label: branch,
+          selected: branch === info.current,
+          onClick: () => {
+            if (branch !== info.current)
+              void select(branch)
+          },
+        })),
+      }}
+    >
       <button
         type="button"
         className={styles.toggle}
-        title="切换会话分支"
-        aria-label="切换会话分支"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen(value => !value)}
+        title={error ?? '切换 Git 分支'}
+        aria-label={`切换 Git 分支，当前 ${info.current}`}
       >
         <GitBranch />
-        分支
+        <span className={styles.label}>{info.current}</span>
+        <ChevronDown className={styles.chevron} />
       </button>
-      {menu.mounted
-        ? (
-            <div className={`${styles.menu} t-dropdown ${menu.className}`} data-origin={placement === 'up' ? 'bottom-left' : 'top-right'} role="menu">
-              {tree.map(node => <BranchNode key={node.entry.id} node={node} leafId={leafId} onSelect={select} />)}
-            </div>
-          )
-        : null}
-    </div>
-  )
-}
-
-function isBranched(nodes: SessionTreeNode[]): boolean {
-  return nodes.some(function walk(node): boolean {
-    return node.children.length > 1 || node.children.some(walk)
-  })
-}
-
-function BranchNode({ node, leafId, onSelect }: { node: SessionTreeNode, leafId: string | null, onSelect: (id: string) => Promise<void> }) {
-  const label = node.label || node.entry.id
-  return (
-    <div>
-      <button className={`${styles.node} ${leafId === node.entry.id ? styles.active : ''}`} role="menuitem" onClick={() => void onSelect(node.entry.id)}>{label}</button>
-      {node.children.map(child => <BranchNode key={child.entry.id} node={child} leafId={leafId} onSelect={onSelect} />)}
-    </div>
+    </Dropdown>
   )
 }

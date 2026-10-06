@@ -76,20 +76,16 @@
   border-color: var(--c-line-strong);
 }
 
-.box.streaming {
-  border-color: var(--c-accent);
-}
-
-.box.streaming:focus-within {
-  border-color: var(--c-accent-hover);
-}
-
 .composer {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
   min-height: 40px;
   padding: 6px;
+}
+
+.box.wide .composer {
+  align-items: flex-end;
 }
 
 .composer .plus {
@@ -155,64 +151,55 @@
 .meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   min-height: 28px;
-  padding: 6px 8px 0;
-}
-
-.meta-lead,
-.meta-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.meta-stat {
-  color: var(--c-faint);
-  font-size: 0.75rem;
-  white-space: nowrap;
-}
-
-.streaming-mode {
-  font-size: 0.75rem;
+  padding: 4px 10px 0;
 }
 
 .meter {
   position: relative;
+  margin-left: auto;
 }
 
-.meter-trigger {
-  height: 24px;
-  padding: 0 4px;
-  border-radius: var(--radius-control);
-  color: var(--c-faint);
-  font-size: 0.75rem;
-}
-
-.meter-trigger.warning {
-  color: var(--c-warning);
-}
-
-.meter-trigger.danger {
-  color: var(--c-danger);
-}
-
-.meter-trigger:hover,
-.meter:focus-within .meter-trigger {
+.ring {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
   color: var(--c-muted);
-  background: var(--c-press);
 }
 
-.meter-trigger.warning:hover,
-.meter:focus-within .meter-trigger.warning {
+.ring:hover,
+.meter:focus-within .ring {
+  color: var(--c-ink);
+}
+
+.ring.warning,
+.ring.warning:hover,
+.meter:focus-within .ring.warning {
   color: var(--c-warning);
 }
 
-.meter-trigger.danger:hover,
-.meter:focus-within .meter-trigger.danger {
+.ring.danger,
+.ring.danger:hover,
+.meter:focus-within .ring.danger {
   color: var(--c-danger);
+}
+
+.track,
+.value {
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.track {
+  stroke: var(--c-scrollbar);
+}
+
+.value {
+  stroke: currentcolor;
+  stroke-linecap: round;
 }
 
 .meter-tip {
@@ -244,33 +231,6 @@
 .meter:hover .meter-tip,
 .meter:focus-within .meter-tip {
   display: block;
-}
-
-.chip {
-  display: inline-flex;
-  height: var(--control);
-  flex-shrink: 0;
-  align-items: center;
-  padding: 0 8px;
-  border-radius: var(--radius-control);
-  color: var(--c-muted);
-  font-size: 0.75rem;
-}
-
-.chip:disabled {
-  color: var(--c-faint);
-  opacity: 0.45;
-}
-
-.chip:hover:not(:disabled) {
-  color: var(--c-ink);
-  background: var(--c-press);
-}
-
-.chip:active:not(:disabled),
-.chip[aria-pressed='true'] {
-  color: var(--c-ink);
-  background: var(--c-press);
 }
 
 .model {
@@ -324,7 +284,7 @@
 }
 
 .stop .core {
-  color: var(--c-signal);
+  color: var(--c-ink);
 }
 
 .send.ready {

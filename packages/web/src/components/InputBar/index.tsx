@@ -1,5 +1,4 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
-import type { UsageWindow } from '@piflow/protocol'
 import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
@@ -7,8 +6,7 @@ import type { DropdownItem } from '../Dropdown'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
 import { ArrowUp, ChevronDown, ListX, Plus, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useTabsPill } from '../../motion'
-import { abort, abortCompaction, clearQueue, compact, requestUsage, sendPrompt, setAutoCompaction, setModel, setThinking } from '../../session/actions'
+import { abort, abortCompaction, clearQueue, sendPrompt, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
 import BranchNavigator from '../BranchNavigator'
@@ -24,32 +22,19 @@ interface Props {
   draftKey: string
 }
 
-function formatWindow(window: UsageWindow) {
-  const reset = window.resetTime ? new Date(window.resetTime) : null
-  const when = reset
-    ? window.minutes
-      ? reset.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-      : reset.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
-    : ''
-  const label = window.minutes ? `${Math.round(window.minutes / 60)}h 窗口` : '周期额度'
-  return `${label} · 剩 ${window.remaining}% · ${when} 重置`
-}
+const RING_R = 6
+const RING_C = 2 * Math.PI * RING_R
 
 export default function InputBar({ view, text, focusVersion, onTextChange, draftKey }: Props) {
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [aborting, setAborting] = useState(false)
-  const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'followUp'>('steer')
   const [clearingQueue, setClearingQueue] = useState(false)
-  const [compacting, setCompacting] = useState(false)
   const [images, setImages] = useState<DraftImage[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
-  const streamingTabsRef = useRef<HTMLDivElement>(null)
-  const streamingPillRef = useTabsPill(streamingTabsRef, view?.isStreaming ? streamingBehavior : '')
-  const previousStreamingRef = useRef(view?.isStreaming)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
     const models = modelGroups.get(model.provider) ?? []
@@ -58,12 +43,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   }
   const scopedModels = new Map(view?.modelScope.map(scoped => [`${scoped.model.provider}/${scoped.model.id}`, scoped.thinkingLevel] as const) ?? [])
 
-  const provider = view?.model?.provider
-  const report = provider ? store.usage[provider] : null
-  const usage = report?.supported ? report : null
-  const quota = usage?.windows.length ? Math.min(...usage.windows.map(window => window.remaining)) : null
   const contextPercent = Math.round(view?.context?.percent ?? 0)
-  const contextRemaining = Math.max(0, 100 - contextPercent)
   const contextLevel = contextPercent >= 85 ? styles.danger : contextPercent >= 70 ? styles.warning : ''
   const canSend = store.connected && (text.trim().length > 0 || images.length > 0)
   const isLive = store.connected && !!view?.isStreaming
@@ -73,21 +53,6 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复')
     : store.connected ? '发送' : offlineLabel
   const sendAria = stopping && !view?.isCompacting && aborting ? '正在中断回复' : sendLabel
-
-  const viewKey = view?.key
-  const modelId = view?.model?.id
-  const isStreaming = view?.isStreaming
-
-  useEffect(() => {
-    if (viewKey)
-      requestUsage(viewKey)
-  }, [viewKey, modelId])
-
-  useEffect(() => {
-    if (previousStreamingRef.current && !isStreaming && viewKey)
-      requestUsage(viewKey, true)
-    previousStreamingRef.current = isStreaming
-  }, [isStreaming, viewKey])
 
   useEffect(() => {
     if (focusVersion)
@@ -117,8 +82,6 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
 
   function onModelOpenChange(next: boolean) {
     setModelOpen(next)
-    if (next && view)
-      requestUsage(view.key)
   }
 
   function pickThinking(level: ThinkingLevel) {
@@ -137,7 +100,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
       await sendPrompt(
         text.trim(),
         images.map(image => ({ type: image.type, data: image.data, mimeType: image.mimeType })),
-        isLive ? streamingBehavior : undefined,
+        isLive ? 'steer' : undefined,
       )
       onTextChange('')
       clearDraft(draftKey)
@@ -197,26 +160,11 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
       .finally(() => setClearingQueue(false))
   }
 
-  function runCompact() {
-    if (!view || compacting)
-      return
-    setOperationError(null)
-    setCompacting(true)
-    void compact(view.key).catch(error => setOperationError(errorMessage(error))).finally(() => setCompacting(false))
-  }
-
   function stopCompaction() {
     if (!view)
       return
     setOperationError(null)
     void abortCompaction(view.key).catch(error => setOperationError(errorMessage(error)))
-  }
-
-  function toggleAutoCompaction() {
-    if (!view)
-      return
-    setOperationError(null)
-    void setAutoCompaction(view.key, !view.autoCompactionEnabled).catch(error => setOperationError(errorMessage(error)))
   }
 
   function dropImages(event: DragEvent<HTMLTextAreaElement>) {
@@ -305,7 +253,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             )
           : null}
 
-        <div ref={boxRef} className={`${styles.box} ${isLive ? styles.streaming : ''}`}>
+        <div ref={boxRef} className={styles.box}>
           {images.length
             ? (
                 <div className={styles.images}>
@@ -344,15 +292,6 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
               hidden
               onChange={pickImages}
             />
-            {isLive
-              ? (
-                  <div ref={streamingTabsRef} className={`t-tabs t-tabs-sm ${styles.streamingMode}`} aria-label="运行中消息发送方式">
-                    <span ref={streamingPillRef} className="t-tabs-pill" aria-hidden="true" />
-                    <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>立即引导</button>
-                    <button className="t-tab" role="tab" aria-selected={streamingBehavior === 'followUp'} onClick={() => setStreamingBehavior('followUp')}>完成后继续</button>
-                  </div>
-                )
-              : null}
             {view && (view.model || view.thinkingLevels.length > 0)
               ? (
                   <Dropdown
@@ -392,48 +331,30 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
         </div>
 
         <div className={styles.meta}>
-          <div className={styles.metaLead}>
-            {store.activeKey ? <BranchNavigator path={store.activeKey} placement="up" /> : null}
-            {quota !== null ? <span className={styles.metaStat}>{`额度 剩 ${quota}%`}</span> : null}
-            {view?.context
-              ? (
-                  <div className={styles.meter} onMouseEnter={() => viewKey && requestUsage(viewKey)}>
-                    <button type="button" className={`${styles.meterTrigger} ${contextLevel}`} aria-label={`上下文余量 ${contextRemaining}%`} aria-describedby="composer-usage">
-                      {`上下文 剩 ${contextRemaining}%`}
-                    </button>
-                    <div className={styles.meterTip} id="composer-usage" role="tooltip">
-                      {usage?.windows.map(window => (
-                        <div key={`${window.minutes}:${window.limit}:${window.resetTime ?? ''}`}>{formatWindow(window)}</div>
-                      ))}
-                      <div>
-                        已用
-                        {' '}
-                        {contextPercent}
-                        %
-                        {' · '}
-                        {formatTokens(view.context.tokens ?? 0)}
-                        {' / '}
-                        {formatTokens(view.context.contextWindow)}
-                      </div>
-                    </div>
-                  </div>
-                )
-              : null}
-          </div>
-          {view && !isLive
+          {view?.cwd ? <BranchNavigator cwd={view.cwd} /> : null}
+          {view?.context
             ? (
-                <div className={styles.metaActions}>
-                  <button
-                    type="button"
-                    className={styles.chip}
-                    aria-pressed={view.autoCompactionEnabled}
-                    onClick={toggleAutoCompaction}
-                  >
-                    {view.autoCompactionEnabled ? '自动压缩开' : '自动压缩关'}
+                <div className={styles.meter}>
+                  <button type="button" className={`${styles.ring} ${contextLevel}`} aria-label={`上下文已用 ${contextPercent}%`} aria-describedby="composer-usage">
+                    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                      <circle className={styles.track} cx="8" cy="8" r={RING_R} />
+                      {contextPercent > 0
+                        ? (
+                            <circle
+                              className={styles.value}
+                              cx="8"
+                              cy="8"
+                              r={RING_R}
+                              strokeDasharray={`${(contextPercent / 100) * RING_C} ${RING_C}`}
+                              transform="rotate(-90 8 8)"
+                            />
+                          )
+                        : null}
+                    </svg>
                   </button>
-                  <button type="button" className={styles.chip} disabled={compacting || view.isCompacting} onClick={runCompact}>
-                    {compacting || view.isCompacting ? '压缩中…' : '压缩上下文'}
-                  </button>
+                  <div className={styles.meterTip} id="composer-usage" role="tooltip">
+                    {`已用 ${contextPercent}% · ${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}`}
+                  </div>
                 </div>
               )
             : null}
