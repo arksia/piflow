@@ -9,7 +9,7 @@
   position: relative;
   display: inline-flex;
   opacity: 0;
-  transition: opacity 200ms var(--ll-ease);
+  transition: opacity var(--lattice-fade, 200ms) ease-in;
 }
 
 .root[data-status="working"] {
@@ -29,6 +29,7 @@
 
 .root[data-phase="is-open"] {
   opacity: 1;
+  transition-timing-function: ease-out;
 }
 
 .grid {
