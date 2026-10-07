@@ -37,6 +37,7 @@ export default function BranchNavigator({ cwd }: { cwd: string }) {
     <Dropdown
       placement="topLeft"
       maxWidth={300}
+      search
       menu={{
         items: info.branches.map(branch => ({
           key: branch,

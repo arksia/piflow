@@ -28,6 +28,8 @@ interface Props {
   placement?: Placement
   /** Menu grows with its labels, at least 220px, and stops at this width. */
   maxWidth?: number
+  /** Filter rows from a field at the top of the menu. */
+  search?: boolean
   trigger?: Array<'click' | 'hover'>
   children: ReactElement<{
     onClick?: (event: MouseEvent<HTMLElement>) => void
@@ -132,6 +134,7 @@ export default function Dropdown({
   onOpenChange,
   placement = 'bottomLeft',
   maxWidth,
+  search = false,
   trigger = ['click'],
   children,
 }: Props) {
@@ -259,13 +262,13 @@ export default function Dropdown({
     setMergedOpen(false, 'menu')
   }
 
-  const visibleItems = filterDropdownItems(menu.items, query)
+  const visibleItems = search ? filterDropdownItems(menu.items, query) : menu.items
   const openItem = visibleItems.find(item => item.key === openKey)
 
   useLayoutEffect(() => {
-    if (mergedOpen)
+    if (mergedOpen && search)
       searchRef.current?.focus()
-  }, [mergedOpen, presence.mounted])
+  }, [mergedOpen, presence.mounted, search])
 
   return (
     <span
@@ -304,38 +307,42 @@ export default function Dropdown({
               }}
             >
               <div className={styles.menu} style={maxWidth === undefined ? undefined : { maxWidth }}>
-                <div className={styles.search}>
-                  <Search size={14} />
-                  <input
-                    ref={searchRef}
-                    value={query}
-                    placeholder="搜索"
-                    aria-label="搜索"
-                    onChange={event => setQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape' && query) {
-                        event.stopPropagation()
-                        setQuery('')
-                      }
-                    }}
-                  />
-                  {query
-                    ? (
-                        <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}>
-                          <X size={12} />
-                        </button>
-                      )
-                    : null}
-                </div>
+                {search
+                  ? (
+                      <div className={styles.search}>
+                        <Search size={14} />
+                        <input
+                          ref={searchRef}
+                          value={query}
+                          placeholder="搜索"
+                          aria-label="搜索"
+                          onChange={event => setQuery(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape' && query) {
+                              event.stopPropagation()
+                              setQuery('')
+                            }
+                          }}
+                        />
+                        {query
+                          ? (
+                              <button type="button" aria-label="清除搜索" onClick={() => setQuery('')}>
+                                <X size={12} />
+                              </button>
+                            )
+                          : null}
+                      </div>
+                    )
+                  : null}
                 <div role="menu">
                   {visibleItems.length
                     ? (
-                        <Glide className={styles.list}>
+                        <Glide className={styles.list} pin={visibleItems.find(item => item.selected)?.key}>
                           {visibleItems.map(item => (
                             <button
                               key={item.key}
                               type="button"
-                              data-glide=""
+                              data-glide={item.key}
                               className={styles.item}
                               disabled={item.disabled}
                               role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
@@ -369,6 +376,7 @@ export default function Dropdown({
                     <Flyout
                       anchor={anchorRef.current}
                       itemKey={openItem.key}
+                      pin={pinnedKey(openItem.children)}
                       label={typeof openItem.label === 'string' ? openItem.label : openItem.key}
                       onEnter={clearTimers}
                       onLeave={scheduleClose}
@@ -384,9 +392,22 @@ export default function Dropdown({
   )
 }
 
+function pinnedKey(items: DropdownItem[]): string | undefined {
+  for (const item of items) {
+    if (item.selected)
+      return item.key
+    if (item.children?.length) {
+      const nested = pinnedKey(item.children)
+      if (nested)
+        return nested
+    }
+  }
+}
+
 function Flyout({
   anchor,
   itemKey,
+  pin,
   label,
   onEnter,
   onLeave,
@@ -394,6 +415,7 @@ function Flyout({
 }: {
   anchor: HTMLElement | null
   itemKey: string
+  pin?: string
   label: string
   onEnter: () => void
   onLeave: () => void
@@ -473,7 +495,7 @@ function Flyout({
         aria-label={label}
       >
         <div ref={scrollerRef} className={styles.scroller}>
-          <Glide className={styles.list} pin={itemKey}>
+          <Glide className={styles.list} pin={pin}>
             {children}
           </Glide>
         </div>
@@ -498,7 +520,7 @@ function ItemList({ items, onPick }: { items: DropdownItem[], onPick: (item: Dro
         type="button"
         role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
         aria-checked={item.selected}
-        data-glide=""
+        data-glide={item.key}
         className={styles.item}
         disabled={item.disabled}
         onClick={() => onPick(item)}
