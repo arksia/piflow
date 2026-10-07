@@ -13,6 +13,7 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
   const listRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLSpanElement>(null)
   const rowRef = useRef<HTMLElement | null>(null)
+  const restTimerRef = useRef(0)
 
   function move(row: HTMLElement, snap: boolean) {
     const pill = pillRef.current
@@ -44,15 +45,18 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
   }
 
   useLayoutEffect(() => {
+    window.clearTimeout(restTimerRef.current)
     const list = listRef.current
     const row = list ? pinnedRow(list, pin) : null
     if (row)
       move(row, true)
     else
       hide()
+    return () => window.clearTimeout(restTimerRef.current)
   }, [pin])
 
   function track(target: EventTarget | null) {
+    window.clearTimeout(restTimerRef.current)
     if (!(target instanceof Element))
       return
     const row = target.closest('[data-glide]')
@@ -67,10 +71,13 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
   function rest() {
     const list = listRef.current
     const row = list ? pinnedRow(list, pin) : null
-    if (row)
-      move(row, false)
-    else
-      hide()
+    window.clearTimeout(restTimerRef.current)
+    restTimerRef.current = window.setTimeout(() => {
+      if (row)
+        move(row, false)
+      else
+        hide()
+    }, 500)
   }
 
   return (
