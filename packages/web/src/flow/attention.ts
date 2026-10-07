@@ -41,6 +41,24 @@ export function sessionAttention(
   return null
 }
 
+export function sessionRailStatus(
+  sessionPath: string,
+  statuses: Record<string, SessionStatusRecord>,
+  unread?: ReadonlySet<string>,
+  seenFailures?: Readonly<Record<string, string>>,
+): 'working' | 'done' | 'error' | 'needs_input' | null {
+  const attention = sessionAttention(sessionPath, statuses, unread)
+  if (attention?.kind === 'needs_input')
+    return 'needs_input'
+  if (attention?.kind === 'failed')
+    return seenFailures?.[sessionPath] === statuses[sessionPath]?.updatedAt ? null : 'error'
+  if (attention?.kind === 'running')
+    return 'working'
+  if (attention?.kind === 'unread')
+    return 'done'
+  return null
+}
+
 export function flowAttentionItems(
   nodes: FlowNode[],
   statuses: Record<string, SessionStatusRecord>,

@@ -221,10 +221,6 @@
   text-align: left;
 }
 
-.cwd-row:hover {
-  background: var(--c-press);
-}
-
 .session-row:has(.active) {
   background: color-mix(in srgb, var(--c-press) 60%, transparent);
 }
@@ -331,15 +327,6 @@
   white-space: nowrap;
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  margin-left: auto;
-  margin-right: 5px;
-  border-radius: 50%;
-}
-
 .action-error {
   margin: 10px 6px 0;
   padding: 7px 8px;
@@ -348,11 +335,6 @@
   color: var(--c-danger);
   font-size: 0.76rem;
 }
-
-.needs-input { background: var(--c-warning); }
-.failed { background: var(--c-danger); }
-.running { background: var(--c-signal); }
-.unread { background: var(--c-mid); }
 
 .swap {
   grid-column: 2;

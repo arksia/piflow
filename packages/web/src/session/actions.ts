@@ -53,7 +53,7 @@ import {
 } from '@piflow/protocol'
 import { api, post, sessionUrl } from './api'
 import { clearActiveSessionFile, migrateDraft, saveActiveSessionFile } from './persistence'
-import { applyState, clearSessionUnread } from './reducer'
+import { applyState, clearSessionUnread, dismissSessionFailure } from './reducer'
 import { ensureView, notify, store } from './store'
 
 async function requestSession(path: string, body: OpenSessionRequest | NewSessionRequest): Promise<SessionState> {
@@ -69,6 +69,7 @@ async function requestSession(path: string, body: OpenSessionRequest | NewSessio
   store.activeKey = state.key
   migrateDraft(draftKey, state.key)
   clearSessionUnread(state.sessionFile ?? state.key)
+  dismissSessionFailure(state.sessionFile ?? state.key)
   saveActiveSessionFile(state.sessionFile)
   notify()
   await Promise.all([requestModels(state.key), requestProjectTrust(state.cwd)])

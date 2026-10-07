@@ -72,6 +72,7 @@
   --dropdown-pre-scale: 0.97;
   --dropdown-closing-scale: 0.99;
   --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --lattice-fade: 200ms;
   /* Modal open / close */
   --modal-open-dur: 250ms;
   --modal-close-dur: 150ms;

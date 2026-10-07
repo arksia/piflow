@@ -101,6 +101,27 @@ export function saveUnreadSessions(unread: ReadonlySet<string>) {
     localStorage.removeItem(UNREAD_KEY)
 }
 
+const SEEN_FAILURES_KEY = 'piflow.seen-failures'
+
+export function readSeenFailures(): Record<string, string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SEEN_FAILURES_KEY) ?? '{}') as unknown
+    if (typeof saved !== 'object' || saved === null || Array.isArray(saved))
+      return {}
+    return Object.fromEntries(Object.entries(saved).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+  }
+  catch {
+    return {}
+  }
+}
+
+export function saveSeenFailures(seen: Readonly<Record<string, string>>) {
+  if (Object.keys(seen).length)
+    localStorage.setItem(SEEN_FAILURES_KEY, JSON.stringify(seen))
+  else
+    localStorage.removeItem(SEEN_FAILURES_KEY)
+}
+
 export function readCollapsedSessions() {
   return readPathSet(COLLAPSED_KEY)
 }

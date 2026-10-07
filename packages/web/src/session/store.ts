@@ -30,6 +30,7 @@ export const store: StoreState = {
   views: {},
   statuses: {},
   unreadSessions: new Set(),
+  seenFailures: {},
   extensionNotices: [],
   projectTrust: {},
   sidebarOpen: false,

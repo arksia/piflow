@@ -60,6 +60,7 @@ export interface StoreState {
   views: Record<string, SessionView>
   statuses: Record<string, SessionStatusRecord>
   unreadSessions: ReadonlySet<string>
+  seenFailures: Readonly<Record<string, string>>
   extensionNotices: ExtensionNotice[]
   projectTrust: Record<string, ProjectTrustStatus>
   sidebarOpen: boolean
