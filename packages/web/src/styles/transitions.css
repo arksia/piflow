@@ -306,6 +306,7 @@
 .t-icon-swap {
   position: relative;
   display: inline-grid;
+  place-items: center;
 }
 .t-icon-swap .t-icon {
   grid-area: 1 / 1;

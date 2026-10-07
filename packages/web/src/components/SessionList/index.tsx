@@ -2,8 +2,8 @@ import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
 import { ChevronDown, ChevronRight, Folder, MessageSquarePlus, PanelLeftClose, Search, Settings, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { sessionAttention } from '../../flow/attention'
-import { AccChevron } from '../../motion'
+import { sessionAttention, sessionRailStatus } from '../../flow/attention'
+import { AccChevron, usePresence } from '../../motion'
 import { shortenPath } from '../../path'
 import { openSession, renameSession } from '../../session/actions'
 import { readCollapsedProjects, readCollapsedSessions, saveCollapsedProjects, saveCollapsedSessions } from '../../session/persistence'
@@ -13,6 +13,7 @@ import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
 import Glide from '../Glide'
 import IconButton from '../IconButton'
+import LatticeLoader from '../LatticeLoader'
 import NewSessionDialog from '../NewSessionDialog'
 import ProviderDialog from '../ProviderDialog'
 import SessionItemMenu from '../SessionItemMenu'
@@ -40,16 +41,6 @@ function sessionAge(timestamp: string) {
 
 function label(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
-}
-
-function attentionClass(kind: string) {
-  if (kind === 'needs_input')
-    return styles.needsInput
-  if (kind === 'failed')
-    return styles.failed
-  if (kind === 'running')
-    return styles.running
-  return styles.unread
 }
 
 function projectName(cwd: string) {
@@ -270,6 +261,7 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
                                     active={store.activeKey === session.path}
                                     streaming={store.statuses[session.path]?.status === 'running'}
                                     attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                                    rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
                                     connected={store.connected}
                                     opening={openingPath === session.path}
                                     editing={editingPath === session.path}
@@ -345,6 +337,7 @@ interface SessionRowProps {
   active: boolean
   streaming: boolean
   attention: { kind: string, label: string } | null
+  rail: 'working' | 'done' | 'error' | 'needs_input' | null
   connected: boolean
   opening: boolean
   editing: boolean
@@ -358,7 +351,39 @@ interface SessionRowProps {
   onToggle: () => void
 }
 
-function SessionRow({ session, active, streaming, attention, connected, opening, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
+function SessionRail({ status, hasChildren, collapsed, sessionLabel, onToggle }: {
+  status: 'working' | 'done' | 'error' | 'needs_input' | null
+  hasChildren: boolean
+  collapsed: boolean
+  sessionLabel: string
+  onToggle: () => void
+}) {
+  const presence = usePresence(status !== null, '--lattice-fade', 200)
+  const shownRef = useRef(status)
+  if (status)
+    shownRef.current = status
+  return (
+    <span className={styles.rail}>
+      {presence.mounted && shownRef.current
+        ? <LatticeLoader status={shownRef.current} phase={presence.className} />
+        : hasChildren
+          ? (
+              <button
+                className={styles.chevron}
+                title={collapsed ? '展开子会话' : '折叠子会话'}
+                aria-label={collapsed ? `展开子会话：${sessionLabel}` : `折叠子会话：${sessionLabel}`}
+                aria-expanded={!collapsed}
+                onClick={onToggle}
+              >
+                {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              </button>
+            )
+          : null}
+    </span>
+  )
+}
+
+function SessionRow({ session, active, streaming, attention, rail, connected, opening, editing, indent, hasChildren, isCollapsed, lineage, onPick, onRenameStart, onRenameEnd, onToggle }: SessionRowProps) {
   if (editing)
     return <RenameRow session={session} indent={indent} onDone={onRenameEnd} />
   const age = sessionAge(session.modified)
@@ -375,25 +400,16 @@ function SessionRow({ session, active, streaming, attention, connected, opening,
       aria-current={active ? 'page' : undefined}
       style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}
     >
-      <span className={styles.rail}>
-        {hasChildren
-          ? (
-              <button
-                className={styles.chevron}
-                title={isCollapsed ? '展开子会话' : '折叠子会话'}
-                aria-label={isCollapsed ? `展开子会话：${label(session)}` : `折叠子会话：${label(session)}`}
-                aria-expanded={!isCollapsed}
-                onClick={onToggle}
-              >
-                {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-              </button>
-            )
-          : null}
-      </span>
+      <SessionRail
+        status={rail}
+        hasChildren={hasChildren}
+        collapsed={isCollapsed}
+        sessionLabel={label(session)}
+        onToggle={onToggle}
+      />
       <div className={`${styles.item} ${active ? styles.active : ''} t-session`} title={title}>
         <button className={styles.itemMain} disabled={!connected || opening} onClick={onPick}>
           <span className={styles.label}>{label(session)}</span>
-          {attention ? <span className={`${styles.dot} ${attentionClass(attention.kind)}`} /> : null}
         </button>
         {connected
           ? (

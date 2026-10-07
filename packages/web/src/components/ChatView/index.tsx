@@ -203,11 +203,9 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
     ? { label: store.connectionState === 'reconnecting' ? '重连中…' : '连接中…', kind: 'connection' }
     : view?.isCompacting
       ? { label: '压缩上下文', kind: 'running' }
-      : attention && attention.kind !== 'unread'
+      : attention?.kind === 'failed' || attention?.kind === 'needs_input'
         ? attention
-        : isLive
-          ? { label: '运行中', kind: 'running' }
-          : { label: '', kind: '' }
+        : { label: '', kind: '' }
 
   function applyPreset(preset: string) {
     setComposerText(preset)
