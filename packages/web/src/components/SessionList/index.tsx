@@ -371,7 +371,7 @@ function SessionRow({ session, active, streaming, attention, connected, opening,
   return (
     <div
       className={styles.sessionRow}
-      data-glide=""
+      data-glide={session.path}
       aria-current={active ? 'page' : undefined}
       style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}
     >

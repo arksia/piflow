@@ -125,7 +125,7 @@
   padding: 4px 8px;
   border-radius: 6px;
   background: transparent;
-  color: var(--c-ink);
+  color: var(--c-body);
   font-size: 0.82rem;
   text-align: left;
 }
@@ -137,6 +137,7 @@
 
 .item[aria-checked='true'] {
   background: color-mix(in srgb, var(--c-press) 60%, transparent);
+  color: var(--c-ink);
 }
 
 .list[data-live] .item[aria-checked='true'] {
