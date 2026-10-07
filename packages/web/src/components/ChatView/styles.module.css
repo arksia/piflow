@@ -135,6 +135,7 @@
   width: min(calc(100% - 48px), var(--chat-w));
   margin: 0 auto;
   padding: 24px 0 16px;
+  color: var(--c-prose);
 }
 
 .hero {

@@ -10,6 +10,7 @@
   --c-surface: #171717;
   --c-ink: #fafafa;
   --c-mid: #e5e5e5;
+  --c-prose: #d2d2d2;
   --c-body: #a1a1a1;
   --c-muted: #a1a1a1;
   --c-faint: #737373;
@@ -67,6 +68,7 @@
   --c-surface: #fff;
   --c-ink: #0a0a0a;
   --c-mid: #171717;
+  --c-prose: #333;
   --c-body: #737373;
   --c-muted: #737373;
   --c-faint: #a1a1a1;
