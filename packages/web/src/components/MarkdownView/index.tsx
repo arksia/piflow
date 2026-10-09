@@ -1,20 +1,14 @@
-import type { ReactNode } from 'react'
 import type { Components, Options as ReactMarkdownOptions } from 'react-markdown'
 import { memo, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from '../../markdown/md'
 import { rehypeStreamingText } from '../../markdown/streaming-text'
 import CodeBlock from '../CodeBlock'
-import StreamingText from '../StreamingText'
 
 interface Props {
   text: string
   streaming?: boolean
   tail?: boolean
-}
-
-function StreamTextComponent({ children }: { children?: ReactNode }) {
-  return <StreamingText>{children}</StreamingText>
 }
 
 function StreamTailComponent() {
@@ -45,7 +39,6 @@ function MarkdownView({ text, streaming = false, tail = false }: Props) {
       }
       return <CodeBlock code={raw} language={language} streaming={streaming} />
     },
-    'stream-text': StreamTextComponent,
     'stream-tail': StreamTailComponent,
   }), [streaming])
 

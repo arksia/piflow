@@ -7,10 +7,11 @@ import type {
   SessionStatusRecord,
 } from '@piflow/protocol'
 import type { ToolState } from './state'
-import { readSavedActivePath, readUnreadSessions, saveActiveSessionFile, saveUnreadSessions } from './persistence'
+import { readSavedActivePath, readSeenFailures, readUnreadSessions, saveActiveSessionFile, saveSeenFailures, saveUnreadSessions } from './persistence'
 import { ensureView, notify, store } from './store'
 
 let restored = false
+let seenFailuresLoaded = false
 
 type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
 type MessageUpdate = Extract<JsonAgentSessionEvent, { type: 'message_update' }>['assistantMessageEvent']
@@ -88,6 +89,10 @@ export function applySessions(sessions: SessionInfoLite[], restoreSession: (path
   store.sessions = sessions
   if (store.unreadSessions.size === 0)
     store.unreadSessions = readUnreadSessions()
+  if (!seenFailuresLoaded) {
+    seenFailuresLoaded = true
+    store.seenFailures = readSeenFailures()
+  }
   notify()
   if (!restored && !store.activeKey) {
     restored = true
@@ -247,6 +252,15 @@ export function clearSessionUnread(key: string) {
   unread.delete(key)
   store.unreadSessions = unread
   saveUnreadSessions(unread)
+  notify()
+}
+
+export function dismissSessionFailure(key: string) {
+  const current = store.statuses[key]
+  if (current?.status !== 'failed' || store.seenFailures[key] === current.updatedAt)
+    return
+  store.seenFailures = { ...store.seenFailures, [key]: current.updatedAt }
+  saveSeenFailures(store.seenFailures)
   notify()
 }
 

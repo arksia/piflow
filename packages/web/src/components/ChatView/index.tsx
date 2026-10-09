@@ -1,20 +1,21 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { CSSProperties, UIEvent, WheelEvent } from 'react'
+import type { UIEvent, WheelEvent } from 'react'
 import { PanelLeft } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { sessionAttention } from '../../flow/attention'
+import { ThinkLine } from '../../motion'
 import { trustProject } from '../../session/actions'
 import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
-import BranchNavigator from '../BranchNavigator'
+import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
-import ViewSwitch from '../ViewSwitch'
+import { turnToolCount } from '../MessageItem/facts'
 import styles from './styles.module.css'
 
 const SCROLL_KEY = 'piflow.scroll'
 const PRESETS = ['探索这个代码库', '回顾我的改动', '修一个 bug', '做个功能规划']
-const WIDTHS = [860, 1180, 1440] as const
 const messageIds = new WeakMap<AgentMessage, number>()
 let nextMessageId = 1
 
@@ -28,12 +29,11 @@ function readScrollMap(): Record<string, number> {
 }
 
 interface ChatViewProps {
-  onShowFlow: () => void
   onToggleSidebar: () => void
   sidebarCollapsed: boolean
 }
 
-export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed }: ChatViewProps) {
+export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatViewProps) {
   const store = useStore()
   const view = store.activeKey ? (store.views[store.activeKey] ?? null) : null
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -50,13 +50,19 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   const [composerText, setComposerText] = useState('')
   const [composerFocusVersion, setComposerFocusVersion] = useState(0)
   const [trustError, setTrustError] = useState<string | null>(null)
-  const [widthIndex, setWidthIndex] = useState(() => Math.min(Number(localStorage.getItem('piflow.chatWidth') ?? 1), 2))
   const session = store.sessions.find(session => session.path === store.activeKey)
   const title = store.activeKey ? session?.name || session?.firstMessage || '新会话' : ''
   const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
   const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
   const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
   const draftKey = store.activeKey ?? `new:${store.cwd}`
+  let userCount = -1
+  const shown = view?.live ? [...view.messages, view.live] : view?.messages ?? []
+  let lastOutput = -1
+  shown.forEach((message, index) => {
+    if (message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text.trim()))
+      lastOutput = index
+  })
 
   useEffect(() => {
     // Session changes replace the controlled composer with that session's draft.
@@ -191,28 +197,20 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   }, [])
 
   const isEmpty = !view || view.messages.length === 0
-  const chatStyle = { '--chat-w': `${WIDTHS[widthIndex] ?? WIDTHS[1]}px` } as CSSProperties
   const isLive = store.connected && !!view?.isStreaming
-  const statusLabel = store.connectionState !== 'connected'
-    ? store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'
+  const attention = store.activeKey ? sessionAttention(store.activeKey, store.statuses) : null
+  const status = store.connectionState !== 'connected'
+    ? { label: store.connectionState === 'reconnecting' ? '重连中…' : '连接中…', kind: 'connection' }
     : view?.isCompacting
-      ? '压缩上下文'
-      : isLive
-        ? '生成中'
-        : ''
+      ? { label: '压缩上下文', kind: 'running' }
+      : attention?.kind === 'failed' || attention?.kind === 'needs_input'
+        ? attention
+        : { label: '', kind: '' }
 
   function applyPreset(preset: string) {
     setComposerText(preset)
     saveDraftText(draftKey, preset)
     setComposerFocusVersion(version => version + 1)
-  }
-
-  function cycleWidth() {
-    setWidthIndex((current) => {
-      const next = (current + 1) % WIDTHS.length
-      localStorage.setItem('piflow.chatWidth', String(next))
-      return next
-    })
   }
 
   function trustProjectNow() {
@@ -223,18 +221,31 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
   }
 
   return (
-    <div className={styles.chat} style={chatStyle}>
+    <div className={styles.chat}>
       <header className={styles.bar}>
-        {sidebarCollapsed ? <button className={styles.menu} title="展开会话列表" aria-label="展开会话列表" onClick={onToggleSidebar}><PanelLeft size={15} /></button> : null}
-        <button className={styles.mobileMenu} title="会话列表" aria-label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}><PanelLeft size={15} /></button>
+        {sidebarCollapsed
+          ? (
+              <span className={styles.menu}>
+                <IconButton label="展开会话列表" onClick={onToggleSidebar}>
+                  <PanelLeft />
+                </IconButton>
+              </span>
+            )
+          : null}
+        <span className={styles.mobileMenu}>
+          <IconButton label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>
+            <PanelLeft />
+          </IconButton>
+        </span>
         <div className={styles.identity}>
           {title ? <div className={styles.title} title={title}>{title}</div> : null}
-          {store.activeKey ? <BranchNavigator path={store.activeKey} /> : null}
         </div>
         <div className={styles.actions}>
-          <span className={`${styles.status} ${statusLabel ? styles.on : ''}`}>{statusLabel}</span>
-          <ViewSwitch active="chat" onChange={view => view === 'flow' && onShowFlow()} />
-          <button className={styles.width} title="切换聊天宽度" aria-label="切换聊天宽度" onClick={cycleWidth}>⇔</button>
+          <ThinkLine
+            className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}
+            text={status.label}
+            sizer="压缩上下文"
+          />
         </div>
       </header>
 
@@ -262,44 +273,47 @@ export default function ChatView({ onShowFlow, onToggleSidebar, sidebarCollapsed
             )
           : (
               <div ref={setColumn} className={styles.column}>
-                {view.messages.map(message => (
-                  <MessageItem
-                    key={messageKey(message)}
-                    message={message}
-                    toolResults={view.toolResults}
-                  />
-                ))}
-                {view.live ? <MessageItem message={view.live} toolResults={view.toolResults} live /> : null}
+                {view.messages.map((message, index) => {
+                  if (message.role === 'user')
+                    userCount += 1
+                  return (
+                    <MessageItem
+                      key={messageKey(message)}
+                      message={message}
+                      toolResults={view.toolResults}
+                      showTime={index === lastOutput}
+                      sessionPath={store.activeKey ?? undefined}
+                      forkOrdinal={userCount}
+                      tools={turnToolCount(view.messages, index)}
+                    />
+                  )
+                })}
+                {view.live
+                  ? (
+                      <MessageItem
+                        message={view.live}
+                        toolResults={view.toolResults}
+                        live
+                        showTime={lastOutput === view.messages.length}
+                        sessionPath={store.activeKey ?? undefined}
+                        forkOrdinal={userCount}
+                        tools={turnToolCount([...view.messages, view.live], view.messages.length)}
+                      />
+                    )
+                  : null}
                 {isLive && !view.live
                   ? (
                       <div className={styles.pending}>
-                        <span className={styles.dot} />
-                        正在生成…
+                        <ThinkLine text="正在生成…" />
                       </div>
                     )
                   : null}
-                {store.connected && view.isCompacting ? <div className={styles.note}>正在压缩上下文…</div> : null}
+                {store.connected && view.isCompacting ? <div className={styles.note}><span className="t-shimmer" data-text="正在压缩上下文…">正在压缩上下文…</span></div> : null}
                 {view.compactionNotice && (
                   <div className={styles.note}>
                     {compactionNoticeLabel(view.compactionNotice)}
                   </div>
                 )}
-                {view.stats
-                  ? (
-                      <div className={styles.stats} title="本 session 累计统计，不含 Provider quota">
-                        {formatTokens(view.stats.tokens.total)}
-                        {' tokens · $'}
-                        {view.stats.cost.toFixed(4)}
-                        {' · '}
-                        {view.stats.userMessages}
-                        {' 用户消息 · '}
-                        {view.stats.assistantMessages}
-                        {' 回复 · '}
-                        {view.stats.toolCalls}
-                        {' 工具调用'}
-                      </div>
-                    )
-                  : null}
                 {view.error ? <div className={styles.error}>{view.error}</div> : null}
               </div>
             )}

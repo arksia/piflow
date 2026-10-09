@@ -11,6 +11,7 @@ const FlowView = lazy(() => import('./components/FlowView'))
 const SIDEBAR_WIDTH_KEY = 'piflow.sidebarWidth'
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_SIDEBAR_WIDTH = 420
+type Theme = 'dark' | 'light'
 
 function readSidebarWidth() {
   const value = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY))
@@ -19,12 +20,26 @@ function readSidebarWidth() {
 
 export default function App() {
   const store = useStore()
-  const [workspaceView, setWorkspaceView] = useState<'chat' | 'flow'>('chat')
+  const [workspaceView, setWorkspaceView] = useState<'chat' | 'flow'>(
+    () => localStorage.getItem('piflow.workspaceView') === 'flow' ? 'flow' : 'chat',
+  )
+  const [flowReady, setFlowReady] = useState(() => localStorage.getItem('piflow.workspaceView') === 'flow')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('piflow.sidebarCollapsed') === 'true')
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth)
+  const [theme, setTheme] = useState<Theme>(() => document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
   const sidebarRef = useRef<HTMLElement>(null)
   const sidebarWidthRef = useRef(sidebarWidth)
   const [isResizing, setIsResizing] = useState(false)
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(width <= 768px)').matches)
+  // ponytail: Flow's chrome is display:none on this breakpoint, so show chat without clearing the saved view
+  const view = narrow ? 'chat' : workspaceView
+
+  useEffect(() => {
+    const media = window.matchMedia('(width <= 768px)')
+    const onChange = () => setNarrow(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
 
   const toggleWorkspaceSidebar = useCallback(() => {
     setSidebarCollapsed((collapsed) => {
@@ -34,8 +49,23 @@ export default function App() {
     })
   }, [])
 
-  const onShowFlow = useCallback(() => setWorkspaceView('flow'), [])
-  const onShowChat = useCallback(() => setWorkspaceView('chat'), [])
+  const onShowFlow = useCallback(() => {
+    setFlowReady(true)
+    setWorkspaceView('flow')
+    localStorage.setItem('piflow.workspaceView', 'flow')
+  }, [])
+  const onShowChat = useCallback(() => {
+    setWorkspaceView('chat')
+    localStorage.setItem('piflow.workspaceView', 'chat')
+  }, [])
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark'
+      document.documentElement.dataset.theme = next
+      localStorage.setItem('piflow.theme', next)
+      return next
+    })
+  }, [])
 
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
     if (sidebarCollapsed || event.button !== 0)
@@ -88,7 +118,14 @@ export default function App() {
         className={`${styles.sidebar} ${store.sidebarOpen ? styles.open : ''} ${sidebarCollapsed ? styles.collapsed : ''} ${isResizing ? styles.resizing : ''}`}
         style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
       >
-        <SessionList onToggleSidebar={toggleWorkspaceSidebar} />
+        <SessionList
+          theme={theme}
+          view={view}
+          onShowChat={onShowChat}
+          onShowFlow={onShowFlow}
+          onToggleTheme={toggleTheme}
+          onToggleSidebar={toggleWorkspaceSidebar}
+        />
       </aside>
       <div
         className={`${styles.resizer} ${sidebarCollapsed ? styles.resizerHidden : ''}`}
@@ -104,13 +141,23 @@ export default function App() {
         ? <button type="button" className={styles.scrim} aria-label="关闭会话列表" onClick={() => setSidebarOpen(false)} />
         : null}
       <main className={styles.main}>
-        {workspaceView === 'chat'
-          ? <ChatView onShowFlow={onShowFlow} onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
-          : (
-              <Suspense fallback={<div className={styles.loading}>正在加载 Flow…</div>}>
-                <FlowView onShowChat={onShowChat} onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
-              </Suspense>
-            )}
+        <div className={`${styles.pane} ${view !== 'chat' ? styles.paneHidden : ''}`}>
+          <ChatView onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
+        </div>
+        {flowReady
+          ? (
+              <div className={`${styles.pane} ${view !== 'flow' ? styles.paneHidden : ''}`}>
+                <Suspense fallback={<div className={styles.loading}>正在加载 Flow…</div>}>
+                  <FlowView
+                    active={view === 'flow'}
+                    onShowChat={onShowChat}
+                    onToggleSidebar={toggleWorkspaceSidebar}
+                    sidebarCollapsed={sidebarCollapsed}
+                  />
+                </Suspense>
+              </div>
+            )
+          : null}
       </main>
       <ExtensionDialog />
     </div>

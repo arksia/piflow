@@ -7,6 +7,12 @@
   contain-intrinsic-size: auto 160px;
 }
 
+/* Hover pill padding sits in here so its left radius is not clipped. */
+.message:not(.user) {
+  margin-left: -6px;
+  padding-left: 6px;
+}
+
 .user {
   display: flex;
   flex-direction: column;
@@ -19,54 +25,134 @@
   gap: 8px;
   max-width: 78%;
   padding: 8px 14px;
-  background: #a160fc14;
-  border: 1px solid #a160fc33;
+  background: var(--c-raise);
+  border: 1px solid var(--c-line);
   border-radius: 14px 14px 4px;
-  line-height: 1.6;
 }
 
 .user-text {
-  color: var(--c-ink);
+  color: var(--c-prose);
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
 
-.time {
-  display: inline-block;
-  margin-right: 4px;
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
   color: var(--c-faint);
-  font-size: 0.72rem;
 }
 
-.thinking {
-  margin: 8px 0;
-  font-size: 0.85rem;
+.age {
+  padding: 0 6px;
+  color: var(--c-faint);
+  font-size: 0.75rem;
+  line-height: 24px;
+  opacity: 0;
+  transition: opacity var(--tt-out-dur) var(--tt-out-ease);
+}
+
+.age:hover {
   color: var(--c-muted);
 }
 
-.thinking summary {
+.age[data-show],
+[data-open] .age {
+  opacity: 1;
+}
+
+.message:hover .age,
+.message:focus-within .age {
+  opacity: 1;
+  transition: opacity var(--tt-in-dur) var(--tt-in-ease) var(--tt-delay);
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.fact {
+  display: contents;
+}
+
+.rows dt {
+  color: var(--c-faint);
+}
+
+.rows dd {
+  margin: 0;
+  color: var(--c-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.thinking {
+  margin: 2px 0 8px;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+
+.thinking-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--c-muted);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  user-select: none;
+}
+
+.thinking-head:hover {
+  background: var(--c-press);
+}
+
+.tools {
+  margin: 2px 0 8px;
+  font-size: 13px;
+}
+
+.tools-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 2px 6px;
+  color: var(--c-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tools-list {
+  margin: 2px 0 4px 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--c-line);
+}
+
+.thinking-body {
+  margin: 2px 0 4px 6px;
+  padding: 2px 0 2px 12px;
+  border-left: 1px solid var(--c-line);
+  color: var(--c-muted);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .message-error {
   margin-top: 8px;
   padding: 10px 14px;
-  border-left: 2px solid #f8514966;
-  background: #f851490d;
+  border-left: 2px solid var(--c-danger);
+  background: var(--c-danger-tint);
   border-radius: 0 6px 6px 0;
-  color: #ffa198;
-  font-size: 0.82rem;
-  line-height: 1.6;
+  color: var(--c-danger);
   white-space: pre-wrap;
   overflow-wrap: break-word;
-}
-
-.thinking-body {
-  margin-top: 6px;
-  padding-left: 12px;
-  border-left: 2px solid var(--c-line);
-  white-space: pre-wrap;
-  font-size: 0.82rem;
-  line-height: 1.6;
 }

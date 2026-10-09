@@ -72,18 +72,26 @@ export function readSavedActivePath(): string | null {
   }
 }
 
+function readPathSet(key: string) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown
+    return new Set(Array.isArray(saved) ? saved.filter((item): item is string => typeof item === 'string') : [])
+  }
+  catch {
+    return new Set<string>()
+  }
+}
+
+function savePathSet(key: string, values: ReadonlySet<string>) {
+  localStorage.setItem(key, JSON.stringify([...values]))
+}
+
 const COLLAPSED_KEY = 'piflow.collapsed-sessions'
 
 const UNREAD_KEY = 'piflow.unread-sessions'
 
-export function readUnreadSessions(): Set<string> {
-  try {
-    const saved = JSON.parse(localStorage.getItem(UNREAD_KEY) ?? '[]') as unknown
-    return new Set(Array.isArray(saved) ? saved.filter((path): path is string => typeof path === 'string') : [])
-  }
-  catch {
-    return new Set()
-  }
+export function readUnreadSessions() {
+  return readPathSet(UNREAD_KEY)
 }
 
 export function saveUnreadSessions(unread: ReadonlySet<string>) {
@@ -93,16 +101,41 @@ export function saveUnreadSessions(unread: ReadonlySet<string>) {
     localStorage.removeItem(UNREAD_KEY)
 }
 
-export function readCollapsedSessions(): Set<string> {
+const SEEN_FAILURES_KEY = 'piflow.seen-failures'
+
+export function readSeenFailures(): Record<string, string> {
   try {
-    const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as unknown
-    return new Set(Array.isArray(saved) ? saved.filter((path): path is string => typeof path === 'string') : [])
+    const saved = JSON.parse(localStorage.getItem(SEEN_FAILURES_KEY) ?? '{}') as unknown
+    if (typeof saved !== 'object' || saved === null || Array.isArray(saved))
+      return {}
+    return Object.fromEntries(Object.entries(saved).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
   }
   catch {
-    return new Set()
+    return {}
   }
 }
 
+export function saveSeenFailures(seen: Readonly<Record<string, string>>) {
+  if (Object.keys(seen).length)
+    localStorage.setItem(SEEN_FAILURES_KEY, JSON.stringify(seen))
+  else
+    localStorage.removeItem(SEEN_FAILURES_KEY)
+}
+
+export function readCollapsedSessions() {
+  return readPathSet(COLLAPSED_KEY)
+}
+
 export function saveCollapsedSessions(collapsed: ReadonlySet<string>) {
-  localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]))
+  savePathSet(COLLAPSED_KEY, collapsed)
+}
+
+const COLLAPSED_PROJECTS_KEY = 'piflow.collapsed-projects'
+
+export function readCollapsedProjects() {
+  return readPathSet(COLLAPSED_PROJECTS_KEY)
+}
+
+export function saveCollapsedProjects(collapsed: ReadonlySet<string>) {
+  savePathSet(COLLAPSED_PROJECTS_KEY, collapsed)
 }

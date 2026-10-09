@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { answerExtensionRequest, dismissExtensionNotice } from '../../session/actions'
 import { useStore } from '../../session/use-store'
+import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
 type DialogRequest = Extract<RpcExtensionUIRequest, { method: 'select' | 'confirm' | 'input' | 'editor' }>
@@ -102,7 +103,7 @@ export default function ExtensionDialog() {
       {pending && store.activeKey
         ? (
             <div className={styles.backdrop}>
-              <section className={styles.dialog} role="dialog" aria-modal="true" aria-label={pending.title ?? '扩展请求'}>
+              <section className={`${styles.dialog} t-modal is-open`} role="dialog" aria-modal="true" aria-label={pending.title ?? '扩展请求'}>
                 {pending.method === 'select' ? <SelectDialog session={store.activeKey} request={pending} /> : null}
                 {pending.method === 'confirm' ? <ConfirmDialog session={store.activeKey} request={pending} /> : null}
                 {pending.method === 'input' || pending.method === 'editor'
@@ -118,14 +119,13 @@ export default function ExtensionDialog() {
               {store.extensionNotices.map(notice => (
                 <div key={notice.request.id} className={`${styles.notice} ${styles[notice.request.notifyType ?? 'info']}`}>
                   <span className={styles.noticeText}>{notice.request.message ?? ''}</span>
-                  <button
-                    className={styles.dismiss}
-                    title="知道了"
-                    aria-label="知道了"
+                  <IconButton
+                    size="compact"
+                    label="知道了"
                     onClick={() => dismissExtensionNotice(notice.request.id)}
                   >
-                    <X size={13} />
-                  </button>
+                    <X />
+                  </IconButton>
                 </div>
               ))}
             </div>

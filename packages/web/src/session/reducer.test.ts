@@ -3,7 +3,7 @@ import type { JsonAgentSessionEvent } from '@earendil-works/pi-coding-agent'
 import type { SessionState } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { applyAssistantUpdate, applyStatusDelta, clearSessionUnread, handleEvent, route } from './reducer'
+import { applyAssistantUpdate, applyStatusDelta, clearSessionUnread, dismissSessionFailure, handleEvent, route } from './reducer'
 import { store } from './store'
 
 type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
@@ -72,6 +72,31 @@ it('tracks completion attention per background session and clears it on open', (
   assert.equal(store.statuses['/project/other.jsonl']?.status, 'failed')
   clearSessionUnread('/project/background.jsonl')
   assert.deepEqual([...store.unreadSessions], [])
+})
+
+it('dismisses the open failure until a later one', () => {
+  const values = new Map<string, string>()
+  Object.assign(globalThis, {
+    localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    },
+  })
+  const key = '/project/a.jsonl'
+  store.statuses = {
+    [key]: { key, sessionFile: key, status: 'failed', needsInputAt: null, updatedAt: 't1' },
+  }
+  store.seenFailures = {}
+  dismissSessionFailure(key)
+  assert.equal(store.seenFailures[key], 't1')
+  dismissSessionFailure(key)
+  assert.equal(store.seenFailures[key], 't1')
+  store.statuses = {
+    [key]: { key, sessionFile: key, status: 'failed', needsInputAt: null, updatedAt: 't2' },
+  }
+  dismissSessionFailure(key)
+  assert.equal(store.seenFailures[key], 't2')
 })
 
 it('keeps provider errors scoped to their session', () => {
