@@ -9,6 +9,8 @@ import type {
   FlowDocumentResponse,
   ForkPointsResponse,
   ForkSessionRequest,
+  GitBranchesResponse,
+  GitCheckoutRequest,
   HelloResponse,
   InstallExtensionRequest,
   ModelsResponse,
@@ -51,6 +53,7 @@ import {
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
   API_FLOW_PATH,
+  API_GIT_PATH,
   API_HELLO_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
@@ -66,6 +69,7 @@ import {
   parseSessionActionPath,
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
+import { checkoutGitBranch, readGitBranches } from './git'
 import { json, readBody } from './http'
 import { ProviderAuthBusyError } from './provider-auth'
 import { listProviders } from './providers'
@@ -252,6 +256,27 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
         return json(res, 400, { error: 'cwd required' })
       const cwd = (await sessions.listDirectories(body.cwd)).path
       return json(res, 200, { status: await sessions.trustProject(cwd) } satisfies ProjectTrustResponse)
+    }
+
+    if (method === 'GET' && path === API_GIT_PATH) {
+      const cwd = (await sessions.listDirectories(url.searchParams.get('cwd') ?? config.rootCwd)).path
+      return json(res, 200, await readGitBranches(cwd) satisfies GitBranchesResponse)
+    }
+
+    if (method === 'POST' && path === API_GIT_PATH) {
+      const body = await readBody<Partial<GitCheckoutRequest>>(req)
+      if (typeof body.cwd !== 'string' || typeof body.branch !== 'string' || !body.branch)
+        return json(res, 400, { error: 'cwd and branch required' })
+      const cwd = (await sessions.listDirectories(body.cwd)).path
+      try {
+        sessions.assertIdle(cwd)
+        return json(res, 200, await checkoutGitBranch(cwd, body.branch) satisfies GitBranchesResponse)
+      }
+      catch (err) {
+        if (err instanceof SessionsStreamingError)
+          throw err
+        return json(res, 400, { error: err instanceof Error ? err.message : 'git failed' })
+      }
     }
 
     if (method === 'GET' && path === API_EXTENSIONS_PATH) {

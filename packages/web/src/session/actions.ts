@@ -11,6 +11,8 @@ import type {
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,
+  GitBranchesResponse,
+  GitCheckoutRequest,
   InstallExtensionRequest,
   ModelsResponse,
   NavigateSessionRequest,
@@ -38,18 +40,20 @@ import type {
 import {
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
+  API_GIT_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
   API_PROVIDER_AUTH_PATH,
   API_PROVIDERS_PATH,
   buildDirectoriesPath,
+  buildGitPath,
   buildUsagePath,
   API_SESSIONS_NEW_PATH as newSessionPath,
   API_SESSIONS_OPEN_PATH as openSessionPath,
 } from '@piflow/protocol'
 import { api, post, sessionUrl } from './api'
 import { clearActiveSessionFile, migrateDraft, saveActiveSessionFile } from './persistence'
-import { applyState, clearSessionUnread } from './reducer'
+import { applyState, clearSessionUnread, dismissSessionFailure } from './reducer'
 import { ensureView, notify, store } from './store'
 
 async function requestSession(path: string, body: OpenSessionRequest | NewSessionRequest): Promise<SessionState> {
@@ -65,6 +69,7 @@ async function requestSession(path: string, body: OpenSessionRequest | NewSessio
   store.activeKey = state.key
   migrateDraft(draftKey, state.key)
   clearSessionUnread(state.sessionFile ?? state.key)
+  dismissSessionFailure(state.sessionFile ?? state.key)
   saveActiveSessionFile(state.sessionFile)
   notify()
   await Promise.all([requestModels(state.key), requestProjectTrust(state.cwd)])
@@ -275,6 +280,14 @@ export async function forkSession(path: string, entryId: string): Promise<Sessio
   saveActiveSessionFile(state.sessionFile)
   notify()
   return state
+}
+
+export function fetchGitBranches(cwd: string): Promise<GitBranchesResponse> {
+  return api(buildGitPath(cwd))
+}
+
+export function checkoutGitBranch(cwd: string, branch: string): Promise<GitBranchesResponse> {
+  return post(API_GIT_PATH, { cwd, branch } satisfies GitCheckoutRequest)
 }
 
 export function fetchSessionTree(path: string): Promise<SessionTreeResponse> {

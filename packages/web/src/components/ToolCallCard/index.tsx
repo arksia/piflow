@@ -1,20 +1,24 @@
 import type { ToolState } from '../../session/state'
+import { FilePen, FileText, Folder, Pencil, Search, Terminal, Wrench } from 'lucide-react'
 import { useState } from 'react'
+import { AccChevron } from '../../motion'
 import ContentImage from '../ContentImage'
+import { reviewOpenByDefault, toolKind, toolPath, toolTarget } from './kind'
 import styles from './styles.module.css'
 
 interface Props {
   call: { id: string, name: string, arguments?: Record<string, unknown> }
   state?: ToolState
+  /** Row inside a run group. Diff stays one click away; failures still open. */
+  plain?: boolean
 }
 
-export default function ToolCallCard({ call, state }: Props) {
-  const [open, setOpen] = useState(false)
+export default function ToolCallCard({ call, state, plain = false }: Props) {
+  const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const [expanded, setExpanded] = useState(false)
   const args = call.arguments ?? {}
-  const value = args.command ?? args.path ?? args.pattern ?? args.query ?? args.url ?? args.message ?? ''
-  const rawSummary = String(value)
-  const summary = rawSummary.length > 72 ? `${rawSummary.slice(0, 72)}…` : rawSummary
+  const rawSummary = toolTarget(args)
+  const path = toolPath(args)
   const details = state?.result?.details
   const diffText = typeof details?.diff === 'string'
     ? details.diff
@@ -45,75 +49,124 @@ export default function ToolCallCard({ call, state }: Props) {
   const output = truncated ? lines.slice(0, 60).join('\n') : rawOutput
   const status = state?.running ? 'running' : state?.isError ? 'error' : state?.result ? 'done' : 'pending'
   const expandable = Boolean(diff || rawOutput || images.length)
-
-  function copyOutput() {
-    void navigator.clipboard.writeText(rawOutput)
-  }
-
-  const head = (
-    <>
-      <span className={styles.name}>{call.name}</span>
-      <span className={styles.summary} title={rawSummary}>{summary}</span>
-      {status === 'running' ? <span className={styles.signal} title="运行中" /> : null}
-      {status === 'error' ? <span className={styles.error}>失败</span> : null}
-    </>
-  )
+  const defaultOpen = reviewOpenByDefault(status === 'error' ? 'error' : 'done', !plain && Boolean(diff))
+  const open = expandable && (userOpen ?? defaultOpen)
+  const kind = toolKind(call.name)
 
   return (
-    <div className={`${styles.tool} ${styles[status]}`}>
+    <article className={`${styles.tool} ${styles[status]} ${plain ? styles.plain : ''} ${expandable ? 't-acc t-acc-fold' : ''}`} data-open={expandable ? String(open) : undefined}>
+      <div className={styles.headRow}>
+        {expandable
+          ? (
+              <button
+                type="button"
+                className={`${styles.head} t-acc-head t-tool`}
+                aria-expanded={open}
+                aria-label={`${open ? '收起' : '展开'} ${kind}${rawSummary ? ` ${rawSummary}` : ''}`}
+                onClick={() => setUserOpen(!(userOpen ?? defaultOpen))}
+              >
+                <ToolMark name={call.name} open={open} />
+                <span className={styles.kind}>{kind}</span>
+                {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
+                {status === 'running' ? <span className={styles.live}>运行中</span> : null}
+                {status === 'error' ? <span className={styles.fail}>失败</span> : null}
+              </button>
+            )
+          : (
+              <div className={`${styles.head} ${styles.static}`}>
+                <ToolMark name={call.name} open={null} />
+                <span className={styles.kind}>{kind}</span>
+                {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
+                {status === 'running' ? <span className={styles.live}>运行中</span> : null}
+                {status === 'error' ? <span className={styles.fail}>失败</span> : null}
+              </div>
+            )}
+        {path
+          ? (
+              <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(path)}>
+                复制路径
+              </button>
+            )
+          : null}
+      </div>
+
       {expandable
         ? (
-            <button className={styles.head} aria-expanded={open} onClick={() => setOpen(value => !value)}>
-              <span className={`${styles.chevron} ${open ? styles.open : ''}`}>›</span>
-              {head}
-            </button>
-          )
-        : <div className={`${styles.head} ${styles.static}`}>{head}</div>}
-
-      {expandable && open
-        ? (
-            <div className={styles.body}>
-              {diff
-                ? (
-                    <div className={styles.diff}>
-                      {diff.map(item => (
-                        <div key={item.key} className={`${styles.diffLine} ${item.className}`}>
-                          {item.line}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                : output
+            <div className="t-acc-panel">
+              <div className={`t-acc-panel-inner ${styles.body}`}>
+                {diff
                   ? (
-                      <>
-                        <pre className={styles.output}>{output}</pre>
-                        <div className={styles.actions}>
-                          {lines.length > 60
-                            ? (
-                                <button className={styles.action} onClick={() => setExpanded(value => !value)}>
-                                  {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
-                                </button>
-                              )
-                            : null}
-                          <button className={styles.action} onClick={copyOutput}>复制</button>
-                        </div>
-                      </>
+                      <div className={styles.diff}>
+                        {diff.map(item => (
+                          <div key={item.key} className={`${styles.diffLine} ${item.className}`}>
+                            {item.line}
+                          </div>
+                        ))}
+                      </div>
                     )
-                  : images.length ? null : <div className={styles.none}>无输出</div>}
-              {images.length
-                ? (
-                    <div className={styles.images}>
-                      {images.map((image, index) => (
-                        // Tool result content is immutable; its index is stable.
-                        // eslint-disable-next-line react/no-array-index-key
-                        <ContentImage key={index} image={image} alt={`工具输出图片 ${index + 1}`} />
-                      ))}
-                    </div>
-                  )
-                : null}
+                  : null}
+                {output
+                  ? <pre className={styles.output}>{output}</pre>
+                  : !diff && !images.length ? <div className={styles.none}>无输出</div> : null}
+                {images.length
+                  ? (
+                      <div className={styles.images}>
+                        {images.map((image, index) => (
+                          // Tool result content is immutable; its index is stable.
+                          // eslint-disable-next-line react/no-array-index-key
+                          <ContentImage key={index} image={image} alt={`工具输出图片 ${index + 1}`} />
+                        ))}
+                      </div>
+                    )
+                  : null}
+                {rawOutput
+                  ? (
+                      <div className={styles.actions}>
+                        {lines.length > 60
+                          ? (
+                              <button type="button" className={styles.action} onClick={() => setExpanded(value => !value)}>
+                                {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
+                              </button>
+                            )
+                          : null}
+                        <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(rawOutput)}>
+                          复制输出
+                        </button>
+                      </div>
+                    )
+                  : null}
+              </div>
             </div>
           )
         : null}
-    </div>
+    </article>
   )
+}
+
+function ToolMark({ name, open }: { name: string, open: boolean | null }) {
+  const glyph = <ToolGlyph name={name} />
+  if (open === null)
+    return <span className={styles.slot}>{glyph}</span>
+  return (
+    <span className={`t-icon-swap ${styles.slot}`} data-state={open ? 'b' : 'a'}>
+      <span className="t-icon" data-icon="a">{glyph}</span>
+      <span className="t-icon" data-icon="b"><AccChevron /></span>
+    </span>
+  )
+}
+
+const TOOL_ICONS: Record<string, typeof FileText> = {
+  read: FileText,
+  write: FilePen,
+  edit: Pencil,
+  bash: Terminal,
+  ls: Folder,
+  grep: Search,
+  find: Search,
+  glob: Search,
+}
+
+function ToolGlyph({ name }: { name: string }) {
+  const Icon = TOOL_ICONS[name] ?? Wrench
+  return <Icon size={13} aria-hidden="true" />
 }

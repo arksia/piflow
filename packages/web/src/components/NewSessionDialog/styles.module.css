@@ -48,17 +48,6 @@ h2 {
   font-size: 1.05rem;
 }
 
-.close {
-  display: grid;
-  place-items: center;
-  color: var(--c-muted);
-  transition: color 0.15s var(--ease);
-}
-
-.close:hover {
-  color: var(--c-ink);
-}
-
 .path-form {
   display: flex;
   gap: 8px;
@@ -108,23 +97,6 @@ h2 {
   white-space: nowrap;
 }
 
-.parent {
-  flex-shrink: 0;
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 1px solid var(--c-line);
-  border-radius: 4px;
-  color: var(--c-muted);
-  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
-}
-
-.parent:hover {
-  color: var(--c-ink);
-  border-color: var(--c-faint);
-}
-
 .body {
   min-height: 180px;
   overflow-y: auto;
@@ -165,7 +137,7 @@ h2 {
 }
 
 .error {
-  color: #f08a83;
+  color: var(--c-danger);
 }
 
 .footer {

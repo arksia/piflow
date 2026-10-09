@@ -1,24 +1,7 @@
 /* Visibility (hover-reveal / touch-always) is driven by the parent row via the
    className prop; this module owns layout and look. */
 .root {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-}
-
-.trigger {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--c-faint);
-  transition: color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
-.trigger:hover {
-  background: var(--c-line);
-  color: var(--c-ink);
+  position: relative;
 }
 
 .menu {
@@ -47,6 +30,11 @@
   transition: color 0.15s var(--ease), background 0.15s var(--ease);
 }
 
+.menu-item svg {
+  width: 14px;
+  height: 14px;
+}
+
 .menu-item:disabled {
   opacity: 0.4;
 }
@@ -57,7 +45,7 @@
 }
 
 .menu-item.danger:hover:not(:disabled) {
-  color: #f08a83;
+  color: var(--c-danger);
 }
 
 /* ---------- dialogs (fork picker / delete confirm) ---------- */
@@ -108,17 +96,6 @@
   font-size: 1.05rem;
 }
 
-.close {
-  display: grid;
-  place-items: center;
-  color: var(--c-muted);
-  transition: color 0.15s var(--ease);
-}
-
-.close:hover {
-  color: var(--c-ink);
-}
-
 .hint {
   margin: 0;
   padding: 14px 20px 4px;
@@ -162,7 +139,7 @@
 
 .error {
   margin: 8px 12px 0;
-  color: #f08a83;
+  color: var(--c-danger);
   font-size: 0.76rem;
 }
 
@@ -192,8 +169,8 @@
 }
 
 .confirm-danger {
-  border: 1px solid rgb(240 138 131 / 45%);
-  color: #f08a83;
+  border: 1px solid var(--c-danger);
+  color: var(--c-danger);
 }
 
 .confirm-danger:disabled {
@@ -201,5 +178,5 @@
 }
 
 .confirm-danger:hover:not(:disabled) {
-  background: rgb(240 138 131 / 12%);
+  background: var(--c-danger-tint);
 }
