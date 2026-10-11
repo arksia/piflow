@@ -39,7 +39,7 @@ function withoutSignal(prompt: AuthPrompt): ProviderAuthPrompt['prompt'] {
   return safePrompt as ProviderAuthPrompt['prompt']
 }
 
-export function createProviderAuthManager(runtime: ModelRuntime, publish: (message: ServerMessage) => void): ProviderAuthManager {
+export function createProviderAuthManager(runtime: ModelRuntime, publish: (message: ServerMessage) => void, onCompleted?: (providerId: string) => void): ProviderAuthManager {
   const operations = new Map<string, Operation>()
 
   function emit(operationId: string, event: ProviderAuthEvent) {
@@ -70,7 +70,10 @@ export function createProviderAuthManager(runtime: ModelRuntime, publish: (messa
       notify: event => emit(operationId, event),
     }
     void runtime.login(providerId, type, interaction)
-      .then(() => emit(operationId, { type: 'completed' }))
+      .then(() => {
+        onCompleted?.(providerId)
+        emit(operationId, { type: 'completed' })
+      })
       .catch(error => emit(operationId, { type: 'failed', message: error instanceof Error ? error.message : String(error) }))
       .finally(() => operations.delete(operationId))
     await new Promise<void>(resolve => setImmediate(resolve))

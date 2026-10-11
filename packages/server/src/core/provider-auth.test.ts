@@ -1,4 +1,5 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
+import type { ServerMessage } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
 import { createProviderAuthManager, ProviderAuthBusyError } from './provider-auth'
@@ -34,4 +35,30 @@ it('serializes auth operations and supports cancellation', async () => {
   await assert.rejects(manager.start('demo', 'api_key'), ProviderAuthBusyError)
   assert.equal(manager.cancel(started.operationId), true)
   assert.equal(manager.cancel(started.operationId), false)
+})
+
+it('publishes a safe failure when native login rejects', async () => {
+  const messages: Array<Extract<ServerMessage, { type: 'provider_auth' }>> = []
+  const runtime = {
+    getProvider: () => ({ id: 'demo', auth: { apiKey: { login: true } } }),
+    login: async () => { throw new Error('invalid credentials') },
+  } as unknown as ModelRuntime
+  const manager = createProviderAuthManager(runtime, message => messages.push(message))
+  await manager.start('demo', 'api_key')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(messages.at(-1), { type: 'provider_auth', operationId: messages[0].operationId, event: { type: 'failed', message: 'invalid credentials' } })
+})
+
+it('notifies the host after credentials are stored', async () => {
+  let completed = ''
+  const runtime = {
+    getProvider: () => ({ id: 'demo', auth: { apiKey: { login: true } } }),
+    login: async () => ({ type: 'api_key' as const }),
+  } as unknown as ModelRuntime
+  const manager = createProviderAuthManager(runtime, () => {}, (providerId) => {
+    completed = providerId
+  })
+  await manager.start('demo', 'api_key')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(completed, 'demo')
 })
