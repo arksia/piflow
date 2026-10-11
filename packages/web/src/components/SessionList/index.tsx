@@ -1,6 +1,6 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, Folder, MessageSquarePlus, PanelLeftClose, Search, Settings, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Search, Settings, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { sessionAttention, sessionRailStatus } from '../../flow/attention'
 import { AccChevron, usePresence } from '../../motion'
@@ -241,8 +241,8 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
                               toggleProject(cwd)
                           }}
                         >
-                          <span className={`t-icon-swap ${styles.folder}`} data-state={shown ? 'b' : 'a'}>
-                            <span className="t-icon" data-icon="a"><Folder size={16} /></span>
+                          <span className={`t-icon-swap ${styles.folder}`} data-state="a">
+                            <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
                             <span className="t-icon" data-icon="b"><AccChevron /></span>
                           </span>
                           <div className={styles.projectName} title={shortenPath(cwd)}>
