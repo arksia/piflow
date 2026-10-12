@@ -67,10 +67,41 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
 
   useLayoutEffect(() => {
     const input = areaRef.current
-    const next = images.length > 0 || (input ? input.scrollHeight > 40 : false)
+    const box = boxRef.current
     const wide = styles.wide
-    if (wide)
-      boxRef.current?.classList.toggle(wide, next)
+    if (!box || !wide)
+      return
+    if (!input || images.length > 0) {
+      box.classList.toggle(wide, images.length > 0)
+      return
+    }
+    // Probe at the single-row width. Measuring the live field would reflow the side buttons.
+    const composer = input.parentElement
+    if (!composer)
+      return
+    const controls = [...composer.children].filter(el => el instanceof HTMLElement && el !== input && getComputedStyle(el).display !== 'none')
+    const style = getComputedStyle(composer)
+    const pad = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+    const gap = Number.parseFloat(style.columnGap) || 0
+    const taken = controls.reduce((sum, el) => {
+      const button = el instanceof HTMLButtonElement ? el : el.querySelector('button')
+      return sum + (button?.offsetWidth ?? el.offsetWidth)
+    }, 0)
+    const narrow = Math.max(40, composer.clientWidth - pad - taken - gap * controls.length)
+    const probe = document.createElement('textarea')
+    probe.className = input.className
+    probe.value = input.value
+    probe.setAttribute('aria-hidden', 'true')
+    probe.tabIndex = -1
+    probe.style.position = 'absolute'
+    probe.style.visibility = 'hidden'
+    probe.style.pointerEvents = 'none'
+    probe.style.width = `${narrow}px`
+    probe.style.height = 'auto'
+    box.appendChild(probe)
+    const overflows = probe.scrollHeight > 32
+    probe.remove()
+    box.classList.toggle(wide, overflows)
   }, [text, images.length])
 
   function pickModel(selectedProvider: string, modelId: string) {
@@ -294,22 +325,24 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             />
             {view && (view.model || view.thinkingLevels.length > 0)
               ? (
-                  <Dropdown
-                    menu={{ items: menuItems }}
-                    open={modelOpen}
-                    placement="topRight"
-                    trigger={['click']}
-                    onOpenChange={onModelOpenChange}
-                  >
-                    <button
-                      type="button"
-                      className={styles.model}
-                      aria-label={view.model ? `模型和思考，当前 ${view.model.id}，${thinkingLabel(view.thinkingLevel)}` : `思考强度，当前${thinkingLabel(view.thinkingLevel)}`}
+                  <span className={styles.modelSlot}>
+                    <Dropdown
+                      menu={{ items: menuItems }}
+                      open={modelOpen}
+                      placement="topRight"
+                      trigger={['click']}
+                      onOpenChange={onModelOpenChange}
                     >
-                      <span>{view.model?.id ?? thinkingLabel(view.thinkingLevel)}</span>
-                      <ChevronDown size={12} />
-                    </button>
-                  </Dropdown>
+                      <button
+                        type="button"
+                        className={styles.model}
+                        aria-label={view.model ? `模型和思考，当前 ${view.model.id}，${thinkingLabel(view.thinkingLevel)}` : `思考强度，当前${thinkingLabel(view.thinkingLevel)}`}
+                      >
+                        <span>{view.model?.id ?? thinkingLabel(view.thinkingLevel)}</span>
+                        <ChevronDown size={12} />
+                      </button>
+                    </Dropdown>
+                  </span>
                 )
               : null}
             <button
