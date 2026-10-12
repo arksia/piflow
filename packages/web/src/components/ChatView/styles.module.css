@@ -35,9 +35,9 @@
 
 .title {
   min-width: 0;
-  color: var(--c-ink);
+  color: var(--c-body);
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -134,7 +134,7 @@
 .column {
   width: min(calc(100% - 48px), var(--chat-w));
   margin: 0 auto;
-  padding: 24px 0 16px;
+  padding: 24px 4px 16px;
   color: var(--c-ink);
 }
 
