@@ -14,20 +14,28 @@
 }
 
 .user {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
   gap: 3px;
+
+  /* Column padding is 4px. Another 8px clears the radius past the text. */
+  width: calc(100% + 24px);
+  margin-right: -12px;
+  margin-left: -12px;
+  content-visibility: visible;
 }
 
 .user-bubble {
   display: grid;
   gap: 8px;
-  max-width: 78%;
-  padding: 8px 14px;
+  width: 100%;
+  padding: 8px 12px;
   background: var(--c-raise);
   border: 1px solid var(--c-line);
-  border-radius: 14px 14px 4px;
+  border-radius: 14px;
 }
 
 .user-text {
