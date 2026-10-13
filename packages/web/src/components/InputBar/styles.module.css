@@ -1,6 +1,7 @@
 .bar {
   position: relative;
   z-index: 3;
+  container-type: inline-size;
 
   /* 10px matches the thin scrollbar, so the field lines up with the transcript. */
   margin-top: -20px;
@@ -86,12 +87,13 @@
 .box::before {
   content: "";
   position: absolute;
-  right: 0;
   bottom: 100%;
-  left: 0;
+  left: 50%;
+  width: 100cqi;
   height: 60px;
   pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--c-canvas));
+  transform: translateX(-50%);
 }
 
 .box.wide {
