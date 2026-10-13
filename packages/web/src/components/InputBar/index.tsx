@@ -35,6 +35,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const fileRef = useRef<HTMLInputElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
     const models = modelGroups.get(model.provider) ?? []
@@ -64,6 +65,18 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     // eslint-disable-next-line react/set-state-in-effect
     setImages(readDraft(draftKey).images)
   }, [draftKey])
+
+  useLayoutEffect(() => {
+    const bar = barRef.current
+    const chat = bar?.parentElement
+    if (!bar || !chat)
+      return
+    const sync = () => chat.style.setProperty('--composer-h', `${bar.offsetHeight}px`)
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(bar)
+    return () => observer.disconnect()
+  }, [])
 
   useLayoutEffect(() => {
     const input = areaRef.current
@@ -256,7 +269,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     menuItems.push({ key: diagnostic.message, label: diagnostic.message, disabled: true })
 
   return (
-    <div className={styles.bar}>
+    <div ref={barRef} className={styles.bar}>
       <div className={styles.column}>
         {operationError ? <div className={styles.error} role="alert">{operationError}</div> : null}
         {!store.connected

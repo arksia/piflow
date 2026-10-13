@@ -1,8 +1,9 @@
 .chat {
   --chat-w: 900px;
 
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -79,7 +80,9 @@
 
 .scroll {
   position: relative;
-  flex: 1;
+  grid-row: 2;
+  grid-column: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
   font-size: 14px;
@@ -90,6 +93,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-bottom: var(--composer-h, 0px);
 }
 
 .trust {
@@ -121,20 +125,32 @@
 
 .extension-state {
   display: flex;
+  grid-row: 2;
+  grid-column: 1;
+  align-self: end;
+  z-index: 4;
   width: min(calc(100% - 56px), var(--chat-w));
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin: 0 auto;
+  margin-bottom: var(--composer-h, 0px);
+  margin-inline: auto;
   padding: 6px 0;
   color: var(--c-muted);
   font-family: var(--font-mono);
   font-size: 0.72rem;
 }
 
+.chat > :last-child {
+  grid-row: 2;
+  grid-column: 1;
+  align-self: end;
+  min-width: 0;
+}
+
 .column {
   width: min(calc(100% - 56px), var(--chat-w));
   margin: 0 auto;
-  padding: 0 4px 36px;
+  padding: 0 4px calc(var(--composer-h, 120px) + 16px);
   color: var(--c-ink);
 }
 
