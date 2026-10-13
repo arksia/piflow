@@ -1,5 +1,5 @@
 .chat {
-  --chat-w: 1180px;
+  --chat-w: 900px;
 
   display: flex;
   flex-direction: column;
@@ -82,6 +82,7 @@
   position: relative;
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -94,7 +95,7 @@
 
 .trust {
   display: flex;
-  width: min(calc(100% - 48px), var(--chat-w));
+  width: min(calc(100% - 56px), var(--chat-w));
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -121,7 +122,7 @@
 
 .extension-state {
   display: flex;
-  width: min(calc(100% - 48px), var(--chat-w));
+  width: min(calc(100% - 56px), var(--chat-w));
   flex-wrap: wrap;
   gap: 6px 14px;
   margin: 0 auto;
@@ -132,9 +133,9 @@
 }
 
 .column {
-  width: min(calc(100% - 48px), var(--chat-w));
+  width: min(calc(100% - 56px), var(--chat-w));
   margin: 0 auto;
-  padding: 24px 4px 16px;
+  padding: 24px 4px 36px;
   color: var(--c-ink);
 }
 
@@ -203,8 +204,4 @@
 
   .mobile-menu { display: contents; }
 
-  .column { width: calc(100% - 32px); }
-
-  .trust,
-  .extension-state { width: calc(100% - 32px); }
 }
