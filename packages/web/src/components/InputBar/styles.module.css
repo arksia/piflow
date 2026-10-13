@@ -1,10 +1,22 @@
 .bar {
-  padding: 8px 20px calc(14px + env(safe-area-inset-bottom));
+  position: relative;
+  z-index: 3;
+
+  /* 10px matches the thin scrollbar, so the field lines up with the transcript. */
+  margin-top: -20px;
+  margin-right: 10px;
+  padding: 20px 0 calc(14px + env(safe-area-inset-bottom));
+  pointer-events: none;
 }
 
 .column {
-  width: min(calc(100% - 48px), calc(var(--chat-w, 1180px) - 60px));
+  position: relative;
+  z-index: 2;
+
+  /* Transcript column is inset 28px, then its own 4px padding. Match that content box. */
+  width: min(calc(100% - 64px), calc(var(--chat-w, 900px) - 8px));
   margin: 0 auto;
+  pointer-events: auto;
 }
 
 .queue {
@@ -69,6 +81,17 @@
   border: 1px solid var(--c-line);
   border-radius: 999px;
   transition: border-color 0.3s var(--ease), border-radius 150ms var(--ease);
+}
+
+.box::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 60px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--c-canvas));
 }
 
 .box.wide {
