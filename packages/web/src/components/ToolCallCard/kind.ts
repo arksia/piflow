@@ -7,10 +7,21 @@ const KINDS: Record<string, string> = {
   find: '查找',
   ls: '列出',
   glob: '匹配',
+  codemode: '脚本',
 }
 
 export function toolKind(name: string) {
-  return KINDS[name] ?? name
+  const known = KINDS[name]
+  if (known)
+    return known
+  if (name.startsWith('mcp__')) {
+    const parts = name.split('__')
+    const tool = parts.pop()
+    const server = parts.slice(1).join('-')
+    if (server && tool)
+      return `${server}/${tool}`
+  }
+  return name
 }
 
 export function toolTarget(args: Record<string, unknown>) {

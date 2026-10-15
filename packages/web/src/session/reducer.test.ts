@@ -112,8 +112,66 @@ it('replaces tool results on replay instead of duplicating them', () => {
   handleEvent('session-a', { type: 'tool_execution_end', toolCallId: 'call-1', toolName: 'read', result: { content: 'failed' }, isError: true })
   handleEvent('session-a', { type: 'tool_execution_end', toolCallId: 'call-1', toolName: 'read', result: { content: 'replayed' }, isError: false })
   assert.deepEqual(store.views['session-a']?.toolResults, {
-    'call-1': { result: { content: 'replayed' }, isError: false },
+    'call-1': { running: false, name: 'read', result: { content: 'replayed' }, isError: false },
   })
+})
+
+it('nests calls a tool makes and keeps their duration', () => {
+  store.views = {}
+  handleEvent('session-a', {
+    type: 'tool_execution_start',
+    toolCallId: 'child',
+    toolName: 'read',
+    args: { path: 'a.ts' },
+    parentToolCallId: 'parent',
+  })
+  assert.equal(store.views['session-a']?.toolResults.child?.parentId, 'parent')
+  assert.equal(store.views['session-a']?.toolResults.child?.running, true)
+  handleEvent('session-a', {
+    type: 'tool_execution_end',
+    toolCallId: 'child',
+    toolName: 'read',
+    result: { content: [{ type: 'text', text: 'ok' }], details: undefined },
+    isError: false,
+    durationMs: 40,
+    parentToolCallId: 'parent',
+  })
+  assert.equal(store.views['session-a']?.toolResults.child?.durationMs, 40)
+  assert.equal(store.views['session-a']?.toolResults.child?.running, false)
+
+  const state: SessionState = {
+    key: 'session-a',
+    cwd: '/project',
+    messages: [{
+      role: 'toolResult',
+      toolCallId: 'parent',
+      toolName: 'codemode',
+      content: [{ type: 'text', text: 'done' }],
+      isError: false,
+      timestamp: 1,
+      durationMs: 1200,
+      nestedCalls: {
+        complete: true,
+        calls: [{ id: 'child', name: 'read', arguments: { path: 'a.ts' }, status: 'ok', durationMs: 40 }],
+      },
+    }],
+    isStreaming: false,
+    isCompacting: false,
+    autoCompactionEnabled: true,
+    model: null,
+    thinkingLevel: null,
+    thinkingLevels: [],
+    context: null,
+    queue: { steering: [], followUp: [] },
+    extensionRequests: [],
+    error: null,
+  }
+  route({ type: 'state', state }, () => {})
+  const results = store.views['session-a']?.toolResults
+  assert.equal(results?.parent?.name, 'codemode')
+  assert.equal(results?.parent?.durationMs, 1200)
+  assert.equal(results?.child?.parentId, 'parent')
+  assert.equal(results?.child?.durationMs, 40)
 })
 
 it('replaces queues from authoritative state after abort or reconnect', () => {

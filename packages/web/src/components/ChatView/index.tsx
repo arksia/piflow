@@ -62,7 +62,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
   shown.forEach((message, index) => {
     if (message.role === 'user' || groups.length === 0)
       groups.push([])
-    groups[groups.length - 1].push(index)
+    groups[groups.length - 1]?.push(index)
   })
   let lastOutput = -1
   shown.forEach((message, index) => {
@@ -279,34 +279,42 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
             )
           : (
               <div ref={setColumn} className={styles.column}>
-                {groups.map((indices, groupIndex) => (
-                  <div key={messageKey(shown[indices[0]])}>
-                    {indices.map((index) => {
-                      const message = shown[index]
-                      if (message.role === 'user')
-                        userCount += 1
-                      return (
-                        <MessageItem
-                          key={messageKey(message)}
-                          message={message}
-                          toolResults={view.toolResults}
-                          live={message === view.live}
-                          showTime={index === lastOutput}
-                          sessionPath={store.activeKey ?? undefined}
-                          forkOrdinal={userCount}
-                          tools={turnToolCount(shown, index)}
-                        />
-                      )
-                    })}
-                    {groupIndex === groups.length - 1 && isLive && !view.live
-                      ? (
-                          <div className={styles.pending}>
-                            <ThinkLine text="正在生成…" />
-                          </div>
+                {groups.map((indices, groupIndex) => {
+                  const head = indices[0]
+                  const headMessage = head === undefined ? undefined : shown[head]
+                  if (!headMessage)
+                    return null
+                  return (
+                    <div key={messageKey(headMessage)}>
+                      {indices.map((index) => {
+                        const message = shown[index]
+                        if (!message)
+                          return null
+                        if (message.role === 'user')
+                          userCount += 1
+                        return (
+                          <MessageItem
+                            key={messageKey(message)}
+                            message={message}
+                            toolResults={view.toolResults}
+                            live={message === view.live}
+                            showTime={index === lastOutput}
+                            sessionPath={store.activeKey ?? undefined}
+                            forkOrdinal={userCount}
+                            tools={turnToolCount(shown, index)}
+                          />
                         )
-                      : null}
-                  </div>
-                ))}
+                      })}
+                      {groupIndex === groups.length - 1 && isLive && !view.live
+                        ? (
+                            <div className={styles.pending}>
+                              <ThinkLine text="正在生成…" />
+                            </div>
+                          )
+                        : null}
+                    </div>
+                  )
+                })}
                 {store.connected && view.isCompacting ? <div className={styles.note}><span className="t-shimmer" data-text="正在压缩上下文…">正在压缩上下文…</span></div> : null}
                 {view.compactionNotice && (
                   <div className={styles.note}>

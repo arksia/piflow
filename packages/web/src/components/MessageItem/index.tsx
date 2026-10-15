@@ -123,7 +123,9 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
         })}
         {message.stopReason === 'error'
           ? <div className={styles.messageError}>{message.errorMessage || '请求失败'}</div>
-          : null}
+          : message.stopReason === 'aborted'
+            ? <div className={styles.messageNote}>已中止</div>
+            : null}
       </div>
     )
   }
@@ -147,11 +149,12 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
 
 function renderAssistantPart(part: AssistantPart, toolResults: Record<string, ToolState>, live: boolean) {
   if (part.type === 'tools') {
-    if (part.calls.length === 1) {
-      const call = part.calls[0]
-      return <ToolCallCard key={call.id} call={call} state={toolResults[call.id]} />
-    }
-    return <ToolRunGroup key={part.calls[0].id} calls={part.calls} toolResults={toolResults} />
+    const call = part.calls[0]
+    if (!call)
+      return null
+    if (part.calls.length === 1)
+      return <ToolCallCard key={call.id} call={call} state={toolResults[call.id]} toolResults={toolResults} />
+    return <ToolRunGroup key={call.id} calls={part.calls} toolResults={toolResults} />
   }
   const { block, index } = part
   const key = live ? `live:${block.type}:${index}` : blockKey(block)
@@ -162,8 +165,6 @@ function renderAssistantPart(part: AssistantPart, toolResults: Record<string, To
   }
   if (block.type === 'thinking')
     return <ThinkingBlock key={key} text={block.thinking} live={live} />
-  if (block.type === 'image')
-    return <ContentImage key={key} image={block} alt="助手图片" />
   return null
 }
 
@@ -185,7 +186,7 @@ function ToolRunGroup({ calls, toolResults }: { calls: ToolCallBlock[], toolResu
       </div>
       <div className={styles.toolsList}>
         {calls.map(call => (
-          <ToolCallCard key={call.id} plain call={call} state={toolResults[call.id]} />
+          <ToolCallCard key={call.id} plain call={call} state={toolResults[call.id]} toolResults={toolResults} />
         ))}
       </div>
     </div>

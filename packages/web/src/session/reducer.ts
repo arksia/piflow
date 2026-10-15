@@ -14,6 +14,8 @@ let restored = false
 let seenFailuresLoaded = false
 
 type AssistantMessage = Extract<AgentMessage, { role: 'assistant' }>
+type ToolResultMessage = Extract<AgentMessage, { role: 'toolResult' }>
+type ToolCallArguments = Extract<AssistantMessage['content'][number], { type: 'toolCall' }>['arguments']
 type MessageUpdate = Extract<JsonAgentSessionEvent, { type: 'message_update' }>['assistantMessageEvent']
 const toolCallArgumentJson = new Map<string, string>()
 
@@ -75,13 +77,35 @@ export function applyAssistantUpdate(message: AssistantMessage, update: MessageU
   return { ...message, content }
 }
 
-function parseToolArguments(json: string): Record<string, unknown> {
+function parseToolArguments(json: string): ToolCallArguments {
   try {
     const value: unknown = JSON.parse(json)
-    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
+    if (typeof value === 'object' && value !== null && !Array.isArray(value))
+      return value as ToolCallArguments
   }
-  catch {
-    return {}
+  catch {}
+  return {}
+}
+
+function rememberToolResult(results: Record<string, ToolState>, message: ToolResultMessage) {
+  results[message.toolCallId] = {
+    name: message.toolName,
+    result: { content: message.content, details: message.details },
+    isError: message.isError,
+    ...(message.durationMs != null ? { durationMs: message.durationMs } : {}),
+  }
+  for (const call of message.nestedCalls?.calls ?? []) {
+    results[call.id] = {
+      name: call.name,
+      parentId: message.toolCallId,
+      args: call.arguments,
+      isError: call.status === 'error',
+      running: call.status === 'unfinished',
+      ...(call.durationMs != null ? { durationMs: call.durationMs } : {}),
+      ...(call.error
+        ? { result: { content: [{ type: 'text', text: call.error }], details: undefined } }
+        : {}),
+    }
   }
 }
 
@@ -124,12 +148,8 @@ export function applyState(state: SessionState) {
 
   const results: Record<string, ToolState> = {}
   for (const message of state.messages) {
-    if (message.role === 'toolResult' && message.toolCallId && Array.isArray(message.content)) {
-      results[message.toolCallId] = {
-        result: { content: message.content, details: message.details },
-        isError: message.isError,
-      }
-    }
+    if (message.role === 'toolResult' && message.toolCallId && Array.isArray(message.content))
+      rememberToolResult(results, message)
   }
 
   view.toolResults = results
@@ -178,7 +198,12 @@ export function handleEvent(key: string, event: JsonAgentSessionEvent) {
     case 'tool_execution_start':
       view.toolResults = {
         ...view.toolResults,
-        [event.toolCallId]: { running: true, args: event.args },
+        [event.toolCallId]: {
+          running: true,
+          name: event.toolName,
+          args: event.args,
+          ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
+        },
       }
       break
 
@@ -186,17 +211,33 @@ export function handleEvent(key: string, event: JsonAgentSessionEvent) {
       const previous = view.toolResults[event.toolCallId]
       view.toolResults = {
         ...view.toolResults,
-        [event.toolCallId]: { ...previous, partial: event.partialResult },
+        [event.toolCallId]: {
+          ...previous,
+          name: event.toolName,
+          args: event.args,
+          partial: event.partialResult,
+          ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
+        },
       }
       break
     }
 
-    case 'tool_execution_end':
+    case 'tool_execution_end': {
+      const previous = view.toolResults[event.toolCallId]
       view.toolResults = {
         ...view.toolResults,
-        [event.toolCallId]: { result: event.result, isError: event.isError },
+        [event.toolCallId]: {
+          ...previous,
+          running: false,
+          name: event.toolName,
+          result: event.result,
+          isError: event.isError,
+          ...(event.durationMs != null ? { durationMs: event.durationMs } : {}),
+          ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
+        },
       }
       break
+    }
 
     case 'compaction_start':
       view.isCompacting = true
