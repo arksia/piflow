@@ -470,6 +470,8 @@ function Flyout({
     }
     align()
     function onScroll(event: Event) {
+      if (!frame)
+        return
       if (event.target instanceof Node && frame.contains(event.target))
         return
       align()

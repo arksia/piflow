@@ -71,10 +71,22 @@ button.head:hover {
   font-family: var(--font-mono);
 }
 
+.took {
+  flex-shrink: 0;
+  color: var(--c-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .live,
 .fail {
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.nested {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-1) 0 0 18px;
 }
 
 .fail {

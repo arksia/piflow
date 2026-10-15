@@ -6,6 +6,8 @@ test('toolKind uses a review label for known tools', () => {
   assert.equal(toolKind('read'), '读取')
   assert.equal(toolKind('bash'), '命令')
   assert.equal(toolKind('custom_tool'), 'custom_tool')
+  assert.equal(toolKind('codemode'), '脚本')
+  assert.equal(toolKind('mcp__dev_radius__search'), 'dev_radius/search')
 })
 
 test('toolTarget prefers a single reviewable argument', () => {

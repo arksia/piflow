@@ -43,10 +43,15 @@ it('publishes a safe failure when native login rejects', async () => {
     getProvider: () => ({ id: 'demo', auth: { apiKey: { login: true } } }),
     login: async () => { throw new Error('invalid credentials') },
   } as unknown as ModelRuntime
-  const manager = createProviderAuthManager(runtime, message => messages.push(message))
+  const manager = createProviderAuthManager(runtime, (message) => {
+    if (message.type === 'provider_auth')
+      messages.push(message)
+  })
   await manager.start('demo', 'api_key')
   await new Promise(resolve => setImmediate(resolve))
-  assert.deepEqual(messages.at(-1), { type: 'provider_auth', operationId: messages[0].operationId, event: { type: 'failed', message: 'invalid credentials' } })
+  const started = messages[0]
+  assert.ok(started)
+  assert.deepEqual(messages.at(-1), { type: 'provider_auth', operationId: started.operationId, event: { type: 'failed', message: 'invalid credentials' } })
 })
 
 it('notifies the host after credentials are stored', async () => {

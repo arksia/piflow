@@ -14,9 +14,13 @@ import type {
 
 export interface ToolState {
   running?: boolean
+  name?: string
   args?: unknown
-  partial?: AgentToolResult<Record<string, unknown>>
-  result?: AgentToolResult<Record<string, unknown>>
+  /** Set when another tool, such as a codemode script, made this call. */
+  parentId?: string
+  durationMs?: number
+  partial?: AgentToolResult
+  result?: AgentToolResult
   isError?: boolean
 }
 

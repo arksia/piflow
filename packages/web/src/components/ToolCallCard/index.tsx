@@ -9,17 +9,18 @@ import styles from './styles.module.css'
 interface Props {
   call: { id: string, name: string, arguments?: Record<string, unknown> }
   state?: ToolState
+  toolResults?: Record<string, ToolState>
   /** Row inside a run group. Diff stays one click away; failures still open. */
   plain?: boolean
 }
 
-export default function ToolCallCard({ call, state, plain = false }: Props) {
+export default function ToolCallCard({ call, state, toolResults, plain = false }: Props) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const [expanded, setExpanded] = useState(false)
-  const args = call.arguments ?? {}
+  const args = call.arguments ?? argumentsOf(state?.args)
   const rawSummary = toolTarget(args)
   const path = toolPath(args)
-  const details = state?.result?.details
+  const details = argumentsOf(state?.result?.details)
   const diffText = typeof details?.diff === 'string'
     ? details.diff
     : typeof details?.patch === 'string'
@@ -52,6 +53,9 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
   const defaultOpen = reviewOpenByDefault(status === 'error' ? 'error' : 'done', !plain && Boolean(diff))
   const open = expandable && (userOpen ?? defaultOpen)
   const kind = toolKind(call.name)
+  const took = state?.durationMs != null ? formatDuration(state.durationMs) : null
+  const nested = Object.entries(toolResults ?? {}).flatMap(([id, child]) =>
+    child.parentId === call.id ? [{ id, child }] : [])
 
   return (
     <article className={`${styles.tool} ${styles[status]} ${plain ? styles.plain : ''} ${expandable ? 't-acc t-acc-fold' : ''}`} data-open={expandable ? String(open) : undefined}>
@@ -68,6 +72,7 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
                 <ToolMark name={call.name} open={open} />
                 <span className={styles.kind}>{kind}</span>
                 {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
+                {took ? <span className={styles.took}>{took}</span> : null}
                 {status === 'running' ? <span className={styles.live}>运行中</span> : null}
                 {status === 'error' ? <span className={styles.fail}>失败</span> : null}
               </button>
@@ -77,6 +82,7 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
                 <ToolMark name={call.name} open={null} />
                 <span className={styles.kind}>{kind}</span>
                 {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
+                {took ? <span className={styles.took}>{took}</span> : null}
                 {status === 'running' ? <span className={styles.live}>运行中</span> : null}
                 {status === 'error' ? <span className={styles.fail}>失败</span> : null}
               </div>
@@ -89,6 +95,22 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
             )
           : null}
       </div>
+
+      {nested.length
+        ? (
+            <div className={styles.nested}>
+              {nested.map(({ id, child }) => (
+                <ToolCallCard
+                  key={id}
+                  plain
+                  call={{ id, name: child.name ?? 'tool', arguments: argumentsOf(child.args) }}
+                  state={child}
+                  toolResults={toolResults}
+                />
+              ))}
+            </div>
+          )
+        : null}
 
       {expandable
         ? (
@@ -169,4 +191,17 @@ const TOOL_ICONS: Record<string, typeof FileText> = {
 function ToolGlyph({ name }: { name: string }) {
   const Icon = TOOL_ICONS[name] ?? Wrench
   return <Icon size={13} aria-hidden="true" />
+}
+
+function argumentsOf(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000)
+    return `${ms}ms`
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60)
+    return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }

@@ -92,7 +92,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     const composer = input.parentElement
     if (!composer)
       return
-    const controls = [...composer.children].filter(el => el instanceof HTMLElement && el !== input && getComputedStyle(el).display !== 'none')
+    const controls = [...composer.children].filter((el): el is HTMLElement => el instanceof HTMLElement && el !== input && getComputedStyle(el).display !== 'none')
     const style = getComputedStyle(composer)
     const pad = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
     const gap = Number.parseFloat(style.columnGap) || 0
