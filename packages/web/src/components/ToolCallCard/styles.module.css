@@ -20,7 +20,7 @@
   font-size: 13px;
 }
 
-.headRow {
+.head-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -110,24 +110,24 @@ button.head:hover {
   font-family: var(--font-mono);
 }
 
-.diffLine {
+.diff-line {
   padding: 0 14px;
   color: var(--c-muted);
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
 
-.diffLine.add {
+.diff-line.add {
   background: var(--c-diff-add);
   color: var(--c-diff-add-fg);
 }
 
-.diffLine.delete {
+.diff-line.delete {
   background: var(--c-diff-del);
   color: var(--c-diff-del-fg);
 }
 
-.diffLine.hunk {
+.diff-line.hunk {
   color: var(--c-faint);
 }
 

@@ -38,12 +38,12 @@
 
 .status-dot.running { background: var(--c-signal); }
 .status-dot.failed { background: var(--c-danger); }
-.status-dot.needsInput { background: var(--c-warning); }
+.status-dot.needs-input { background: var(--c-warning); }
 .status-dot.unread { background: var(--c-mid); }
 
 .status.running { color: var(--c-signal); }
 .status.failed { color: var(--c-danger); }
-.status.needsInput { color: var(--c-warning); }
+.status.needs-input { color: var(--c-warning); }
 
 .status {
   color: var(--c-muted);

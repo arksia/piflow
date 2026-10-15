@@ -93,7 +93,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-bottom: var(--composer-h, 0px);
+  padding-bottom: var(--composer-h, 0);
 }
 
 .trust {
@@ -132,7 +132,7 @@
   width: min(calc(100% - 56px), var(--chat-w));
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin-bottom: var(--composer-h, 0px);
+  margin-bottom: var(--composer-h, 0);
   margin-inline: auto;
   padding: 6px 0;
   color: var(--c-muted);

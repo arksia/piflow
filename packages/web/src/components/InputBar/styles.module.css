@@ -114,29 +114,15 @@
   padding: var(--side-inset);
 }
 
-.box.wide textarea {
-  grid-area: 1 / 1 / 2 / -1;
-  width: auto;
-  padding: 4px 4px 2px;
-}
-
-.box.wide .plus {
-  grid-area: 2 / 1;
-}
-
-.box.wide .model-slot {
-  grid-area: 2 / 2;
-}
-
-.box.wide .button {
-  grid-area: 2 / 4;
-}
-
 .composer .plus {
   grid-column: 1;
   width: var(--side-button);
   height: var(--side-button);
   border-radius: 50%;
+}
+
+.box.wide .plus {
+  grid-area: 2 / 1;
 }
 
 .box textarea {
@@ -155,6 +141,12 @@
   font-size: 14px;
   line-height: 20px;
   padding: 2px 4px;
+}
+
+.box.wide textarea {
+  grid-area: 1 / 1 / 2 / -1;
+  width: auto;
+  padding: 4px 4px 2px;
 }
 
 .box textarea::placeholder {
@@ -286,6 +278,10 @@
   min-width: 0;
 }
 
+.box.wide .model-slot {
+  grid-area: 2 / 2;
+}
+
 .model {
   display: inline-flex;
   max-width: 180px;
@@ -324,6 +320,10 @@
   place-items: center;
   border-radius: 50%;
   background: var(--c-press);
+}
+
+.box.wide .button {
+  grid-area: 2 / 4;
 }
 
 .core {
