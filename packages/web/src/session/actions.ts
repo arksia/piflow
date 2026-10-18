@@ -82,6 +82,18 @@ export async function createBackgroundSession(cwd: string): Promise<SessionState
   return state
 }
 
+export async function createConductorSession(cwd: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(newSessionPath, { cwd, persist: true, conductor: true } satisfies NewSessionRequest)
+  applyState(state)
+  return state
+}
+
+export async function openBackgroundSession(path: string): Promise<SessionState> {
+  const { state } = await post<SessionStateResponse>(openSessionPath, { path })
+  applyState(state)
+  return state
+}
+
 export function openSession(path: string): Promise<SessionState> {
   return requestSession(openSessionPath, { path })
 }
@@ -99,16 +111,16 @@ export async function requestDirectories(path: string): Promise<DirectoryListing
   return listing
 }
 
-export async function sendPrompt(text: string, images?: PromptRequest['images'], streamingBehavior?: PromptRequest['streamingBehavior']): Promise<void> {
+export async function sendPrompt(text: string, images?: PromptRequest['images'], streamingBehavior?: PromptRequest['streamingBehavior'], key?: string): Promise<void> {
   if (!store.connected)
     throw new Error('not connected')
-  if (!store.activeKey)
+  if (!key && !store.activeKey)
     await newSession()
-  const key = store.activeKey
-  if (!key)
+  const target = key ?? store.activeKey
+  if (!target)
     return
-  await post<ApiOkResponse>(sessionUrl(key, 'prompt'), { text, images, streamingBehavior } satisfies PromptRequest)
-  const view = ensureView(key)
+  await post<ApiOkResponse>(sessionUrl(target, 'prompt'), { text, images, streamingBehavior } satisfies PromptRequest)
+  const view = ensureView(target)
   const content = images?.length
     ? [...(text ? [{ type: 'text' as const, text }] : []), ...images]
     : text
@@ -221,7 +233,7 @@ export function removeExtension(source: string, scope: 'global' | 'project'): Pr
 
 export async function requestModels(key: string): Promise<void> {
   const { models } = await api<ModelsResponse>(`${API_MODELS_PATH}?${new URLSearchParams({ key })}`)
-  if (store.activeKey === key) {
+  if (store.activeKey === key || store.models.length === 0) {
     store.models = models
     notify()
   }

@@ -5,9 +5,10 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { sessionAttention, sessionRailStatus } from '../../flow/attention'
 import { AccChevron, usePresence } from '../../motion'
 import { shortenPath } from '../../path'
-import { openSession, renameSession } from '../../session/actions'
+import { openBackgroundSession, openSession, renameSession } from '../../session/actions'
 import { readCollapsedProjects, readCollapsedSessions, saveCollapsedProjects, saveCollapsedSessions } from '../../session/persistence'
-import { setSidebarOpen } from '../../session/store'
+import { requestConductorPanel, setSidebarOpen } from '../../session/store'
+
 import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
@@ -163,6 +164,13 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
     setOpeningPath(session.path)
     setActionError(null)
     try {
+      if (session.conductor) {
+        await openBackgroundSession(session.path)
+        requestConductorPanel()
+        onShowFlow()
+        setSidebarOpen(false)
+        return
+      }
       await openSession(session.path)
       setSidebarOpen(false)
     }

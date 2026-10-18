@@ -23,5 +23,44 @@ it('keeps the draft when a prompt request is rejected', async () => {
   }
   finally {
     globalThis.fetch = previousFetch
+    store.activeKey = null
+    store.views = {}
+  }
+})
+
+it('sends a prompt to a background session without switching the open chat', async () => {
+  const previousFetch = globalThis.fetch
+  const previousDocument = globalThis.document
+  const previousFrame = globalThis.requestAnimationFrame
+  let posted = ''
+  globalThis.fetch = async (input) => {
+    posted = String(input)
+    return new Response(JSON.stringify({ ok: true }), { status: 202 })
+  }
+  globalThis.document = { hidden: false } as Document
+  globalThis.requestAnimationFrame = (callback) => {
+    callback(0)
+    return 0
+  }
+  store.connected = true
+  store.activeKey = 'main'
+  store.views = {}
+  ensureView('main')
+
+  try {
+    await sendPrompt('划分模块', undefined, undefined, 'conductor')
+    assert.equal(store.activeKey, 'main')
+    assert.match(posted, /conductor/)
+    assert.equal(ensureView('main').messages.length, 0)
+    const sent = ensureView('conductor').messages.at(-1)
+    assert.equal(sent?.role, 'user')
+    assert.equal(sent && sent.role === 'user' ? sent.content : '', '划分模块')
+  }
+  finally {
+    globalThis.fetch = previousFetch
+    globalThis.document = previousDocument
+    globalThis.requestAnimationFrame = previousFrame
+    store.activeKey = null
+    store.views = {}
   }
 })

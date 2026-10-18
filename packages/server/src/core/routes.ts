@@ -1,5 +1,6 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type {
+  AcceptConductorRequest,
   ApiOkResponse,
   CompactRequest,
   DirectoriesResponse,
@@ -52,6 +53,7 @@ import {
   API_EVENTS_PATH,
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
+  API_FLOW_ACCEPT_PATH,
   API_FLOW_PATH,
   API_GIT_PATH,
   API_HELLO_PATH,
@@ -64,9 +66,11 @@ import {
   API_SESSIONS_PATH,
   API_USAGE_PATH,
   AUTH_PATH,
+  conductorDraftReady,
   MAX_PROMPT_IMAGE_BYTES,
   MAX_PROMPT_IMAGES,
   parseSessionActionPath,
+  UnsupportedProjectCanvasVersion,
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
 import { checkoutGitBranch, readGitBranches } from './git'
@@ -226,23 +230,57 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
     if (method === 'GET' && path === API_FLOW_PATH) {
       const projectPath = url.searchParams.get('projectPath') ?? config.rootCwd
-      return json(res, 200, { document: await flow.read(projectPath) } satisfies FlowDocumentResponse)
+      try {
+        const state = await flow.readState(projectPath)
+        return json(res, 200, { document: state.document, stored: state.stored } satisfies FlowDocumentResponse)
+      }
+      catch (error) {
+        if (error instanceof UnsupportedProjectCanvasVersion)
+          return json(res, 409, { error: error.message })
+        throw error
+      }
     }
 
     if (method === 'PUT' && path === API_FLOW_PATH) {
       const body = await readBody<ReplaceFlowRequest>(req)
       if (typeof body.projectPath !== 'string' || !body.topology)
         return json(res, 400, { error: 'projectPath and topology required' })
-      const projectPath = (await flow.read(body.projectPath)).projectPath
-      const knownSessions = await sessions.listSessions()
-      const invalidNode = body.topology.nodes.find((node) => {
-        const session = sessions.get(node.sessionPath) ?? knownSessions.find(session => session.path === node.sessionPath)
-        return !session || session.cwd !== projectPath
-      })
-      if (invalidNode)
-        return json(res, 400, { error: `session is not part of this project: ${invalidNode.sessionPath}` })
-      const document = await flow.replaceTopology(projectPath, body.topology)
-      return json(res, 200, { document } satisfies FlowDocumentResponse)
+      try {
+        const projectPath = (await flow.read(body.projectPath)).projectPath
+        const knownSessions = await sessions.listSessions()
+        const invalidNode = body.topology.nodes.find((node) => {
+          if (!node.sessionPath)
+            return false
+          const session = sessions.get(node.sessionPath) ?? knownSessions.find(session => session.path === node.sessionPath)
+          return !session || session.cwd !== projectPath
+        })
+        if (invalidNode)
+          return json(res, 400, { error: `session is not part of this project: ${invalidNode.sessionPath}` })
+        const document = await flow.replaceTopology(projectPath, body.topology, { commitGraph: body.commitGraph === true })
+        return json(res, 200, { document, stored: true } satisfies FlowDocumentResponse)
+      }
+      catch (error) {
+        if (error instanceof UnsupportedProjectCanvasVersion)
+          return json(res, 409, { error: error.message })
+        throw error
+      }
+    }
+
+    if (method === 'POST' && path === API_FLOW_ACCEPT_PATH) {
+      const body = await readBody<Partial<AcceptConductorRequest>>(req)
+      if (typeof body.projectPath !== 'string' || !conductorDraftReady(body.draft))
+        return json(res, 400, { error: 'invalid conductor draft' })
+      try {
+        const document = await flow.acceptConductor(body.projectPath, body.draft)
+        return json(res, 200, { document, stored: true } satisfies FlowDocumentResponse)
+      }
+      catch (error) {
+        if (error instanceof UnsupportedProjectCanvasVersion)
+          return json(res, 409, { error: error.message })
+        if (error instanceof Error && error.message === 'invalid conductor draft')
+          return json(res, 400, { error: error.message })
+        throw error
+      }
     }
 
     if (method === 'GET' && path === API_PROJECT_TRUST_PATH) {
@@ -358,7 +396,9 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
 
     if (method === 'POST' && path === API_SESSIONS_NEW_PATH) {
       const body = await readBody<NewSessionRequest>(req)
-      const managed = await sessions.createFreshSession(body.cwd, body.persist === true)
+      const managed = await sessions.createFreshSession(body.cwd, body.persist === true, body.conductor === true)
+      if (body.conductor === true)
+        await publishSessions()
       return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
     }
 

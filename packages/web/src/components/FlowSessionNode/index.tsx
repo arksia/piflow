@@ -6,6 +6,7 @@ export type FlowSessionNodeData = Record<string, unknown> & {
   sessionPath: string
   name: string
   goal: string
+  brief?: string
   status: 'idle' | 'running' | 'failed'
   needsInput: boolean
   unread?: boolean
@@ -46,7 +47,10 @@ export default function FlowSessionNode({ data, selected }: NodeProps<FlowCanvas
       </div>
       <h2>{data.name}</h2>
       {data.goal ? <p>{data.goal}</p> : <p className={styles.empty}>尚未设置目标</p>}
-      <button type="button" className="nodrag" onClick={data.onOpen}>打开会话</button>
+      {data.brief?.trim()
+        ? <p className={styles.brief}>{data.brief.trim()}</p>
+        : <p className={`${styles.brief} ${styles.empty}`}>还没有 Brief</p>}
+      <button type="button" className="nodrag" onClick={data.onOpen}>{data.sessionPath ? '打开会话' : '新建会话'}</button>
       <Handle className={styles['hidden-handle']} type="source" position={Position.Right} isConnectable={false} />
     </article>
   )

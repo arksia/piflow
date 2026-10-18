@@ -28,6 +28,8 @@ interface Props {
   placement?: Placement
   /** Menu grows with its labels, at least 220px, and stops at this width. */
   maxWidth?: number
+  /** Overrides the 220px minimum so a short menu can stay inside a narrow pane. */
+  minWidth?: number
   /** Filter rows from a field at the top of the menu. */
   search?: boolean
   trigger?: Array<'click' | 'hover'>
@@ -134,6 +136,7 @@ export default function Dropdown({
   onOpenChange,
   placement = 'bottomLeft',
   maxWidth,
+  minWidth,
   search = false,
   trigger = ['click'],
   children,
@@ -306,7 +309,7 @@ export default function Dropdown({
                 scheduleClose()
               }}
             >
-              <div className={styles.menu} style={maxWidth === undefined ? undefined : { maxWidth }}>
+              <div className={styles.menu} style={{ maxWidth, minWidth }}>
                 {search
                   ? (
                       <div className={styles.search}>

@@ -159,6 +159,13 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   return [listConnections, sendMessage, searchContext, readContext]
 }
 
+export function moduleContext(node: Pick<FlowNode, 'brief'>): { path: string, content: string } | null {
+  const content = node.brief?.trim()
+  if (!content)
+    return null
+  return { path: 'piflow-module.md', content }
+}
+
 export function formatFlowDirectory(document: Awaited<ReturnType<FlowStore['read']>>, sessionPath: string): string | null {
   const node = findNodeBySession(document, sessionPath)
   if (!node)
@@ -197,7 +204,10 @@ function publicNode(node: FlowNode) {
 
 function directoryLines(nodes: FlowNode[]) {
   return nodes.length
-    ? nodes.map(node => `- ${node.id} | ${node.name} | ${node.goal.slice(0, 160) || 'No current goal'}`)
+    ? nodes.map((node) => {
+        const brief = node.brief?.trim().replace(/\s+/g, ' ').slice(0, 160)
+        return `- ${node.id} | ${node.name} | ${node.goal.slice(0, 160) || 'No current goal'}${brief ? ` | ${brief}` : ''}`
+      })
     : ['- None']
 }
 

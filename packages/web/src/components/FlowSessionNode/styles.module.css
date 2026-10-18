@@ -72,6 +72,15 @@
   color: var(--c-faint);
 }
 
+.brief {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  min-height: 0;
+  color: var(--c-body);
+}
+
 .node button {
   color: var(--c-mid);
   font-size: 0.76rem;

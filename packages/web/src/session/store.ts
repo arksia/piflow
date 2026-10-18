@@ -34,6 +34,12 @@ export const store: StoreState = {
   extensionNotices: [],
   projectTrust: {},
   sidebarOpen: false,
+  conductorNonce: 0,
+}
+
+export function requestConductorPanel() {
+  store.conductorNonce += 1
+  notify()
 }
 
 export function subscribeStore(listener: () => void): () => void {
