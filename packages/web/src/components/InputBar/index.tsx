@@ -145,10 +145,12 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
         text.trim(),
         images.map(image => ({ type: image.type, data: image.data, mimeType: image.mimeType })),
         isLive ? 'steer' : undefined,
+        view?.key,
       )
       onTextChange('')
       clearDraft(draftKey)
-      clearDraft(store.activeKey)
+      if (!view)
+        clearDraft(store.activeKey)
       setImages([])
       requestAnimationFrame(() => areaRef.current?.focus())
     }

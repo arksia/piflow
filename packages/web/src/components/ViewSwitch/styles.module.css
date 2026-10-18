@@ -1,25 +1,14 @@
-.switcher {
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: var(--row-pad, 8px);
+  color: var(--c-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.trigger svg {
   flex-shrink: 0;
-  padding: 2px;
-  border: 1px solid var(--c-line);
-}
-
-.tab,
-.pill {
-  height: 22px;
-}
-
-.pill {
-  top: 2px;
-}
-
-.tab {
-  padding: 0 10px;
-  font-size: 0.75rem;
-}
-
-@media (width <= 768px) {
-  .flow {
-    display: none;
-  }
 }

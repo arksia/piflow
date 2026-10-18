@@ -32,7 +32,9 @@ import {
   SettingsManager,
 } from '@earendil-works/pi-coding-agent'
 import { createExtensionUIContext } from '../extensions/extension-ui'
-import { createFlowTools, formatFlowDirectory } from '../flow/tools'
+import { conductorContext } from '../flow/conductor'
+import { findNodeBySession } from '../flow/store'
+import { createFlowTools, formatFlowDirectory, moduleContext } from '../flow/tools'
 import { toJsonEvent } from './json-event'
 
 type ExtensionUI = ReturnType<typeof createExtensionUIContext>
@@ -61,7 +63,7 @@ export class SessionsStreamingError extends Error {
 }
 
 export interface SessionStore {
-  createFreshSession: (cwd?: string, persist?: boolean) => Promise<ManagedSession>
+  createFreshSession: (cwd?: string, persist?: boolean, conductor?: boolean) => Promise<ManagedSession>
   openSavedSession: (path: string, options?: { refresh?: boolean }) => Promise<ManagedSession | null>
   prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
   compact: (managed: ManagedSession, instructions?: string) => Promise<void>
@@ -275,10 +277,35 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         const requiresTrust = hasTrustRequiringProjectResources(cwd)
         const projectTrusted = !requiresTrust || trustStore.get(cwd) === true
         const settingsManager = SettingsManager.create(cwd, runtimeAgentDir, { projectTrusted })
+        const sessionFile = sessionManager.getSessionFile()
+        const conductor = Boolean(sessionFile && (await flow.read(cwd)).conductorPath === sessionFile)
         const services = await createAgentSessionServices({
           cwd,
           agentDir: runtimeAgentDir,
           settingsManager,
+          resourceLoaderOptions: {
+            extensionFactories: [{
+              name: 'piflow-module',
+              hidden: true,
+              factory(pi) {
+                pi.on('before_agent_start', async (event, ctx) => {
+                  const activeFile = ctx.sessionManager.getSessionFile()
+                  if (!activeFile)
+                    return
+                  const document = await flow.read(ctx.cwd)
+                  if (document.conductorPath === activeFile) {
+                    event.systemPromptOptions.contextFiles.push(conductorContext(await flow.readModules(ctx.cwd)))
+                    return
+                  }
+                  const node = findNodeBySession(document, activeFile)
+                  const context = node ? moduleContext(node) : null
+                  if (!context)
+                    return
+                  event.systemPromptOptions.contextFiles.push(context)
+                })
+              },
+            }],
+          },
           resourceLoaderReloadOptions: requiresTrust
             ? { resolveProjectTrust: async () => projectTrusted }
             : undefined,
@@ -287,18 +314,20 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
           services,
           sessionManager,
           sessionStartEvent,
-          customTools: createFlowTools({
-            flow,
-            source: () => managed ? toolSession(managed) : undefined,
-            resolveTarget: async (node, projectPath) => {
-              const target = await openSavedSession(node.sessionPath)
-              if (!target || target.cwd !== projectPath)
-                throw new Error('target Flow session is not part of this project')
-              return toolSession(target)
-            },
-            readMessages: (node, projectPath) => readMessages(node.sessionPath, projectPath),
-            onDispatchError: (target, error) => publishError(target.sessionPath ?? target.cwd, String(error)),
-          }),
+          customTools: conductor
+            ? []
+            : createFlowTools({
+                flow,
+                source: () => managed ? toolSession(managed) : undefined,
+                resolveTarget: async (node, projectPath) => {
+                  const target = await openSavedSession(node.sessionPath)
+                  if (!target || target.cwd !== projectPath)
+                    throw new Error('target Flow session is not part of this project')
+                  return toolSession(target)
+                },
+                readMessages: (node, projectPath) => readMessages(node.sessionPath, projectPath),
+                onDispatchError: (target, error) => publishError(target.sessionPath ?? target.cwd, String(error)),
+              }),
         })
         return { ...created, services, diagnostics: services.diagnostics }
       }
@@ -384,7 +413,10 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     const session = managed.runtime.session
     if (!session.sessionFile)
       return
-    const directory = formatFlowDirectory(await flow.read(managed.cwd), session.sessionFile)
+    const document = await flow.read(managed.cwd)
+    if (document.conductorPath === session.sessionFile)
+      return
+    const directory = formatFlowDirectory(document, session.sessionFile)
     if (directory) {
       await session.sendCustomMessage({
         customType: 'flow_directory',
@@ -418,19 +450,28 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
 
   async function listSessions(): Promise<SessionInfoLite[]> {
     const all = await SessionManager.listAll()
-    return all
-      .map(session => ({
-        path: session.path,
-        id: session.id,
-        cwd: session.cwd,
-        name: session.name ?? null,
-        parentSession: session.parentSessionPath ?? null,
-        created: session.created.toISOString(),
-        modified: session.modified.toISOString(),
-        messageCount: session.messageCount,
-        firstMessage: session.firstMessage.slice(0, 120),
-      }))
-      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
+    const conductors = new Map<string, Promise<string | undefined>>()
+    const conductorOf = (cwd: string) => {
+      const pending = conductors.get(cwd)
+      if (pending)
+        return pending
+      const next = flow.read(cwd).then(document => document.conductorPath).catch(() => undefined)
+      conductors.set(cwd, next)
+      return next
+    }
+    const sessions = await Promise.all(all.map(async session => ({
+      path: session.path,
+      id: session.id,
+      cwd: session.cwd,
+      name: session.name ?? null,
+      conductor: (await conductorOf(session.cwd)) === session.path,
+      parentSession: session.parentSessionPath ?? null,
+      created: session.created.toISOString(),
+      modified: session.modified.toISOString(),
+      messageCount: session.messageCount,
+      firstMessage: session.firstMessage.slice(0, 120),
+    })))
+    return sessions.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
   }
 
   async function listDirectories(path: string): Promise<DirectoryListing> {
@@ -465,12 +506,21 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return known ? openSession({ path: known.path, cwd: known.cwd }) : null
   }
 
-  async function createFreshSession(cwd?: string, persist = false): Promise<ManagedSession> {
+  async function createFreshSession(cwd?: string, persist = false, conductor = false): Promise<ManagedSession> {
     const resolvedCwd = typeof cwd === 'string' ? (await listDirectories(cwd)).path : rootCwd
     const manager = SessionManager.create(resolvedCwd)
     if (persist)
       await persistEmptySession(manager)
-    return openSession({ path: persist ? manager.getSessionFile() : undefined, cwd: resolvedCwd })
+    const sessionFile = manager.getSessionFile()
+    if (conductor) {
+      if (!sessionFile)
+        throw new Error('conductor session cannot be persisted')
+      await flow.setConductor(resolvedCwd, sessionFile)
+    }
+    const managed = await openSession({ path: persist ? sessionFile ?? undefined : undefined, cwd: resolvedCwd })
+    if (conductor)
+      managed.runtime.session.setSessionName('编排')
+    return managed
   }
 
   async function getAvailableModels(managed: ManagedSession): Promise<ModelInfo[]> {

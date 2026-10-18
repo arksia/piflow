@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { ImageContent } from '@earendil-works/pi-ai'
+import type { ConductorDraft } from './conductor'
 
 export const AUTH_PATH = '/auth'
 
@@ -12,6 +13,7 @@ export const API_PROVIDER_AUTH_PATH = '/api/provider-auth'
 export const API_DIRECTORIES_PATH = '/api/directories'
 export const API_USAGE_PATH = '/api/usage'
 export const API_FLOW_PATH = '/api/flow'
+export const API_FLOW_ACCEPT_PATH = '/api/flow/accept'
 export const API_EXTENSIONS_PATH = '/api/extensions'
 export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
 export const API_PROJECT_TRUST_PATH = '/api/project-trust'
@@ -32,6 +34,13 @@ export interface OpenSessionRequest {
 export interface NewSessionRequest {
   cwd?: string
   persist?: boolean
+  /** Create the project's Conductor session. */
+  conductor?: boolean
+}
+
+export interface AcceptConductorRequest {
+  projectPath: string
+  draft: ConductorDraft
 }
 
 export interface PromptRequest {

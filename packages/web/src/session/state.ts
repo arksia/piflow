@@ -70,4 +70,5 @@ export interface StoreState {
   extensionNotices: ExtensionNotice[]
   projectTrust: Record<string, ProjectTrustStatus>
   sidebarOpen: boolean
+  conductorNonce: number
 }

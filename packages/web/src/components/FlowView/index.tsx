@@ -1,3 +1,4 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { FlowDocument, FlowEdge, FlowMessageRecord, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
 import type {
   Edge,
@@ -9,7 +10,9 @@ import type {
   ReactFlowInstance,
   Viewport,
 } from '@xyflow/react'
+import type { SessionView } from '../../session/state'
 import type { FlowCanvasNode } from '../FlowSessionNode'
+import { conductorDraftReady, parseConductorDraft } from '@piflow/protocol'
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -22,11 +25,13 @@ import {
 } from '@xyflow/react'
 import { ArrowRight, CircleAlert, PanelLeft } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { loadFlow, saveFlow } from '../../flow/api'
+import { acceptConductor, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
+import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
-import { createBackgroundSession, openSession } from '../../session/actions'
+import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
 import { useStore } from '../../session/use-store'
+import ChatView from '../ChatView'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -64,51 +69,101 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [activeEdges, setActiveEdges] = useState(() => new Map<string, { source: string, target: string }>())
   const activeTimersRef = useRef(new Map<string, number>())
   const seenMessageIdsRef = useRef(new Set<string>())
+  const saveRevRef = useRef(0)
+  const pendingSaveRef = useRef<FlowDocument | null>(null)
+  const graphChangedRef = useRef(false)
+  const commitGraphRef = useRef(false)
+  const saveRunningRef = useRef(false)
+  const acceptingRef = useRef(false)
+  const seenConductorRef = useRef(0)
+  const openingRef = useRef(new Set<string>())
+  const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<void>>(async () => {})
+  const [conductorOpen, setConductorOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('')
+  const [draftBrief, setDraftBrief] = useState('')
   const [sessionPath, setSessionPath] = useState('')
+  const [briefOpen, setBriefOpen] = useState(false)
+  const [brief, setBrief] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const pollRef = useRef({ start() {}, stop() {} })
-  const focusSession = useCallback(async (path: string) => {
+  const focusSession = useCallback(async (id: string) => {
+    if (openingRef.current.has(id))
+      return
+    const current = documentRef.current
+    const node = current?.nodes.find(item => item.id === id)
+    if (!current || !node)
+      return
+    openingRef.current.add(id)
+    setError(null)
     try {
+      let path = node.sessionPath
+      if (!path) {
+        const state = await createBackgroundSession(current.projectPath)
+        if (!state.sessionFile)
+          throw new Error('新会话尚未生成可持久化路径')
+        path = state.sessionFile
+        const latest = documentRef.current ?? current
+        await persistRef.current({
+          ...latest,
+          nodes: latest.nodes.map(item => item.id === id ? { ...item, sessionPath: path, updatedAt: new Date().toISOString() } : item),
+        })
+      }
       await openSession(path)
       onShowChat()
     }
     catch (reason) {
       setError(String(reason))
     }
+    finally {
+      openingRef.current.delete(id)
+    }
   }, [onShowChat])
+
+  if (store.conductorNonce !== seenConductorRef.current) {
+    seenConductorRef.current = store.conductorNonce
+    if (store.conductorNonce > 0)
+      setConductorOpen(true)
+  }
 
   useEffect(() => {
     let cancelled = false
+    const rev = saveRevRef.current
     void loadFlow(projectPath)
       .then(async (loaded) => {
-        if (cancelled)
+        if (cancelled || rev !== saveRevRef.current)
           return
-        let resolved = loaded
-        if (!loaded.nodes.length && seedSessionPath && seedSessionCwd === loaded.projectPath) {
+        let resolved = loaded.document
+        if (shouldSeedFlow({
+          stored: loaded.stored,
+          nodeCount: resolved.nodes.length,
+          seedPath: seedSessionPath,
+          seedCwd: seedSessionCwd,
+          projectPath: resolved.projectPath,
+        })) {
           const now = new Date().toISOString()
-          resolved = await saveFlow(loaded.projectPath, {
-            ...topologyOf(loaded),
+          resolved = await saveFlow(resolved.projectPath, {
+            ...topologyOf(resolved),
             nodes: [{
               id: crypto.randomUUID(),
               sessionPath: seedSessionPath,
               name: seedSessionName,
               goal: seedSessionGoal,
+              brief: '',
               position: { x: 80, y: 80 },
               createdAt: now,
               updatedAt: now,
             }],
           })
         }
-        if (cancelled)
+        if (cancelled || rev !== saveRevRef.current)
           return
         setDocument(resolved)
-        setNodes(resolved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
+        setNodes(resolved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
         if (instance)
           void instance.setViewport(resolved.viewport)
       })
@@ -195,7 +250,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         .then((loaded) => {
           if (cancelled)
             return
-          processIncoming(loaded.messages)
+          processIncoming(loaded.document.messages)
         })
         .catch(() => {
           // Polling failures are not surfaced; the next tick will retry.
@@ -266,23 +321,66 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     setEdges(toCanvasEdges(document.edges, activeEdges, new Set(selection.edges), reducedMotion))
   }, [document, activeEdges, selection.edges, reducedMotion])
 
-  async function persist(next: FlowDocument) {
+  async function persist(next: FlowDocument, commitGraph = false) {
+    const previous = documentRef.current
+    // Replacing nodes drops measured size, and React Flow hides a node until it is measured again.
+    // A viewport save must not touch the node list, or the cards vanish when the pan ends.
+    const graphChanged = !previous || previous.nodes !== next.nodes || previous.edges !== next.edges
+    if (graphChanged)
+      graphChangedRef.current = true
+    if (commitGraph)
+      commitGraphRef.current = true
+    documentRef.current = next
+    saveRevRef.current += 1
+    pendingSaveRef.current = next
     setDocument(next)
-    setNodes(next.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
+    if (graphChanged)
+      setNodes(next.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+    if (saveRunningRef.current)
+      return
+    saveRunningRef.current = true
     setSaving(true)
     setError(null)
     try {
-      const saved = await saveFlow(next.projectPath, topologyOf(next))
-      setDocument(saved)
-      setNodes(saved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.sessionPath))))
+      while (pendingSaveRef.current) {
+        const snapshot = pendingSaveRef.current
+        const rev = saveRevRef.current
+        const replaceNodes = graphChangedRef.current
+        const commit = commitGraphRef.current
+        graphChangedRef.current = false
+        commitGraphRef.current = false
+        pendingSaveRef.current = null
+        let saved: FlowDocument
+        try {
+          saved = await saveFlow(snapshot.projectPath, topologyOf(snapshot), commit)
+        }
+        catch (error) {
+          if (commit)
+            commitGraphRef.current = true
+          throw error
+        }
+        if (rev !== saveRevRef.current) {
+          if (commit)
+            commitGraphRef.current = true
+          continue
+        }
+        documentRef.current = saved
+        setDocument(saved)
+        if (replaceNodes)
+          setNodes(saved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+      }
     }
     catch (reason) {
       setError(String(reason))
     }
     finally {
+      saveRunningRef.current = false
       setSaving(false)
+      if (pendingSaveRef.current && !acceptingRef.current)
+        void persist(pendingSaveRef.current)
     }
   }
+  persistRef.current = persist
 
   function connectNodes(sourceId: string, targetId: string) {
     if (!document || sourceId === targetId)
@@ -302,7 +400,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       target: targetId,
       createdAt: new Date().toISOString(),
     }
-    void persist({ ...document, edges: [...document.edges, edge] })
+    void persist({ ...document, edges: [...document.edges, edge] }, true)
     setConnectMode(null)
   }
 
@@ -323,13 +421,14 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   }
 
   function onNodeDragStop(_event: MouseEvent | TouchEvent, node: FlowCanvasNode) {
-    if (!document)
+    const current = documentRef.current
+    if (!current)
       return
     const now = new Date().toISOString()
     void persist({
-      ...document,
-      nodes: document.nodes.map(item => item.id === node.id ? { ...item, position: node.position, updatedAt: now } : item),
-    })
+      ...current,
+      nodes: current.nodes.map(item => item.id === node.id ? { ...item, position: node.position, updatedAt: now } : item),
+    }, true)
   }
 
   const onNodesDelete: OnNodesDelete<FlowCanvasNode> = (deleted) => {
@@ -340,7 +439,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       ...document,
       nodes: document.nodes.filter(node => !ids.has(node.id)),
       edges: document.edges.filter(edge => !ids.has(edge.source) && !ids.has(edge.target)),
-    })
+    }, true)
     if (connectMode && ids.has(connectMode.sourceId))
       setConnectMode(null)
   }
@@ -353,20 +452,101 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     if (!document)
       return
     const ids = new Set(deleted.map(edge => edge.id))
-    void persist({ ...document, edges: document.edges.filter(edge => !ids.has(edge.id)) })
+    void persist({ ...document, edges: document.edges.filter(edge => !ids.has(edge.id)) }, true)
   }
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: FlowCanvasNode[], edges: Edge[] }) => {
     const next = { nodes: selectedNodes.map(node => node.id), edges: selectedEdges.map(edge => edge.id) }
     setSelection(current => sameSelection(current, next) ? current : next)
+    if (next.nodes.length !== 1)
+      setBriefOpen(false)
     if (connectMode && !selectedNodes.some(node => node.id === connectMode.sourceId))
       setConnectMode(null)
   }, [connectMode])
 
   function onMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
-    if (!document || sameViewport(document.viewport, viewport))
+    const current = documentRef.current
+    if (acceptingRef.current || !current || sameViewport(current.viewport, viewport))
       return
-    void persist({ ...document, viewport })
+    void persist({ ...current, viewport })
+  }
+
+  async function showConductor() {
+    setConductorOpen(true)
+    const path = documentRef.current?.conductorPath
+    try {
+      if (path) {
+        await openBackgroundSession(path)
+        await Promise.all([requestModels(path), requestProjectTrust(projectPath)])
+        return
+      }
+      const state = await createConductorSession(projectPath)
+      const file = state.sessionFile
+      if (!file)
+        throw new Error('编排会话没有保存下来')
+      const current = documentRef.current
+      if (!current)
+        return
+      const next = { ...current, conductorPath: file }
+      documentRef.current = next
+      setDocument(next)
+      await Promise.all([requestModels(file), requestProjectTrust(projectPath)])
+    }
+    catch (reason) {
+      setError(String(reason))
+    }
+  }
+
+  async function acceptDraft() {
+    const path = documentRef.current?.conductorPath
+    const streaming = Boolean(path && (store.views[path]?.isStreaming || store.statuses[path]?.status === 'running'))
+    const message = latestDraftMessage(viewForSession(store.views, path))
+    const draft = message ? parseConductorDraft(messageText(message)) : null
+    if (!draft || !conductorDraftReady(draft) || streaming)
+      return
+    acceptingRef.current = true
+    saveRevRef.current += 1
+    pendingSaveRef.current = null
+    graphChangedRef.current = false
+    commitGraphRef.current = false
+    setSaving(true)
+    setError(null)
+    try {
+      const saved = await acceptConductor(projectPath, draft)
+      documentRef.current = saved
+      setDocument(saved)
+      setNodes(saved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+    }
+    catch (reason) {
+      setError(String(reason))
+    }
+    finally {
+      acceptingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  function openBrief() {
+    const id = selection.nodes[0]
+    const node = id ? document?.nodes.find(item => item.id === id) : undefined
+    if (!node)
+      return
+    setBrief(node.brief ?? '')
+    setBriefOpen(true)
+    setPanelOpen(false)
+  }
+
+  function saveBrief(event: React.FormEvent) {
+    event.preventDefault()
+    const id = selection.nodes[0]
+    if (!document || !id)
+      return
+    const now = new Date().toISOString()
+    void persist({
+      ...document,
+      nodes: document.nodes.map(node => node.id === id ? { ...node, brief: brief.trim(), updatedAt: now } : node),
+    }, true)
+    setBriefOpen(false)
   }
 
   async function addNode(event: React.FormEvent) {
@@ -392,14 +572,16 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           sessionPath: path,
           name: name.trim(),
           goal: goal.trim(),
+          brief: draftBrief.trim(),
           position: point,
           createdAt: now,
           updatedAt: now,
         }],
       }
-      await persist(next)
+      await persist(next, true)
       setName('')
       setGoal('')
+      setDraftBrief('')
       setSessionPath('')
       setPanelOpen(false)
     }
@@ -418,7 +600,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       ...document,
       nodes: document.nodes.filter(node => !nodeIds.has(node.id)),
       edges: document.edges.filter(edge => !edgeIds.has(edge.id) && !nodeIds.has(edge.source) && !nodeIds.has(edge.target)),
-    })
+    }, true)
     setSelection({ nodes: [], edges: [] })
   }
 
@@ -427,7 +609,12 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       setConnectMode({ sourceId: selection.nodes[0]! })
   }, [selection])
 
-  const availableSessions = store.sessions.filter(session => session.cwd === document?.projectPath && !document.nodes.some(node => node.sessionPath === session.path))
+  const conductorPath = document?.conductorPath
+  const conductorView = viewForSession(store.views, conductorPath)
+  const conductorStreaming = Boolean(conductorView?.isStreaming || (conductorPath && store.statuses[conductorPath]?.status === 'running'))
+  const draftMessage = latestDraftMessage(conductorView)
+  const conductorReady = conductorDraftReady(parseConductorDraft(draftMessage ? messageText(draftMessage) : '')) && !conductorStreaming
+  const availableSessions = store.sessions.filter(session => session.cwd === document?.projectPath && session.path !== conductorPath && !session.conductor && !document.nodes.some(node => node.sessionPath === session.path))
   // The store is mutable and keeps a stable identity, so derive status on every notified render.
   const visibleNodes = nodes.map(node => ({
     ...node,
@@ -472,7 +659,12 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         {saving ? <span className={styles.saving}><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
         {selection.nodes.length || selection.edges.length ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button> : null}
         {selection.nodes.length === 1 && !connectMode
-          ? <button className={styles.connect} onClick={startConnect}>连接</button>
+          ? (
+              <>
+                <button className={styles.connect} onClick={startConnect}>连接</button>
+                <button className={styles.connect} onClick={openBrief}>Brief</button>
+              </>
+            )
           : null}
         {connectMode
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
@@ -516,6 +708,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 <textarea maxLength={500} rows={3} value={goal} onChange={event => setGoal(event.target.value)} placeholder="可选" />
               </label>
               <label>
+                Brief
+                <textarea maxLength={8000} rows={5} value={draftBrief} onChange={event => setDraftBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
+              </label>
+              <label>
                 会话
                 <select value={sessionPath} onChange={event => setSessionPath(event.target.value)}>
                   <option value="">新建干净会话</option>
@@ -530,7 +726,43 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           )
         : null}
 
+      {briefOpen
+        ? (
+            <form className={styles.panel} onSubmit={saveBrief}>
+              <label>
+                Brief
+                <textarea maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" autoFocus />
+              </label>
+              <div className={styles.panelActions}>
+                <button type="button" onClick={() => setBriefOpen(false)}>取消</button>
+                <button type="submit" className={styles.confirm} disabled={saving}>保存</button>
+              </div>
+            </form>
+          )
+        : null}
+
       {error ? <div className={styles.error}>{error}</div> : null}
+      <button type="button" className={styles.conductorButton} disabled={!document} onClick={() => void showConductor()}>编排</button>
+      {conductorOpen
+        ? (
+            <aside className={styles.conductor} aria-label="编排">
+              <header className={styles.conductorBar}>
+                <strong>编排</strong>
+                <button type="button" onClick={() => setConductorOpen(false)}>关闭</button>
+              </header>
+              <div className={styles.conductorChat}>
+                {conductorView
+                  ? (
+                      <ChatView
+                        sessionKey={conductorView.key}
+                        messageExtra={message => draftCard(message, draftMessage, conductorReady, saving, () => void acceptDraft())}
+                      />
+                    )
+                  : <p className={styles.conductorEmpty}>正在打开编排…</p>}
+              </div>
+            </aside>
+          )
+        : null}
       {!document
         ? <div className={styles.loading}>正在读取项目 Flow…</div>
         : (
@@ -541,6 +773,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
               defaultViewport={document.viewport}
               minZoom={0.2}
               maxZoom={2}
+              zoomOnScroll={false}
+              panOnScroll
               fitView={document.nodes.length > 0 && document.viewport.zoom === 1 && document.viewport.x === 0 && document.viewport.y === 0}
               onInit={setInstance}
               onNodesChange={onNodesChange}
@@ -580,7 +814,7 @@ function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
     id: node.id,
     type: 'session',
     position: node.position,
-    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, status: 'idle', needsInput: false, onOpen },
+    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, brief: node.brief, status: 'idle', needsInput: false, onOpen },
   }
 }
 
@@ -598,7 +832,8 @@ function toCanvasEdges(
         id: edge.id,
         source: active.source,
         target: active.target,
-        type: 'smoothstep',
+        type: 'default',
+        pathOptions: { curvature: 0.5 },
         animated: !reducedMotion,
         selected,
         markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: 'var(--c-signal)' },
@@ -609,7 +844,8 @@ function toCanvasEdges(
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      type: 'smoothstep',
+      type: 'default',
+      pathOptions: { curvature: 0.5 },
       animated: false,
       selected,
       style: { stroke: 'var(--c-muted)', strokeWidth: 1.5 },
@@ -634,4 +870,72 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
 
 function sessionLabel(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
+}
+
+function viewForSession(views: Record<string, SessionView>, path: string | undefined) {
+  if (!path)
+    return undefined
+  return views[path] ?? Object.values(views).find(view => view.sessionFile === path)
+}
+
+function messageText(message: AgentMessage): string {
+  if (message.role === 'user') {
+    const content = message.content
+    return typeof content === 'string' ? content : content.map(block => block.type === 'text' ? block.text : '').join('\n')
+  }
+  if (message.role === 'assistant')
+    return message.content.map(block => block.type === 'text' ? block.text : '').join('\n')
+  return ''
+}
+
+function latestDraftMessage(view: { messages: AgentMessage[], live: AgentMessage | null } | undefined) {
+  if (!view)
+    return undefined
+  const shown = view.live ? [...view.messages, view.live] : view.messages
+  for (let index = shown.length - 1; index >= 0; index--) {
+    const message = shown[index]
+    if (message && parseConductorDraft(messageText(message)))
+      return message
+  }
+  return undefined
+}
+
+function draftCard(message: AgentMessage, draftMessage: AgentMessage | undefined, ready: boolean, saving: boolean, onAccept: () => void) {
+  if (message !== draftMessage)
+    return null
+  const draft = parseConductorDraft(messageText(message))
+  if (!draft)
+    return null
+  return (
+    <div className={styles.conductorDraft}>
+      <div className={styles.conductorDraftBody}>
+        {draft.modules.map(module => (
+          <article key={module.id}>
+            <h3>{module.name.trim() || '未命名'}</h3>
+            <p>{module.brief.trim() || '还没有说明'}</p>
+          </article>
+        ))}
+        {draft.links.length
+          ? (
+              <ul>
+                {draft.links.map(link => (
+                  <li key={`${link.source}-${link.target}`}>
+                    {draftName(draft, link.source)}
+                    {' → '}
+                    {draftName(draft, link.target)}
+                  </li>
+                ))}
+              </ul>
+            )
+          : <p className={styles.conductorEmpty}>没有连线</p>}
+      </div>
+      <div className={styles.panelActions}>
+        <button type="button" className={styles.confirm} disabled={!ready || saving} onClick={onAccept}>接受</button>
+      </div>
+    </div>
+  )
+}
+
+function draftName(draft: { modules: Array<{ id: string, name: string }> }, id: string): string {
+  return draft.modules.find(module => module.id === id)?.name.trim() || id
 }

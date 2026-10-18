@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "9462d556-0021-4ffd-ace7-936a5bbb138b",
+      "name": "搜索一下今天美股科技相关的信息，分析一下近期行情",
+      "brief": "",
+      "position": {
+        "x": 161.17350259866348,
+        "y": 66.6191893947566
+      }
+    },
+    {
+      "id": "ea2eda5e-4c9a-4df7-b0f9-748dd166d367",
+      "name": "Protocol 共享协议层",
+      "brief": "owns @piflow/protocol 包：ServerMessage 等前后端共享的 TypeScript 类型与消息契约。设计形状：纯类型包，无运行时逻辑，不依赖 server 或 web。不得承担：任何序列化/校验实现、业务逻辑（如需运行时校验，另建模块并在 brief 中说明）。后续会话易忘的坑：所有跨端消息改动必须先改 packages/protocol/src/index.ts，server 与 web 通过 workspace 依赖消费；不要各自定义重复类型再手动同步。",
+      "position": {
+        "x": 368.4462298713907,
+        "y": 540
+      }
+    },
+    {
+      "id": "f3dabe5f-367e-437e-b58c-ee8e9d1f5f35",
+      "name": "Server Core 服务端核心",
+      "brief": "owns packages/server/src/core：HTTP/SSE 服务器（config、http、routes、sessions、sse），即 server 的启动与请求生命周期。设计形状：routes.ts 注册路由、sessions.ts 管 pi 会话生命周期、sse 推事件流，index.ts 仅做 bootstrap 组装。不得承担：Flow 领域逻辑（归 flow 模块）、额度查询（归 usage）、前端状态投影。坑：tsx 直跑无 dev 构建步骤；会话生命周期与 SSE 流的生命周期要成对管理，断连清理易漏。",
+      "position": {
+        "x": 896.6207825019735,
+        "y": -421.9896352710225
+      }
+    },
+    {
+      "id": "03c04f1c-f680-4f50-b1c4-96ea534edc62",
+      "name": "Server Auth 环回安全",
+      "brief": "owns packages/server/src/core/routes.ts 中的鉴权部分：token 认证、HttpOnly SameSite=Strict Cookie、同源检查等 loopback-first 安全措施。设计形状：以中间件/前置检查形式挂在路由入口，与业务 handler 解耦。不得承担：具体业务路由逻辑；也不得在任何需求下弱化安全默认值——如需变更必须有文档化的决策记录（写入 docs/ 并在此模块 brief 补充）。坑：这是 non-negotiable 红线，后续会话不要为方便调试而加开关绕过。",
+      "position": {
+        "x": 819.3553207804816,
+        "y": 385.4545454545455
+      }
+    },
+    {
+      "id": "de82a088-ff2e-46d4-a06a-70bedddc1bdb",
+      "name": "Server Flow 画布领域",
+      "brief": "owns packages/server/src/flow：store.ts（Flow 持久化）与 tools.ts（暴露给 pi 会话的 Flow 智能体工具）。设计形状：store 负责节点/边等拓扑的读写持久化，tools 把 CRUD 能力包装成 agent 可调用的工具。不得承担：智能体不得自行创建/删除连线（拓扑归用户所有，这是硬约束）；HTTP 传输细节归 server-core。坑：工具实现里任何'自动连边'的诱惑都要拒绝；持久化格式变更要考虑旧数据兼容。",
+      "position": {
+        "x": 1250.2644116895729,
+        "y": 845.4545454545453
+      }
+    },
+    {
+      "id": "a0f94d86-ca3d-4f13-b142-c76868fa2029",
+      "name": "Server Usage 额度适配",
+      "brief": "owns packages/server/src/usage：各 provider 的配额/用量查询适配器。设计形状：每 provider 一个适配器，统一接口返回用量数据，由 server-core 路由暴露。不得承担：计费、限流决策、密钥管理（只读查询）。坑：provider API 差异大（REST/CLI/本地文件），适配器之间不要共享可变的全局状态；配额接口易变，错误要降级为'不可用'而非抛 500。",
+      "position": {
+        "x": 1791.176526397147,
+        "y": -517.8936061233206
+      }
+    },
+    {
+      "id": "67384164-130f-4c54-bc87-ed081eed38d9",
+      "name": "Web Session 前端会话状态",
+      "brief": "owns packages/web/src/session：reducer.ts（服务端事件投影为前端状态）、store.ts（全局状态）、transport.ts（SSE 消费）、api.ts（HTTP 请求）。设计形状：单向数据流——transport 收 SSE → reducer 投影 → store 订阅；组件只读 store。不得承担：UI 渲染（归 web-components）、Flow 画布专用客户端逻辑（归 web-flow）。坑：事件投影必须幂等，SSE 重连后会重放/丢失消息，reducer 要能处理乱序与重复。",
+      "position": {
+        "x": 3224.0867634121264,
+        "y": -189.07926501880198
+      }
+    },
+    {
+      "id": "9741e251-1f83-44aa-a886-2b97f0749559",
+      "name": "Web Components UI 组件",
+      "brief": "owns packages/web/src/components：React 19 + Vite 的扁平组件目录，每个组件为 index.tsx + styles.module.css。设计形状：展示型为主，状态来自 web-session 的 store，工具调用卡片、聊天、 steering 控件都在此。不得承担：SSE/HTTP 直连——一切数据经由 web-session。坑：组件目录保持扁平、勿嵌套子目录；样式必须用 CSS Module，避免全局污染。",
+      "position": {
+        "x": 2206.175014497905,
+        "y": 418.7233100824919
+      }
+    },
+    {
+      "id": "f6ae560d-4a87-4c49-87a6-ff9d89f0e778",
+      "name": "Web Flow 画布客户端",
+      "brief": "owns packages/web/src/flow：Flow 画布前端与 server flow API 的 HTTP 客户端。设计形状：独立的客户端模块，把 server-flow 的 REST 操作包装成 typed 函数，供画布 UI（落在 web-components 内的画布组件）调用。不得承担：拓扑决策逻辑（后端为准）、持久化。坑：与 web-session 的 transport 是两套路——flow 用一次性 HTTP，session 用 SSE；画布上的节点状态如需实时刷新，要想清楚走哪条路，不要混用。",
+      "position": {
+        "x": 2653.9538503331582,
+        "y": 567.5083154458296
+      }
+    },
+    {
+      "id": "79dfcf44-60ac-44f8-a764-9d582b5ecf17",
+      "name": "Web Markdown 渲染管线",
+      "brief": "owns packages/web/src/markdown：流式 markdown 渲染（shiki 高亮 + rehype-sanitize 消毒）。设计形状：纯函数管线，输入 markdown 片段/流，输出安全 HTML；供 web-components 的消息气泡使用。不得承担：消息状态管理。坑：渲染必须始终位于 rehype-sanitize 之后，这是 non-negotiable；流式场景下增量解析要注意未闭合代码块导致 shiki 反复重渲染的性能问题。",
+      "position": {
+        "x": 2892.8005509773416,
+        "y": 529.5206545019986
+      }
+    },
+    {
+      "id": "11806a4d-18c9-4c18-bd41-4c2ee52cd4a7",
+      "name": "CLI 命令行（规划中）",
+      "brief": "owns packages/cli（planned）：CLI 与守护进程。当前为空壳，仅定义边界：未来提供终端入口复用 server 能力。不得承担：直接操作 flow store 文件绕过 server API。坑：规划阶段不要提前实现；启动设计前先与 server-core 约定复用方式，避免 CLI 与 server 各写一套会话管理。",
+      "position": {
+        "x": 3394.3952398163547,
+        "y": 719.4589592211529
+      }
+    },
+    {
+      "id": "5dee39a8-88aa-4cad-8a53-f757e0a9fa48",
+      "name": "Builtin Extensions 内置扩展（规划中）",
+      "brief": "owns packages/builtin-extensions（planned）：pi 内置扩展。当前为空壳。不得承担：核心业务逻辑下沉到扩展里导致 server/web 出现隐式依赖。坑：扩展是 pi agent 体系的挂点，落地前需读 pi 文档的 extensions 章节；保持扩展可禁用、可替换。",
+      "position": {
+        "x": 3911.8181207152975,
+        "y": 368.07309549071744
+      }
+    },
+    {
+      "id": "b1e67503-40f0-406e-9034-bb521e94fc97",
+      "name": "Docs 产品需求文档",
+      "brief": "owns docs/：PRD.md 等公开产品需求，定义 goals 与 explicit non-goals（piflow 不替代 IDE、终端、Git 托管）。设计形状：文档即边界裁决依据——模块职责争议时回到 PRD。不得承担：技术实现细节（README/AGENTS 才是工程约定）。坑：新增功能前检查是否触碰 non-goals；安全决策（如 auth 变更）的文档化记录也放这里。",
+      "position": {
+        "x": 4036.701838527988,
+        "y": -458.158530037604
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "b0162f80-905b-48cd-b57f-9e51d43ad363",
+      "source": "ea2eda5e-4c9a-4df7-b0f9-748dd166d367",
+      "target": "f3dabe5f-367e-437e-b58c-ee8e9d1f5f35"
+    },
+    {
+      "id": "066e73e9-9a79-4001-b43f-68486cc98889",
+      "source": "ea2eda5e-4c9a-4df7-b0f9-748dd166d367",
+      "target": "67384164-130f-4c54-bc87-ed081eed38d9"
+    },
+    {
+      "id": "c4a29bac-284d-40ac-ab67-d1eccf6d6b18",
+      "source": "ea2eda5e-4c9a-4df7-b0f9-748dd166d367",
+      "target": "f6ae560d-4a87-4c49-87a6-ff9d89f0e778"
+    },
+    {
+      "id": "7e60e425-4e71-41b7-b777-3d11d5bf651c",
+      "source": "f3dabe5f-367e-437e-b58c-ee8e9d1f5f35",
+      "target": "03c04f1c-f680-4f50-b1c4-96ea534edc62"
+    },
+    {
+      "id": "03fb99e5-35a6-48aa-af0d-d506b900ff6b",
+      "source": "f3dabe5f-367e-437e-b58c-ee8e9d1f5f35",
+      "target": "de82a088-ff2e-46d4-a06a-70bedddc1bdb"
+    },
+    {
+      "id": "1a617bcb-2604-4dd8-bb50-c7e4f697da55",
+      "source": "f3dabe5f-367e-437e-b58c-ee8e9d1f5f35",
+      "target": "a0f94d86-ca3d-4f13-b142-c76868fa2029"
+    },
+    {
+      "id": "0b4a8d96-54cd-4854-8295-9ec763d5dfcf",
+      "source": "f3dabe5f-367e-437e-b58c-ee8e9d1f5f35",
+      "target": "67384164-130f-4c54-bc87-ed081eed38d9"
+    },
+    {
+      "id": "d903b842-150e-4ff9-b68b-8a477edba91e",
+      "source": "67384164-130f-4c54-bc87-ed081eed38d9",
+      "target": "9741e251-1f83-44aa-a886-2b97f0749559"
+    },
+    {
+      "id": "707fd99d-f5a9-4fae-a6d1-73cc1f26075f",
+      "source": "9741e251-1f83-44aa-a886-2b97f0749559",
+      "target": "79dfcf44-60ac-44f8-a764-9d582b5ecf17"
+    },
+    {
+      "id": "eaaea82b-7dc0-4c3c-bfd7-3645a5cc7ed3",
+      "source": "f6ae560d-4a87-4c49-87a6-ff9d89f0e778",
+      "target": "de82a088-ff2e-46d4-a06a-70bedddc1bdb"
+    },
+    {
+      "id": "5741f4e3-448b-4680-978f-451a44c43bcf",
+      "source": "f6ae560d-4a87-4c49-87a6-ff9d89f0e778",
+      "target": "9741e251-1f83-44aa-a886-2b97f0749559"
+    },
+    {
+      "id": "e07c6259-be09-43cd-a504-2f5de029a021",
+      "source": "b1e67503-40f0-406e-9034-bb521e94fc97",
+      "target": "03c04f1c-f680-4f50-b1c4-96ea534edc62"
+    }
+  ]
+}

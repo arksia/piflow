@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { UIEvent, WheelEvent } from 'react'
+import type { ReactNode, UIEvent, WheelEvent } from 'react'
 import { PanelLeft } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
 import { ThinkLine } from '../../motion'
 import { trustProject } from '../../session/actions'
@@ -29,13 +29,16 @@ function readScrollMap(): Record<string, number> {
 }
 
 interface ChatViewProps {
-  onToggleSidebar: () => void
-  sidebarCollapsed: boolean
+  onToggleSidebar?: () => void
+  sidebarCollapsed?: boolean
+  sessionKey?: string
+  messageExtra?: (message: AgentMessage) => ReactNode
 }
 
-export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatViewProps) {
+export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, sessionKey: pinnedKey, messageExtra }: ChatViewProps) {
   const store = useStore()
-  const view = store.activeKey ? (store.views[store.activeKey] ?? null) : null
+  const sessionKey = pinnedKey ?? store.activeKey
+  const view = sessionKey ? (store.views[sessionKey] ?? null) : null
   const scrollerRef = useRef<HTMLDivElement>(null)
   const scrollMapRef = useRef(readScrollMap())
   const stickToBottomRef = useRef(true)
@@ -50,12 +53,12 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
   const [composerText, setComposerText] = useState('')
   const [composerFocusVersion, setComposerFocusVersion] = useState(0)
   const [trustError, setTrustError] = useState<string | null>(null)
-  const session = store.sessions.find(session => session.path === store.activeKey)
-  const title = store.activeKey ? session?.name || session?.firstMessage || '新会话' : ''
+  const session = store.sessions.find(item => item.path === sessionKey)
+  const title = sessionKey ? session?.name || session?.firstMessage || '新会话' : ''
   const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
   const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
   const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
-  const draftKey = store.activeKey ?? `new:${store.cwd}`
+  const draftKey = sessionKey ?? `new:${store.cwd}`
   let userCount = -1
   const shown = view?.live ? [...view.messages, view.live] : view?.messages ?? []
   const groups: number[][] = []
@@ -79,14 +82,14 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
   useEffect(() => {
     function setEditorText(event: Event) {
       const command = (event as CustomEvent<{ session: string, text: string }>).detail
-      if (command.session !== store.activeKey)
+      if (command.session !== sessionKey)
         return
       setComposerText(command.text)
       setComposerFocusVersion(version => version + 1)
     }
     window.addEventListener('piflow:set-editor-text', setEditorText)
     return () => window.removeEventListener('piflow:set-editor-text', setEditorText)
-  }, [store.activeKey])
+  }, [sessionKey])
 
   function persist(key: string, top: number) {
     scrollMapRef.current[key] = top
@@ -97,7 +100,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
     if (programmaticScrollRef.current)
       return
     markUserScroll()
-    const key = store.activeKey
+    const key = sessionKey
     if (!key)
       return
     const element = event.currentTarget
@@ -125,16 +128,16 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
     const oldKey = previousKeyRef.current
     if (oldKey && element)
       persist(oldKey, element.scrollTop)
-    previousKeyRef.current = store.activeKey
-    if (element && store.activeKey) {
+    previousKeyRef.current = sessionKey
+    if (element && sessionKey) {
       programmaticScrollRef.current = true
-      element.scrollTop = scrollMapRef.current[store.activeKey] ?? element.scrollHeight
+      element.scrollTop = scrollMapRef.current[sessionKey] ?? element.scrollHeight
       stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 160
       requestAnimationFrame(() => {
         programmaticScrollRef.current = false
       })
     }
-  }, [store.activeKey])
+  }, [sessionKey])
 
   // Anchor scroll to the bottom while streaming, but only when the user is already near the bottom.
   // ResizeObserver batches content changes and requestAnimationFrame throttles the scroll update.
@@ -172,7 +175,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
         rafRef.current = null
       }
     }
-  }, [column, store.activeKey])
+  }, [column, sessionKey])
 
   // Re-anchor to bottom after window resize when the user is already near the bottom.
   useEffect(() => {
@@ -204,7 +207,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
 
   const isEmpty = !view || view.messages.length === 0
   const isLive = store.connected && !!view?.isStreaming
-  const attention = store.activeKey ? sessionAttention(store.activeKey, store.statuses) : null
+  const attention = sessionKey ? sessionAttention(sessionKey, store.statuses) : null
   const status = store.connectionState !== 'connected'
     ? { label: store.connectionState === 'reconnecting' ? '重连中…' : '连接中…', kind: 'connection' }
     : view?.isCompacting
@@ -226,36 +229,42 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
     void trustProject(view.cwd).catch(error => setTrustError(error instanceof Error && error.message ? error.message : '操作失败，请重试'))
   }
 
+  const embedded = pinnedKey !== undefined
+
   return (
     <div className={styles.chat}>
-      <header className={styles.bar}>
-        {sidebarCollapsed
-          ? (
-              <span className={styles.menu}>
-                <IconButton label="展开会话列表" onClick={onToggleSidebar}>
+      {embedded
+        ? null
+        : (
+            <header className={styles.bar}>
+              {sidebarCollapsed
+                ? (
+                    <span className={styles.menu}>
+                      <IconButton label="展开会话列表" onClick={() => onToggleSidebar?.()}>
+                        <PanelLeft />
+                      </IconButton>
+                    </span>
+                  )
+                : null}
+              <span className={styles.mobileMenu}>
+                <IconButton label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>
                   <PanelLeft />
                 </IconButton>
               </span>
-            )
-          : null}
-        <span className={styles.mobileMenu}>
-          <IconButton label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>
-            <PanelLeft />
-          </IconButton>
-        </span>
-        <div className={styles.identity}>
-          {title ? <div className={styles.title} title={title}>{title}</div> : null}
-        </div>
-        <div className={styles.actions}>
-          <ThinkLine
-            className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}
-            text={status.label}
-            sizer="压缩上下文"
-          />
-        </div>
-      </header>
+              <div className={styles.identity}>
+                {title ? <div className={styles.title} title={title}>{title}</div> : null}
+              </div>
+              <div className={styles.actions}>
+                <ThinkLine
+                  className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}
+                  text={status.label}
+                  sizer="压缩上下文"
+                />
+              </div>
+            </header>
+          )}
 
-      <div ref={scrollerRef} className={`${styles.scroll} ${isEmpty ? styles.centered : ''}`} onScroll={onScroll} onWheel={onWheel}>
+      <div ref={scrollerRef} className={`${styles.scroll} ${isEmpty && !embedded ? styles.centered : ''}`} onScroll={onScroll} onWheel={onWheel}>
         {trust?.requiresTrust && !trust.trusted
           ? (
               <div className={styles.trust}>
@@ -265,7 +274,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
               </div>
             )
           : null}
-        {isEmpty
+        {!view || (isEmpty && !embedded)
           ? (
               <div className={styles.hero}>
                 <h1>今天做点什么？</h1>
@@ -293,16 +302,18 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed }: ChatView
                         if (message.role === 'user')
                           userCount += 1
                         return (
-                          <MessageItem
-                            key={messageKey(message)}
-                            message={message}
-                            toolResults={view.toolResults}
-                            live={message === view.live}
-                            showTime={index === lastOutput}
-                            sessionPath={store.activeKey ?? undefined}
-                            forkOrdinal={userCount}
-                            tools={turnToolCount(shown, index)}
-                          />
+                          <Fragment key={messageKey(message)}>
+                            <MessageItem
+                              message={message}
+                              toolResults={view.toolResults}
+                              live={message === view.live}
+                              showTime={index === lastOutput}
+                              sessionPath={sessionKey ?? undefined}
+                              forkOrdinal={userCount}
+                              tools={turnToolCount(shown, index)}
+                            />
+                            {messageExtra?.(message)}
+                          </Fragment>
                         )
                       })}
                       {groupIndex === groups.length - 1 && isLive && !view.live

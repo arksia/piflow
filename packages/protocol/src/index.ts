@@ -12,10 +12,38 @@ import type {
 } from '@earendil-works/pi-coding-agent'
 
 export {
+  LEGACY_MODULES_FILE,
+  parseLegacyModules,
+  parseProjectCanvas,
+  PROJECT_CANVAS_FILE,
+  PROJECT_CANVAS_VERSION,
+  serializeProjectCanvas,
+  UnsupportedProjectCanvasVersion,
+} from './canvas'
+export type {
+  CanvasLink,
+  CanvasNode,
+  LegacyModules,
+  ProjectCanvas,
+  ProjectCanvasDocument,
+} from './canvas'
+export {
+  conductorDraftReady,
+  mergeConductorDraft,
+  parseConductorDraft,
+  stripConductorFences,
+} from './conductor'
+export type {
+  ConductorDraft,
+  ConductorDraftLink,
+  ConductorDraftModule,
+} from './conductor'
+export {
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
+  API_FLOW_ACCEPT_PATH,
   API_FLOW_PATH,
   API_GIT_PATH,
   API_HELLO_PATH,
@@ -40,6 +68,7 @@ export {
   SESSION_ACTIONS,
 } from './http'
 export type {
+  AcceptConductorRequest,
   ApiOkResponse,
   CompactRequest,
   ForkPoint,
@@ -70,6 +99,8 @@ export interface SessionInfoLite {
   id: string
   cwd: string
   name: string | null
+  /** This session is the project's Conductor. */
+  conductor?: boolean
   /** Path of the session this one was forked from, if any. */
   parentSession: string | null
   created: string
@@ -92,6 +123,8 @@ export interface FlowNode {
   sessionPath: string
   name: string
   goal: string
+  /** Standing text injected for this node. The committed copy is `.piflow/canvas.json`. */
+  brief?: string
   position: FlowPosition
   createdAt: string
   updatedAt: string
@@ -125,16 +158,22 @@ export interface FlowDocument extends FlowTopology {
   version: 1
   projectPath: string
   messages: FlowMessageRecord[]
+  /** Local Conductor session. Absent from the committed canvas. */
+  conductorPath?: string
   updatedAt: string
 }
 
 export interface FlowDocumentResponse {
   document: FlowDocument
+  /** False only before this project has ever saved a canvas, including an empty one. */
+  stored: boolean
 }
 
 export interface ReplaceFlowRequest {
   projectPath: string
   topology: FlowTopology
+  /** Set when this save may change nodes, Briefs, links, or positions. A viewport save omits it. */
+  commitGraph?: boolean
 }
 
 export interface DirectoryEntry {

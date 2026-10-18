@@ -416,6 +416,7 @@
   flex-shrink: 0;
   align-items: center;
   height: var(--chrome-h);
+  margin-top: auto;
   padding: 0 var(--row-pad);
   border-top: 1px solid var(--c-line);
 }

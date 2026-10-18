@@ -241,7 +241,7 @@ Pi sessions, models, credentials, and tools
 
 The server owns authoritative runtime sessions and serializes typed state and events. The browser maintains a projection optimized for rendering, but replaces it with authoritative state after opening or reconnecting. UI-only state such as drafts, scroll positions, panel preferences, and later canvas layout remains separate from pi session files.
 
-For V2, canvas metadata will be stored under a piflow application-data directory, keyed by normalized project path. Repository-local export may be added later as an explicit user action.
+For V2, viewport, session bindings, goals, and message records stay under a piflow application-data directory, keyed by normalized project path. The shared canvas — node identity, Brief, links, and position — is committed in the project as `.piflow/canvas.json`. See `docs/adr/0003-commit-the-canvas.md`.
 
 ### Required Components
 

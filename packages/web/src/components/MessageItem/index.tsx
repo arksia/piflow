@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ToolState } from '../../session/state'
+import { stripConductorFences } from '@piflow/protocol'
 import { Check, Copy, GitFork, Sparkles, Wrench } from 'lucide-react'
 import { Fragment, memo, useEffect, useRef, useState } from 'react'
 import { AccChevron } from '../../motion'
@@ -159,9 +160,12 @@ function renderAssistantPart(part: AssistantPart, toolResults: Record<string, To
   const { block, index } = part
   const key = live ? `live:${block.type}:${index}` : blockKey(block)
   if (block.type === 'text') {
+    const text = stripConductorFences(block.text).trim()
+    if (!text)
+      return null
     return live
-      ? <StreamingMarkdownView key={key} text={block.text} />
-      : <MarkdownView key={key} text={block.text} />
+      ? <StreamingMarkdownView key={key} text={text} />
+      : <MarkdownView key={key} text={text} />
   }
   if (block.type === 'thinking')
     return <ThinkingBlock key={key} text={block.thinking} live={live} />
