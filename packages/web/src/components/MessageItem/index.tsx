@@ -153,7 +153,7 @@ function renderAssistantPart(part: AssistantPart, toolResults: Record<string, To
     if (!call)
       return null
     if (part.calls.length === 1)
-      return <ToolCallCard key={call.id} call={call} state={toolResults[call.id]} toolResults={toolResults} />
+      return <ToolCallCard key={call.id} call={call} state={toolResults[call.id]} />
     return <ToolRunGroup key={call.id} calls={part.calls} toolResults={toolResults} />
   }
   const { block, index } = part
@@ -186,7 +186,7 @@ function ToolRunGroup({ calls, toolResults }: { calls: ToolCallBlock[], toolResu
       </div>
       <div className={styles.toolsList}>
         {calls.map(call => (
-          <ToolCallCard key={call.id} plain call={call} state={toolResults[call.id]} toolResults={toolResults} />
+          <ToolCallCard key={call.id} plain call={call} state={toolResults[call.id]} />
         ))}
       </div>
     </div>

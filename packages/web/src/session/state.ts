@@ -22,6 +22,8 @@ export interface ToolState {
   partial?: AgentToolResult
   result?: AgentToolResult
   isError?: boolean
+  /** Calls this tool made. A new array means a nested call changed. */
+  children?: Array<ToolState & { id: string }>
 }
 
 export interface SessionView {
