@@ -3,6 +3,8 @@ import type {
   AcceptConductorRequest,
   ApiOkResponse,
   CompactRequest,
+  ComposerCommandsResponse,
+  ComposerPathsResponse,
   DirectoriesResponse,
   ExtensionChangeResponse,
   ExtensionsResponse,
@@ -49,6 +51,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  API_COMPOSER_PATH,
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
   API_EXTENSIONS_PATH,
@@ -73,6 +76,8 @@ import {
   UnsupportedProjectCanvasVersion,
 } from '@piflow/protocol'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
+import { composerCommandsFromSession } from './composer-commands'
+import { completePaths } from './composer-paths'
 import { checkoutGitBranch, readGitBranches } from './git'
 import { json, readBody } from './http'
 import { ProviderAuthBusyError } from './provider-auth'
@@ -220,6 +225,33 @@ export function createRequestHandler(options: CreateRequestHandlerOptions) {
       }
       if (method === 'DELETE')
         return json(res, providerAuth.cancel(operationId) ? 200 : 404, { ok: true })
+    }
+
+    if (method === 'GET' && path === API_COMPOSER_PATH) {
+      const kind = url.searchParams.get('kind')
+      if (kind === 'paths') {
+        const cwd = url.searchParams.get('cwd')
+        if (!cwd)
+          return json(res, 400, { error: 'cwd required' })
+        try {
+          const paths = await completePaths(cwd, url.searchParams.get('q') ?? '')
+          return json(res, 200, { paths: paths.map(path => ({ path })) } satisfies ComposerPathsResponse)
+        }
+        catch (error) {
+          const message = error instanceof Error && error.message ? error.message : 'path lookup failed'
+          return json(res, 400, { error: message })
+        }
+      }
+      if (kind === 'commands') {
+        const session = url.searchParams.get('session')
+        if (!session)
+          return json(res, 400, { error: 'session required' })
+        const managed = sessions.get(session)
+        if (!managed)
+          return json(res, 404, { error: `session not found: ${session}` })
+        return json(res, 200, { commands: composerCommandsFromSession(managed) } satisfies ComposerCommandsResponse)
+      }
+      return json(res, 400, { error: 'kind must be paths or commands' })
     }
 
     if (method === 'GET' && path === API_DIRECTORIES_PATH) {

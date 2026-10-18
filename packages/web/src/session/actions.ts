@@ -2,6 +2,9 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type {
   ApiOkResponse,
   CompactRequest,
+  ComposerCommandHit,
+  ComposerCommandsResponse,
+  ComposerPathsResponse,
   DirectoriesResponse,
   DirectoryListing,
   ExtensionChangeResponse,
@@ -45,6 +48,8 @@ import {
   API_PROJECT_TRUST_PATH,
   API_PROVIDER_AUTH_PATH,
   API_PROVIDERS_PATH,
+  buildComposerCommandsPath,
+  buildComposerPathsPath,
   buildDirectoriesPath,
   buildGitPath,
   buildUsagePath,
@@ -109,6 +114,16 @@ export function newSessionIn(cwd: string): Promise<SessionState> {
 export async function requestDirectories(path: string): Promise<DirectoryListing> {
   const { listing } = await api<DirectoriesResponse>(buildDirectoriesPath(path))
   return listing
+}
+
+export async function completePaths(cwd: string, q: string): Promise<string[]> {
+  const { paths } = await api<ComposerPathsResponse>(buildComposerPathsPath(cwd, q))
+  return paths.map(hit => hit.path)
+}
+
+export async function loadComposerCommands(session: string): Promise<ComposerCommandHit[]> {
+  const { commands } = await api<ComposerCommandsResponse>(buildComposerCommandsPath(session))
+  return commands
 }
 
 export async function sendPrompt(text: string, images?: PromptRequest['images'], streamingBehavior?: PromptRequest['streamingBehavior'], key?: string): Promise<void> {

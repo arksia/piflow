@@ -105,6 +105,91 @@
   border-color: var(--c-line-strong);
 }
 
+.menu {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  background: var(--c-raise);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.mark {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 4px;
+  left: 4px;
+  border-radius: 6px;
+  background: var(--c-press);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    height var(--tabs-dur) var(--tabs-ease);
+}
+
+.menu-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.menu-path,
+.menu-command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-path {
+  flex: 1;
+}
+
+.menu-command {
+  flex: none;
+  font-weight: 600;
+}
+
+.menu-desc {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--c-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-note {
+  padding: 8px;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark {
+    transition: none;
+  }
+}
+
 .composer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;

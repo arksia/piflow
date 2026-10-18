@@ -34,4 +34,18 @@ _Avoid_: module, agent
 
 **Draft**:
 Node and link changes a Conductor has presented and the user has not accepted.
-_Avoid_: proposal, commit
+_Avoid_: proposal, commit, message
+
+## Message
+
+**Message**:
+The text the user sends to a session.
+_Avoid_: brief, goal, draft, prompt
+
+**At-path**:
+A file or directory in the session's working directory, named where `@` starts a token in a message.
+_Avoid_: attachment, source, node
+
+**Session command**:
+An extension command, a prompt template, or a skill, named when a message's first character is `/`.
+_Avoid_: builtin command, shell command, tool

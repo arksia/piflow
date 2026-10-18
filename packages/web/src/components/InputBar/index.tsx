@@ -1,17 +1,20 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
+import type { ComposerCommandHit } from '@piflow/protocol'
 import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import type { DraftImage } from '../../session/persistence'
 import type { SessionView } from '../../session/state'
 import type { DropdownItem } from '../Dropdown'
+import type { ComposerToken } from './complete'
 import { MAX_PROMPT_IMAGE_BYTES as MAX_IMAGE_BYTES, MAX_PROMPT_IMAGES as MAX_IMAGES } from '@piflow/protocol'
 import { ArrowUp, ChevronDown, ListX, Plus, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { abort, abortCompaction, clearQueue, sendPrompt, setModel, setThinking } from '../../session/actions'
+import { abort, abortCompaction, clearQueue, completePaths, loadComposerCommands, sendPrompt, setModel, setThinking } from '../../session/actions'
 import { clearDraft, readDraft, saveDraftImages, saveDraftText } from '../../session/persistence'
 import { useStore } from '../../session/use-store'
 import BranchNavigator from '../BranchNavigator'
 import Dropdown from '../Dropdown'
 import IconButton from '../IconButton'
+import { applyAt, applyCommand, composerToken, filterCommands } from './complete'
 import styles from './styles.module.css'
 
 interface Props {
@@ -36,6 +39,19 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   const boxRef = useRef<HTMLDivElement>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const markRef = useRef<HTMLSpanElement>(null)
+  const rowListRef = useRef<(HTMLButtonElement | null)[]>([])
+  const cursorRef = useRef<number | null>(null)
+  const pathRequestRef = useRef(0)
+  const commandRequestRef = useRef(0)
+  const [cursor, setCursor] = useState(0)
+  const [dismissed, setDismissed] = useState(false)
+  const [paths, setPaths] = useState<string[]>([])
+  const [commands, setCommands] = useState<ComposerCommandHit[]>([])
+  const [pathLoading, setPathLoading] = useState(false)
+  const [commandLoading, setCommandLoading] = useState(false)
+  const [active, setActive] = useState(0)
   const modelGroups = new Map<string, typeof store.models>()
   for (const model of store.models) {
     const models = modelGroups.get(model.provider) ?? []
@@ -54,6 +70,151 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     ? (view?.isCompacting ? '中止压缩' : aborting ? '正在中断…' : '中断回复')
     : store.connected ? '发送' : offlineLabel
   const sendAria = stopping && !view?.isCompacting && aborting ? '正在中断回复' : sendLabel
+  const token = dismissed ? null : composerToken(text, cursor)
+  const menuOpen = !!token && (token.kind === 'at' || !!view)
+  const loading = token?.kind === 'at' ? pathLoading : commandLoading
+  const rows = menuRows(token, paths, commands)
+  const rowKey = rows.map(row => row.key).join('\n')
+  const rowIndex = rows.length ? Math.min(active, rows.length - 1) : 0
+
+  useEffect(() => {
+    if (token?.kind !== 'at')
+      return
+    const cwd = view?.cwd || store.cwd
+    if (!cwd)
+      return
+    const request = ++pathRequestRef.current
+    /* eslint-disable react/set-state-in-effect */
+    setPathLoading(true)
+    setPaths([])
+    /* eslint-enable react/set-state-in-effect */
+    void completePaths(cwd, token.query).then((next) => {
+      if (pathRequestRef.current !== request)
+        return
+      setPaths(next)
+      setOperationError(null)
+    }).catch((error: unknown) => {
+      if (pathRequestRef.current !== request)
+        return
+      setPaths([])
+      setOperationError(errorMessage(error))
+    }).finally(() => {
+      if (pathRequestRef.current === request)
+        setPathLoading(false)
+    })
+  }, [token?.kind, token?.query, view?.cwd, store.cwd])
+
+  const sessionKey = view?.key
+  useEffect(() => {
+    if (token?.kind !== 'slash' || !sessionKey)
+      return
+    const request = ++commandRequestRef.current
+    /* eslint-disable react/set-state-in-effect */
+    setCommandLoading(true)
+    setCommands([])
+    /* eslint-enable react/set-state-in-effect */
+    void loadComposerCommands(sessionKey).then((next) => {
+      if (commandRequestRef.current !== request)
+        return
+      setCommands(next)
+      setOperationError(null)
+    }).catch((error: unknown) => {
+      if (commandRequestRef.current !== request)
+        return
+      setCommands([])
+      setOperationError(errorMessage(error))
+    }).finally(() => {
+      if (commandRequestRef.current === request)
+        setCommandLoading(false)
+    })
+  }, [token?.kind, sessionKey])
+
+  useEffect(() => {
+    // A new query starts the highlight on the first row.
+    // eslint-disable-next-line react/set-state-in-effect
+    setActive(0)
+  }, [token?.kind, token?.query])
+
+  useEffect(() => {
+    if (!menuOpen)
+      return
+    const close = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-composer]'))
+        return
+      setDismissed(true)
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [menuOpen])
+
+  useLayoutEffect(() => {
+    const area = areaRef.current
+    const next = cursorRef.current
+    if (!area || next == null)
+      return
+    area.setSelectionRange(next, next)
+    cursorRef.current = null
+    setCursor(next)
+  }, [text])
+
+  useLayoutEffect(() => {
+    const box = boxRef.current
+    const menu = menuRef.current
+    if (!box || !menu || !menuOpen)
+      return
+    const measure = () => {
+      const top = box.getBoundingClientRect().top
+      const viewportTop = window.visualViewport?.offsetTop ?? 0
+      menu.style.maxHeight = `${Math.max(80, top - viewportTop - 8)}px`
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('scroll', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('scroll', measure)
+    }
+  }, [menuOpen])
+
+  useLayoutEffect(() => {
+    const mark = markRef.current
+    const row = rowListRef.current[rowIndex]
+    if (!mark)
+      return
+    if (!menuOpen || loading || !row) {
+      mark.style.opacity = '0'
+      return
+    }
+    mark.style.opacity = '1'
+    mark.style.height = `${row.offsetHeight}px`
+    mark.style.transform = `translateY(${row.offsetTop}px)`
+    const menu = menuRef.current
+    if (!menu)
+      return
+    const bottom = row.offsetTop + row.offsetHeight
+    if (row.offsetTop < menu.scrollTop)
+      menu.scrollTop = row.offsetTop
+    else if (bottom > menu.scrollTop + menu.clientHeight)
+      menu.scrollTop = bottom - menu.clientHeight
+  }, [rowIndex, loading, menuOpen, rowKey])
+
+  function placeCursor(next: number) {
+    cursorRef.current = next
+    setCursor(next)
+  }
+
+  function pick(row: MenuRow) {
+    if (!token)
+      return
+    const next = token.kind === 'at' ? applyAt(text, token, row.label) : applyCommand(text, row.label)
+    placeCursor(next.cursor)
+    onTextChange(next.text)
+    saveDraftText(draftKey, next.text)
+    areaRef.current?.focus()
+  }
 
   useEffect(() => {
     if (focusVersion)
@@ -225,7 +386,33 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (event.nativeEvent.isComposing || event.key === 'Process')
+      return
+    if (menuOpen) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setDismissed(true)
+        return
+      }
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && rows.length > 0 && !loading) {
+        event.preventDefault()
+        setActive((current) => {
+          const at = Math.min(current, rows.length - 1)
+          return event.key === 'ArrowDown' ? Math.min(rows.length - 1, at + 1) : Math.max(0, at - 1)
+        })
+        return
+      }
+      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) {
+        if (loading || rows.length > 0) {
+          event.preventDefault()
+          const row = rows[rowIndex]
+          if (!loading && row)
+            pick(row)
+          return
+        }
+      }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       void submit()
     }
@@ -272,7 +459,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
 
   return (
     <div ref={barRef} className={styles.bar}>
-      <div className={styles.column}>
+      <div className={styles.column} data-composer="">
         {operationError ? <div className={styles.error} role="alert">{operationError}</div> : null}
         {!store.connected
           ? (
@@ -300,6 +487,45 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
           : null}
 
         <div ref={boxRef} className={styles.box}>
+          {menuOpen
+            ? (
+                <div
+                  ref={menuRef}
+                  className={styles.menu}
+                  role="listbox"
+                  aria-label={token?.kind === 'at' ? '路径' : '命令'}
+                >
+                  {loading
+                    ? <div className={styles.menuNote} role="status">正在查找</div>
+                    : rows.length === 0
+                      ? <div className={styles.menuNote}>{token?.kind === 'at' ? '没有匹配的路径' : '没有匹配的命令'}</div>
+                      : (
+                          <>
+                            <span ref={markRef} aria-hidden="true" className={styles.mark} />
+                            {rows.map((row, position) => (
+                              <button
+                                key={row.key}
+                                type="button"
+                                role="option"
+                                aria-selected={position === rowIndex}
+                                ref={(element) => {
+                                  rowListRef.current[position] = element
+                                }}
+                                title={row.description ? `${row.label} ${row.description}` : row.label}
+                                className={styles.menuRow}
+                                onMouseDown={event => event.preventDefault()}
+                                onMouseEnter={() => setActive(position)}
+                                onClick={() => pick(row)}
+                              >
+                                <span className={row.description ? styles.menuCommand : styles.menuPath}>{row.label}</span>
+                                {row.description ? <span className={styles.menuDesc}>{row.description}</span> : null}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                </div>
+              )
+            : null}
           {images.length
             ? (
                 <div className={styles.images}>
@@ -324,7 +550,10 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
               onChange={(event) => {
                 onTextChange(event.target.value)
                 saveDraftText(draftKey, event.target.value)
+                setDismissed(false)
+                setCursor(event.target.selectionStart ?? event.target.value.length)
               }}
+              onSelect={event => setCursor(event.currentTarget.selectionStart ?? 0)}
               onKeyDown={onKeyDown}
               onPaste={event => addFiles([...event.clipboardData.files])}
               onDragOver={event => event.preventDefault()}
@@ -410,6 +639,25 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
       </div>
     </div>
   )
+}
+
+interface MenuRow {
+  key: string
+  label: string
+  description: string
+}
+
+function menuRows(token: ComposerToken | null, paths: readonly string[], commands: readonly ComposerCommandHit[]): MenuRow[] {
+  if (!token)
+    return []
+  if (token.kind === 'at') {
+    return paths.map(path => ({ key: path, label: path, description: '' }))
+  }
+  return filterCommands(commands, token.query).map(command => ({
+    key: `${command.source}:${command.name}`,
+    label: command.name,
+    description: command.description,
+  }))
 }
 
 function errorMessage(error: unknown) {
