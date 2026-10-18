@@ -127,6 +127,7 @@ it('nests calls a tool makes and keeps their duration', () => {
   })
   assert.equal(store.views['session-a']?.toolResults.child?.parentId, 'parent')
   assert.equal(store.views['session-a']?.toolResults.child?.running, true)
+  const parentBefore = store.views['session-a']?.toolResults.parent
   handleEvent('session-a', {
     type: 'tool_execution_end',
     toolCallId: 'child',
@@ -138,6 +139,8 @@ it('nests calls a tool makes and keeps their duration', () => {
   })
   assert.equal(store.views['session-a']?.toolResults.child?.durationMs, 40)
   assert.equal(store.views['session-a']?.toolResults.child?.running, false)
+  assert.equal(store.views['session-a']?.toolResults.parent?.children?.[0]?.id, 'child')
+  assert.notEqual(store.views['session-a']?.toolResults.parent, parentBefore)
 
   const state: SessionState = {
     key: 'session-a',
@@ -172,6 +175,8 @@ it('nests calls a tool makes and keeps their duration', () => {
   assert.equal(results?.parent?.durationMs, 1200)
   assert.equal(results?.child?.parentId, 'parent')
   assert.equal(results?.child?.durationMs, 40)
+  const kept = results?.parent?.children?.[0]?.result?.content[0]
+  assert.equal(kept?.type === 'text' ? kept.text : undefined, 'ok')
 })
 
 it('replaces queues from authoritative state after abort or reconnect', () => {

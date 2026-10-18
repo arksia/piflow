@@ -87,26 +87,56 @@ function parseToolArguments(json: string): ToolCallArguments {
   return {}
 }
 
-function rememberToolResult(results: Record<string, ToolState>, message: ToolResultMessage) {
-  results[message.toolCallId] = {
+function writeTool(tools: Record<string, ToolState>, id: string, patch: ToolState) {
+  const row: ToolState = { ...tools[id], ...patch }
+  let next: Record<string, ToolState> = { ...tools, [id]: row }
+  const seen = new Set([id])
+  let childId = id
+  let child = row
+  while (child.parentId && !seen.has(child.parentId)) {
+    seen.add(child.parentId)
+    const parent = next[child.parentId] ?? {}
+    const children = [...(parent.children ?? [])]
+    const node = { id: childId, ...child }
+    const index = children.findIndex(item => item.id === childId)
+    if (index >= 0)
+      children[index] = node
+    else
+      children.push(node)
+    const parentRow: ToolState = { ...parent, children }
+    next = { ...next, [child.parentId]: parentRow }
+    childId = child.parentId
+    child = parentRow
+  }
+  return next
+}
+
+function rememberToolResult(tools: Record<string, ToolState>, message: ToolResultMessage, previous: Record<string, ToolState>) {
+  let next = writeTool(tools, message.toolCallId, {
     name: message.toolName,
     result: { content: message.content, details: message.details },
     isError: message.isError,
+    running: false,
     ...(message.durationMs != null ? { durationMs: message.durationMs } : {}),
-  }
+  })
   for (const call of message.nestedCalls?.calls ?? []) {
-    results[call.id] = {
+    const live = previous[call.id]
+    next = writeTool(next, call.id, {
       name: call.name,
       parentId: message.toolCallId,
       args: call.arguments,
       isError: call.status === 'error',
       running: call.status === 'unfinished',
       ...(call.durationMs != null ? { durationMs: call.durationMs } : {}),
-      ...(call.error
-        ? { result: { content: [{ type: 'text', text: call.error }], details: undefined } }
-        : {}),
-    }
+      ...(live?.result
+        ? { result: live.result }
+        : call.error
+          ? { result: { content: [{ type: 'text', text: call.error }], details: undefined } }
+          : {}),
+      ...(live?.partial && call.status === 'unfinished' ? { partial: live.partial } : {}),
+    })
   }
+  return next
 }
 
 export function applySessions(sessions: SessionInfoLite[], restoreSession: (path: string) => void) {
@@ -146,10 +176,10 @@ export function applyState(state: SessionState) {
   view.queue = state.queue
   view.error = state.error
 
-  const results: Record<string, ToolState> = {}
+  let results: Record<string, ToolState> = {}
   for (const message of state.messages) {
     if (message.role === 'toolResult' && message.toolCallId && Array.isArray(message.content))
-      rememberToolResult(results, message)
+      results = rememberToolResult(results, message, view.toolResults)
   }
 
   view.toolResults = results
@@ -196,48 +226,33 @@ export function handleEvent(key: string, event: JsonAgentSessionEvent) {
     }
 
     case 'tool_execution_start':
-      view.toolResults = {
-        ...view.toolResults,
-        [event.toolCallId]: {
-          running: true,
-          name: event.toolName,
-          args: event.args,
-          ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
-        },
-      }
+      view.toolResults = writeTool(view.toolResults, event.toolCallId, {
+        running: true,
+        name: event.toolName,
+        args: event.args,
+        ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
+      })
       break
 
-    case 'tool_execution_update': {
-      const previous = view.toolResults[event.toolCallId]
-      view.toolResults = {
-        ...view.toolResults,
-        [event.toolCallId]: {
-          ...previous,
-          name: event.toolName,
-          args: event.args,
-          partial: event.partialResult,
-          ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
-        },
-      }
+    case 'tool_execution_update':
+      view.toolResults = writeTool(view.toolResults, event.toolCallId, {
+        name: event.toolName,
+        args: event.args,
+        partial: event.partialResult,
+        ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
+      })
       break
-    }
 
-    case 'tool_execution_end': {
-      const previous = view.toolResults[event.toolCallId]
-      view.toolResults = {
-        ...view.toolResults,
-        [event.toolCallId]: {
-          ...previous,
-          running: false,
-          name: event.toolName,
-          result: event.result,
-          isError: event.isError,
-          ...(event.durationMs != null ? { durationMs: event.durationMs } : {}),
-          ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
-        },
-      }
+    case 'tool_execution_end':
+      view.toolResults = writeTool(view.toolResults, event.toolCallId, {
+        running: false,
+        name: event.toolName,
+        result: event.result,
+        isError: event.isError,
+        ...(event.durationMs != null ? { durationMs: event.durationMs } : {}),
+        ...(event.parentToolCallId ? { parentId: event.parentToolCallId } : {}),
+      })
       break
-    }
 
     case 'compaction_start':
       view.isCompacting = true
