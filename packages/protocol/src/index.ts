@@ -39,6 +39,7 @@ export type {
   ConductorDraftModule,
 } from './conductor'
 export {
+  API_COMPOSER_PATH,
   API_DIRECTORIES_PATH,
   API_EVENTS_PATH,
   API_EXTENSIONS_PATH,
@@ -57,6 +58,8 @@ export {
   API_USAGE_PATH,
   AUTH_PATH,
   buildAuthPath,
+  buildComposerCommandsPath,
+  buildComposerPathsPath,
   buildDirectoriesPath,
   buildFlowPath,
   buildGitPath,
@@ -71,6 +74,10 @@ export type {
   AcceptConductorRequest,
   ApiOkResponse,
   CompactRequest,
+  ComposerCommandHit,
+  ComposerCommandsResponse,
+  ComposerPathHit,
+  ComposerPathsResponse,
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,

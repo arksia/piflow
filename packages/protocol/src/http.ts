@@ -11,6 +11,7 @@ export const API_MODELS_PATH = '/api/models'
 export const API_PROVIDERS_PATH = '/api/providers'
 export const API_PROVIDER_AUTH_PATH = '/api/provider-auth'
 export const API_DIRECTORIES_PATH = '/api/directories'
+export const API_COMPOSER_PATH = '/api/composer'
 export const API_USAGE_PATH = '/api/usage'
 export const API_FLOW_PATH = '/api/flow'
 export const API_FLOW_ACCEPT_PATH = '/api/flow/accept'
@@ -119,6 +120,14 @@ export function buildDirectoriesPath(path: string): string {
   return buildPathWithSearch(API_DIRECTORIES_PATH, { path })
 }
 
+export function buildComposerPathsPath(cwd: string, q: string): string {
+  return buildPathWithSearch(API_COMPOSER_PATH, { kind: 'paths', cwd, q })
+}
+
+export function buildComposerCommandsPath(session: string): string {
+  return buildPathWithSearch(API_COMPOSER_PATH, { kind: 'commands', session })
+}
+
 export function buildGitPath(cwd: string): string {
   return buildPathWithSearch(API_GIT_PATH, { cwd })
 }
@@ -158,6 +167,24 @@ function buildPathWithSearch(pathname: string, params: Record<string, string | u
   }
   const query = search.toString()
   return query ? `${pathname}?${query}` : pathname
+}
+
+export interface ComposerPathHit {
+  path: string
+}
+
+export interface ComposerCommandHit {
+  name: string
+  description: string
+  source: 'prompt' | 'extension' | 'skill'
+}
+
+export interface ComposerPathsResponse {
+  paths: ComposerPathHit[]
+}
+
+export interface ComposerCommandsResponse {
+  commands: ComposerCommandHit[]
 }
 
 function isSessionAction(value: string): value is SessionAction {
