@@ -5,11 +5,10 @@ import { AUTH_COOKIE } from '../../auth'
 import { httpAuth } from '../../plugins/auth'
 
 const token = '0123456789abcdef0123456789abcdef'
-const authHeader = `${AUTH_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`
 
 function app(isLoopback = true) {
   const server = Fastify({ logger: false })
-  void server.register(httpAuth, { authHeader, authToken: token, isLoopback })
+  void server.register(httpAuth, { authToken: token, isLoopback })
   server.get('/api/hello', async () => ({ ok: true }))
   return server
 }
@@ -50,6 +49,7 @@ describe('http auth', () => {
     assert.equal(response.statusCode, 204)
     const cookie = response.headers['set-cookie']
     const header = Array.isArray(cookie) ? cookie.join('; ') : cookie ?? ''
+    assert.match(header, new RegExp(`${AUTH_COOKIE}=${token}`))
     assert.match(header, /HttpOnly/)
     assert.match(header, /SameSite=Strict/)
     await server.close()

@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { AUTH_COOKIE, isLoopbackHost, isValidAccessToken } from '../auth'
+import { isLoopbackHost, isValidAccessToken } from '../auth'
 
 export interface ServerConfig {
   port: number
@@ -10,7 +10,6 @@ export interface ServerConfig {
   rootCwd: string
   isLoopback: boolean
   authToken: string
-  authHeader: string
   webDist: string
   dataDir: string
   sessionPoolSize: number
@@ -42,7 +41,6 @@ export function loadConfig(env = process.env): ServerConfig {
     rootCwd,
     isLoopback,
     authToken,
-    authHeader: `${AUTH_COOKIE}=${authToken}; HttpOnly; SameSite=Strict; Path=/`,
     webDist: DEFAULT_WEB_DIST,
     dataDir: resolve(env.PIFLOW_DATA_DIR ?? resolve(homedir(), '.piflow')),
     sessionPoolSize,

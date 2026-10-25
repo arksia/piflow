@@ -1,20 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
-  AUTH_COOKIE,
-  hasAuthCookie,
   isAllowedOrigin,
   isLoopbackHost,
   isValidAccessToken,
 } from '../auth'
 
 describe('http auth', () => {
-  it('requires the exact authentication cookie', () => {
-    assert.equal(hasAuthCookie(`other=x; ${AUTH_COOKIE}=secret`, 'secret'), true)
-    assert.equal(hasAuthCookie(`${AUTH_COOKIE}=wrong`, 'secret'), false)
-    assert.equal(hasAuthCookie(undefined, 'secret'), false)
-  })
-
   it('only allows automatic bootstrap on loopback hosts', () => {
     assert.equal(isLoopbackHost('127.0.0.1'), true)
     assert.equal(isLoopbackHost('::1'), true)

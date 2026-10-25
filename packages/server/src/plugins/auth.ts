@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import type { ServerConfig } from '../server/config'
+import cookie from '@fastify/cookie'
 import { AUTH_PATH } from '@piflow/protocol'
 import fp from 'fastify-plugin'
-import { hasAuthCookie, isAllowedOrigin } from '../auth'
+import { AUTH_COOKIE, isAllowedOrigin } from '../auth'
 import { query } from '../server/reply'
 
 function one(value: string | string[] | undefined): string | undefined {
@@ -16,16 +17,18 @@ export function trustedOrigin(request: FastifyRequest): boolean {
   return isAllowedOrigin(origin, one(request.headers.host))
 }
 
-export type HttpAuthOptions = Pick<ServerConfig, 'authHeader' | 'authToken' | 'isLoopback'>
+export type HttpAuthOptions = Pick<ServerConfig, 'authToken' | 'isLoopback'>
 
 const httpAuthPlugin: FastifyPluginAsync<HttpAuthOptions> = async (app, config) => {
+  await app.register(cookie)
+
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0] ?? '/'
     if (!path.startsWith('/api/'))
       return
     if (!trustedOrigin(request))
       return reply.code(403).header('cache-control', 'no-store').send({ error: 'forbidden origin' })
-    if (!hasAuthCookie(one(request.headers.cookie), config.authToken))
+    if (request.cookies[AUTH_COOKIE] !== config.authToken)
       return reply.code(401).header('cache-control', 'no-store').send({ error: 'unauthorized' })
   })
 
@@ -35,10 +38,14 @@ const httpAuthPlugin: FastifyPluginAsync<HttpAuthOptions> = async (app, config) 
     const supplied = query(request).token
     const authenticated = config.isLoopback
       || supplied === config.authToken
-      || hasAuthCookie(one(request.headers.cookie), config.authToken)
+      || request.cookies[AUTH_COOKIE] === config.authToken
     if (!authenticated)
       return reply.code(401).header('cache-control', 'no-store').send()
-    return reply.code(204).header('cache-control', 'no-store').header('set-cookie', config.authHeader).send()
+    return reply.code(204).header('cache-control', 'no-store').setCookie(AUTH_COOKIE, config.authToken, {
+      httpOnly: true,
+      path: '/',
+      sameSite: 'strict',
+    }).send()
   })
 }
 
