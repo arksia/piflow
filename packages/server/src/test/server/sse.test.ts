@@ -1,7 +1,6 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { ServerMessage, SessionState, SessionStatusRecord } from '@piflow/protocol'
 import type { FastifyReply } from 'fastify'
-import type { ServerResponse } from 'node:http'
 import type { ExtensionManager } from '../../extensions/manager'
 import type { FlowStore } from '../../flow/store'
 import type { ProviderAuthManager } from '../../providers/provider-auth'
@@ -26,9 +25,6 @@ function testApp(sse: SseHub) {
     logger: false,
     modelRuntime: {} as ModelRuntime,
     providerAuth: {} as ProviderAuthManager,
-    serveStatic: async (res: ServerResponse) => {
-      res.end()
-    },
     sessions: { disposeAll: async () => {}, get: () => undefined } as unknown as SessionStore,
     sse,
   })

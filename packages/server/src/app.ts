@@ -6,10 +6,10 @@ import type { FlowStore } from './flow/store'
 import type { ProviderAuthManager } from './providers/provider-auth'
 import type { UsageSnapshot } from './routes/usage'
 import type { ServerConfig } from './server/config'
-import type { StaticHandler } from './server/http'
 import type { SseHub } from './server/sse'
 import type { SessionStore } from './sessions/index'
 import fastifySse from '@fastify/sse'
+import fastifyStatic from '@fastify/static'
 import { API_EVENTS_PATH, API_HELLO_PATH } from '@piflow/protocol'
 import Fastify from 'fastify'
 import { httpAuth } from './plugins/auth'
@@ -27,7 +27,6 @@ interface CreateAppOptions {
   config: ServerConfig
   sessions: SessionStore
   sse: SseHub
-  serveStatic: StaticHandler
   getUsage: (provider: string, fresh?: boolean) => Promise<UsageSnapshot | null>
   flow: FlowStore
   extensions: ExtensionManager
@@ -37,7 +36,7 @@ interface CreateAppOptions {
 }
 
 export async function build(options: CreateAppOptions) {
-  const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime, providerAuth } = options
+  const { config, sessions, sse, getUsage, flow, extensions, modelRuntime, providerAuth } = options
   const app = Fastify({
     logger: options.logger ?? false,
     routerOptions: {
@@ -79,12 +78,19 @@ export async function build(options: CreateAppOptions) {
   app.register(projectRoutes, { config, sessions })
   app.register(extensionRoutes, { config, extensions, sessions })
 
-  app.setNotFoundHandler(async (request, reply) => {
+  app.register(fastifyStatic, {
+    root: config.webDist,
+    cacheControl: false,
+    setHeaders(reply) {
+      reply.header('x-content-type-options', 'nosniff')
+    },
+  })
+
+  app.setNotFoundHandler((request, reply) => {
     const path = request.url.split('?')[0] ?? '/'
     if (path.startsWith('/api/'))
       return send(reply, 404, { error: 'not found' })
-    reply.hijack()
-    await serveStatic(reply.raw, path)
+    return reply.code(200).sendFile('index.html')
   })
 
   return app

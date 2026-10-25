@@ -5,7 +5,6 @@ import { createExtensionManager } from './extensions/manager'
 import { createFlowStore } from './flow/store'
 import { createProviderAuthManager } from './providers/provider-auth'
 import { loadConfig } from './server/config'
-import { createStaticHandler } from './server/http'
 import { createSseHub } from './server/sse'
 import { createSessionStore } from './sessions/index'
 import { getUsage } from './usage/index'
@@ -26,12 +25,10 @@ const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (pro
 })
 sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
 sse.setStateSnapshotProvider(sessions.getStateSnapshot)
-const serveStatic = createStaticHandler(config.webDist)
 const app = await build({
   config,
   sessions,
   sse,
-  serveStatic,
   getUsage,
   flow,
   extensions,

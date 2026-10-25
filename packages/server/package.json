@@ -12,6 +12,7 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^1.2.0",
     "@fastify/sse": "^0.6.1",
+    "@fastify/static": "^10.1.7",
     "@piflow/protocol": "workspace:*",
     "fastify": "^5.12.7",
     "fastify-plugin": "^6.0.1",
