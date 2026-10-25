@@ -79,10 +79,12 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
         edgeId: edge.id,
         source: sourceNode.id,
         target: targetNode.id,
-        chainId: chain.id,
-        hop,
-        preview: message,
+        body: message,
+        preview: message.slice(0, 160),
         sentAt: new Date().toISOString(),
+        status: 'delivered',
+        read: true,
+        reminded: false,
       })
 
       const target = await options.resolveTarget(targetNode, document.projectPath)

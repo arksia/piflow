@@ -144,15 +144,23 @@ export interface FlowEdge {
   createdAt: string
 }
 
+export type FlowDeliveryStatus = 'queued' | 'delivered' | 'replied' | 'failed'
+
 export interface FlowMessageRecord {
   id: string
   edgeId: string
   source: string
   target: string
-  chainId: string
-  hop: number
+  /** Full text, kept so a waiting delivery can be handed over after restart. */
+  body: string
   preview: string
   sentAt: string
+  status: FlowDeliveryStatus
+  /** True once the target run for this delivery has started. */
+  read: boolean
+  reply?: string
+  /** True after the one reminder to reply. */
+  reminded: boolean
 }
 
 export interface FlowTopology {

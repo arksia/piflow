@@ -23,10 +23,12 @@ it('persists topology without allowing topology updates to erase message history
       edgeId: 'a-b',
       source: 'a',
       target: 'b',
-      chainId: 'chain-1',
-      hop: 1,
+      body: 'Please review this change',
       preview: 'Please review this change',
       sentAt: new Date().toISOString(),
+      status: 'replied',
+      read: true,
+      reminded: false,
     })
     const canvasFile = join(root, PROJECT_CANVAS_FILE)
     const beforeMove = await readFile(canvasFile, 'utf8')
@@ -139,10 +141,12 @@ it('writes the module graph into the project and leaves bindings local', async (
       edgeId: 'a-b',
       source: 'a',
       target: 'b',
-      chainId: 'chain-1',
-      hop: 1,
+      body: 'hello',
       preview: 'hello',
       sentAt: new Date().toISOString(),
+      status: 'replied',
+      read: true,
+      reminded: false,
     })
     assert.equal(await readFile(projectFile, 'utf8'), beforeMessage)
 
@@ -282,6 +286,93 @@ it('moves modules.json into canvas.json and keeps the local position', async () 
     assert.deepEqual(opened.nodes[0]?.position, { x: 40, y: 50 })
     assert.match(await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8'), /"kind": "review"/)
     await assert.rejects(readFile(join(root, LEGACY_MODULES_FILE), 'utf8'))
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('reads a delivery written before status existed as already finished', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  const dataDir = join(root, 'data')
+
+  try {
+    const normalized = (await createFlowStore(dataDir).readState(root)).document.projectPath
+    const id = createHash('sha256').update(normalized).digest('hex').slice(0, 24)
+    const now = new Date().toISOString()
+    await mkdir(join(dataDir, 'flows'), { recursive: true })
+    await writeFile(join(dataDir, 'flows', `${id}.json`), `${JSON.stringify({
+      version: 1,
+      projectPath: normalized,
+      nodes: [],
+      edges: [],
+      messages: [{
+        id: 'old',
+        edgeId: 'a-b',
+        source: 'a',
+        target: 'b',
+        chainId: 'chain-1',
+        hop: 2,
+        preview: 'hello from before',
+        sentAt: now,
+      }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      updatedAt: now,
+    })}\n`)
+    const restored = await createFlowStore(dataDir).read(root)
+    assert.equal(restored.messages[0]?.status, 'replied')
+    assert.equal(restored.messages[0]?.body, 'hello from before')
+    assert.equal(restored.messages[0]?.read, false)
+    assert.equal('chainId' in (restored.messages[0] ?? {}), false)
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('drops finished deliveries before a waiting one when the log is full', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  const dataDir = join(root, 'data')
+
+  try {
+    const store = createFlowStore(dataDir)
+    const now = new Date().toISOString()
+    for (let index = 0; index < 500; index++) {
+      await store.appendMessage(root, {
+        id: `done-${index}`,
+        edgeId: 'a-b',
+        source: 'a',
+        target: 'b',
+        body: 'done',
+        preview: 'done',
+        sentAt: now,
+        status: 'failed',
+        read: false,
+        reminded: false,
+      })
+    }
+    await store.appendMessage(root, {
+      id: 'waiting',
+      edgeId: 'a-b',
+      source: 'a',
+      target: 'b',
+      body: 'still waiting',
+      preview: 'still waiting',
+      sentAt: now,
+      status: 'queued',
+      read: false,
+      reminded: false,
+    })
+    const restored = await store.read(root)
+    assert.equal(restored.messages.length, 500)
+    assert.equal(restored.messages.some(message => message.id === 'done-0'), false)
+    assert.equal(restored.messages.at(-1)?.id, 'waiting')
+
+    const updated = await store.updateMessage(root, 'waiting', message => ({ ...message, status: 'delivered', read: true }))
+    assert.equal(updated?.status, 'delivered')
+    assert.equal(updated?.read, true)
+    assert.equal((await store.read(root)).messages.at(-1)?.status, 'delivered')
+    assert.equal(await store.updateMessage(root, 'missing', () => null), null)
   }
   finally {
     await rm(root, { recursive: true, force: true })

@@ -21,6 +21,7 @@ export interface FlowStore {
   readState: (projectPath: string) => Promise<{ document: FlowDocument, stored: boolean }>
   replaceTopology: (projectPath: string, topology: FlowTopology, options?: { commitGraph?: boolean }) => Promise<FlowDocument>
   appendMessage: (projectPath: string, message: FlowMessageRecord) => Promise<FlowDocument>
+  updateMessage: (projectPath: string, id: string, mutate: (message: FlowMessageRecord, messages: readonly FlowMessageRecord[]) => FlowMessageRecord | null) => Promise<FlowMessageRecord | null>
   readModules: (projectPath: string) => Promise<{ nodes: Array<{ id: string, name: string, brief: string }> }>
   setConductor: (projectPath: string, sessionPath: string) => Promise<void>
   acceptConductor: (projectPath: string, draft: ConductorDraft) => Promise<FlowDocument>
@@ -206,12 +207,37 @@ export function createFlowStore(dataDir: string): FlowStore {
       const current = await readState(normalized)
       const document: FlowDocument = {
         ...current.document,
-        messages: [...current.document.messages, parseMessage(message)].slice(-MAX_MESSAGES),
+        messages: retainMessages([...current.document.messages, parseMessage(message)]),
         updatedAt: new Date().toISOString(),
       }
       remember(document, true, documents.get(normalized)?.project ?? null)
       await persist(document, null)
       return structuredClone(document)
+    })
+  }
+
+  async function updateMessage(projectPath: string, id: string, mutate: (message: FlowMessageRecord, messages: readonly FlowMessageRecord[]) => FlowMessageRecord | null): Promise<FlowMessageRecord | null> {
+    const normalized = await normalizeProject(projectPath)
+    return update(normalized, async () => {
+      const current = await readState(normalized)
+      const index = current.document.messages.findIndex(message => message.id === id)
+      const currentMessage = current.document.messages[index]
+      if (!currentMessage)
+        return null
+      const next = mutate(currentMessage, current.document.messages)
+      if (!next)
+        return null
+      const messages = current.document.messages.slice()
+      messages[index] = parseMessage(next)
+      const retained = retainMessages(messages)
+      const document: FlowDocument = {
+        ...current.document,
+        messages: retained,
+        updatedAt: new Date().toISOString(),
+      }
+      remember(document, true, documents.get(normalized)?.project ?? null)
+      await persist(document, null)
+      return retained.find(message => message.id === id) ?? null
     })
   }
 
@@ -259,7 +285,7 @@ export function createFlowStore(dataDir: string): FlowStore {
     })
   }
 
-  return { read, readState, replaceTopology, appendMessage, readModules, setConductor, acceptConductor }
+  return { read, readState, replaceTopology, appendMessage, updateMessage, readModules, setConductor, acceptConductor }
 }
 
 function applyCanvas(document: FlowDocument, project: ProjectCanvasDocument): FlowDocument {
@@ -489,16 +515,44 @@ function connectionKey(edge: FlowEdge): string {
 function parseMessage(value: unknown): FlowMessageRecord {
   if (!isRecord(value))
     throw new Error('invalid flow message')
+  const preview = asString(value.preview, 'message.preview').slice(0, 160)
+  const reply = typeof value.reply === 'string' ? value.reply.slice(0, 12_000) : undefined
   return {
     id: asString(value.id, 'message.id'),
     edgeId: asString(value.edgeId, 'message.edgeId'),
     source: asString(value.source, 'message.source'),
     target: asString(value.target, 'message.target'),
-    chainId: asString(value.chainId, 'message.chainId'),
-    hop: asNumber(value.hop, 'message.hop'),
-    preview: asString(value.preview, 'message.preview').slice(0, 160),
+    body: typeof value.body === 'string' ? value.body.slice(0, 12_000) : preview,
+    preview,
     sentAt: asString(value.sentAt, 'message.sentAt'),
+    status: parseStatus(value.status),
+    read: value.read === true,
+    reminded: value.reminded === true,
+    ...(reply ? { reply } : {}),
   }
+}
+
+function parseStatus(value: unknown): FlowMessageRecord['status'] {
+  if (value === 'queued' || value === 'delivered' || value === 'replied' || value === 'failed')
+    return value
+  // ponytail: a record from before status exists is already finished
+  return 'replied'
+}
+
+function retainMessages(messages: FlowMessageRecord[]): FlowMessageRecord[] {
+  if (messages.length <= MAX_MESSAGES)
+    return messages
+  const kept: FlowMessageRecord[] = []
+  let drop = messages.length - MAX_MESSAGES
+  for (const message of messages) {
+    const open = message.status === 'queued' || message.status === 'delivered'
+    if (!open && drop > 0) {
+      drop -= 1
+      continue
+    }
+    kept.push(message)
+  }
+  return kept
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
