@@ -40,7 +40,7 @@ _Avoid_: proposal, commit, message
 
 **Message**:
 The text the user sends to a session.
-_Avoid_: brief, goal, draft, prompt
+_Avoid_: brief, goal, draft, prompt, chat history message
 
 **At-path**:
 A file or directory in the session's working directory, named where `@` starts a token in a message.
@@ -49,3 +49,29 @@ _Avoid_: attachment, source, node
 **Session command**:
 An extension command, a prompt template, or a skill, named when a message's first character is `/`.
 _Avoid_: builtin command, shell command, tool
+
+## A2A
+
+**A2A**:
+The lifecycle of a delivery from one Node to a neighboring Node along a Link.
+_Avoid_: agent, link message
+
+**Queue Entry**:
+A delivery from one Node to a neighboring Node that has not yet appeared in the target session transcript. While that session is replying, it waits outside it.
+_Avoid_: sent message, outbox, follow-up
+
+**Chat History Message**:
+That same delivery, once it appears in the target Node's session transcript.
+_Avoid_: Message, queue entry
+
+**Active Run**:
+The run on the target Node started by one A2A delivery.
+_Avoid_: Binding, session, reply
+
+**Read**:
+An A2A delivery whose run on the target Node has begun.
+_Avoid_: Chat History Message, Reply
+
+**Reply**:
+The one answer a Node submits for an A2A delivery, addressed by that delivery's id.
+_Avoid_: Chat History Message, Message
