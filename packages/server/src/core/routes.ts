@@ -1,87 +1,21 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import type {
-  AcceptConductorRequest,
-  ApiOkResponse,
-  CompactRequest,
-  ComposerCommandsResponse,
-  ComposerPathsResponse,
-  DirectoriesResponse,
-  ExtensionChangeResponse,
-  ExtensionsResponse,
-  ExtensionUIResponseBody,
-  FlowDocumentResponse,
-  ForkPointsResponse,
-  ForkSessionRequest,
-  GitBranchesResponse,
-  GitCheckoutRequest,
-  HelloResponse,
-  InstallExtensionRequest,
-  ModelsResponse,
-  NavigateSessionRequest,
-  NewSessionRequest,
-  OpenSessionRequest,
-  ProjectTrustResponse,
-  PromptRequest,
-  ProviderAuthLoginRequest,
-  ProviderAuthResponse,
-  ProviderCheckResponse,
-  ProvidersResponse,
-  RemoveExtensionRequest,
-  RenameSessionRequest,
-  ReplaceFlowRequest,
-  SessionsResponse,
-  SessionStateResponse,
-  SessionTreeResponse,
-  SetAutoCompactionRequest,
-  SetModelRequest,
-  SetThinkingRequest,
-  TrustProjectRequest,
-  UsageReport,
-  UsageWindow,
-} from '@piflow/protocol'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { HelloResponse, UsageWindow } from '@piflow/protocol'
 import type { ExtensionManager } from '../extensions/manager'
 import type { FlowStore } from '../flow/store'
 import type { ServerConfig } from './config'
 import type { StaticHandler } from './http'
 import type { ProviderAuthManager } from './provider-auth'
-import type { ManagedSession, SessionStore } from './sessions'
+import type { SessionStore } from './sessions'
 import type { SseHub } from './sse'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import {
-  API_COMPOSER_PATH,
-  API_DIRECTORIES_PATH,
-  API_EVENTS_PATH,
-  API_EXTENSIONS_PATH,
-  API_EXTENSIONS_UI_RESPONSE_PATH,
-  API_FLOW_ACCEPT_PATH,
-  API_FLOW_PATH,
-  API_GIT_PATH,
-  API_HELLO_PATH,
-  API_MODELS_PATH,
-  API_PROJECT_TRUST_PATH,
-  API_PROVIDER_AUTH_PATH,
-  API_PROVIDERS_PATH,
-  API_SESSIONS_NEW_PATH,
-  API_SESSIONS_OPEN_PATH,
-  API_SESSIONS_PATH,
-  API_USAGE_PATH,
-  AUTH_PATH,
-  conductorDraftReady,
-  MAX_PROMPT_IMAGE_BYTES,
-  MAX_PROMPT_IMAGES,
-  parseSessionActionPath,
-  UnsupportedProjectCanvasVersion,
-} from '@piflow/protocol'
-import { hasAuthCookie, isAllowedOrigin } from '../auth'
-import { composerCommandsFromSession } from './composer-commands'
-import { completePaths } from './composer-paths'
-import { checkoutGitBranch, readGitBranches } from './git'
-import { json, readBody } from './http'
+import { API_EVENTS_PATH, API_HELLO_PATH } from '@piflow/protocol'
+import Fastify from 'fastify'
+import { registerHttpAuth } from './http-auth'
+import { send } from './http-reply'
 import { ProviderAuthBusyError } from './provider-auth'
-import { listProviders } from './providers'
+import { registerFlowRoutes } from './routes-flow'
+import { registerProjectRoutes } from './routes-project'
+import { registerProviderRoutes } from './routes-providers'
+import { registerSessionRoutes } from './routes-sessions'
 import { SessionsStreamingError } from './sessions'
 
 interface UsageSnapshot {
@@ -89,7 +23,7 @@ interface UsageSnapshot {
   windows: UsageWindow[]
 }
 
-interface CreateRequestHandlerOptions {
+interface CreateAppOptions {
   config: ServerConfig
   sessions: SessionStore
   sse: SseHub
@@ -101,597 +35,54 @@ interface CreateRequestHandlerOptions {
   providerAuth: ProviderAuthManager
 }
 
-export function createRequestHandler(options: CreateRequestHandlerOptions) {
+export function createApp(options: CreateAppOptions) {
   const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime, providerAuth } = options
+  const app = Fastify({
+    bodyLimit: 140 * 1024 * 1024,
+    logger: false,
+  })
+  registerHttpAuth(app, config)
 
-  async function publishState(managed: ManagedSession) {
-    sse.broadcast({ type: 'state', state: sessions.getState(managed) })
-  }
-
-  async function publishSessions() {
-    sse.broadcast({ type: 'sessions', sessions: await sessions.listSessions() })
-  }
-
-  async function handlePrompt(managed: ManagedSession, prompt: PromptRequest) {
-    try {
-      await sessions.prompt(managed, prompt.text, prompt.images, prompt.streamingBehavior)
-    }
-    catch (err) {
-      sessions.publishError(managed.key, String(err))
-    }
-    await publishState(managed)
-    await publishSessions()
-  }
-
-  async function reloadAfterExtensionChange(res: ServerResponse, cwd?: string) {
-    const reloaded = await sessions.reloadExtensions(cwd)
-    return json(res, 200, { ok: true, reloaded } satisfies ExtensionChangeResponse)
-  }
-
-  async function handleApiRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
-    const path = url.pathname
-    const method = req.method ?? 'GET'
-
-    if (method === 'GET' && path === API_EVENTS_PATH) {
-      sse.open(req, res)
+  app.setErrorHandler((err, _request, reply) => {
+    if (reply.sent) {
+      reply.raw.end()
       return
     }
+    if (err instanceof SessionsStreamingError)
+      return send(reply, 409, { error: String(err), sessions: err.keys })
+    if (err instanceof ProviderAuthBusyError)
+      return send(reply, 409, { error: err.message })
+    const statusCode = typeof err === 'object' && err && 'statusCode' in err && typeof err.statusCode === 'number'
+      ? err.statusCode
+      : 500
+    if (statusCode >= 400 && statusCode < 500)
+      return send(reply, statusCode, { error: err instanceof Error ? err.message : String(err) })
+    return send(reply, 500, { error: String(err) })
+  })
 
-    if (method === 'GET' && path === API_HELLO_PATH)
-      return json(res, 200, { cwd: config.rootCwd } satisfies HelloResponse)
+  app.get(API_EVENTS_PATH, (request, reply) => {
+    reply.hijack()
+    sse.open(request.raw, reply.raw)
+  })
 
-    if (method === 'GET' && path === API_SESSIONS_PATH)
-      return json(res, 200, { sessions: await sessions.listSessions() } satisfies SessionsResponse)
+  app.get(API_HELLO_PATH, async (_request, reply) => {
+    return send(reply, 200, { cwd: config.rootCwd } satisfies HelloResponse)
+  })
 
-    if (method === 'GET' && path === API_MODELS_PATH) {
-      const key = url.searchParams.get('key')
-      const managed = key ? sessions.get(key) : undefined
-      if (!managed)
-        return json(res, 404, { error: `session not open: ${String(key)}` })
-      return json(res, 200, { models: await sessions.getAvailableModels(managed) } satisfies ModelsResponse)
-    }
+  registerSessionRoutes(app, { getUsage, sessions, sse })
+  registerFlowRoutes(app, { config, flow, sessions })
+  registerProviderRoutes(app, { modelRuntime, providerAuth, sessions })
+  registerProjectRoutes(app, { config, extensions, sessions })
 
-    if (method === 'GET' && path === API_PROVIDERS_PATH)
-      return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
+  app.setNotFoundHandler(async (request, reply) => {
+    const path = request.url.split('?')[0] ?? '/'
+    if (path.startsWith('/api/'))
+      return send(reply, 404, { error: 'not found' })
+    reply.hijack()
+    await serveStatic(reply.raw, path)
+  })
 
-    const providerLogout = path.match(/^\/api\/providers\/([^/]+)\/logout$/)
-    if (providerLogout && method === 'DELETE') {
-      const providerId = decodeURIComponent(providerLogout[1]!)
-      if (!modelRuntime.getProvider(providerId))
-        return json(res, 404, { error: `provider not found: ${providerId}` })
-      sessions.assertProviderIdle(providerId)
-      await modelRuntime.logout(providerId)
-      await sessions.refreshProvider(providerId)
-      return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
-    }
-
-    const providerAction = path.match(/^\/api\/providers\/([^/]+)\/(check|refresh)$/)
-    if (providerAction && method === 'POST') {
-      const providerId = decodeURIComponent(providerAction[1]!)
-      if (!modelRuntime.getProvider(providerId))
-        return json(res, 404, { error: `provider not found: ${providerId}` })
-      if (providerAction[2] === 'check') {
-        const check = await modelRuntime.checkAuth(providerId, { signal: AbortSignal.timeout(15_000) })
-        return json(res, 200, {
-          configured: !!check,
-          type: check?.type,
-          source: check?.source,
-        } satisfies ProviderCheckResponse)
-      }
-      // Validate affected sessions before changing the shared provider state.
-      try {
-        sessions.assertProviderIdle(providerId)
-      }
-      catch (error) {
-        if (error instanceof SessionsStreamingError)
-          return json(res, 409, { error: error.message })
-        throw error
-      }
-      const result = await modelRuntime.refresh({
-        allowNetwork: true,
-        force: true,
-        providers: [providerId],
-        signal: AbortSignal.timeout(15_000),
-      })
-      const error = result.errors.get(providerId)
-      if (error)
-        return json(res, 502, { error: error.message })
-      try {
-        await sessions.refreshProvider(providerId)
-      }
-      catch (error) {
-        if (error instanceof SessionsStreamingError)
-          return json(res, 409, { error: error.message })
-        throw error
-      }
-      return json(res, 200, { providers: await listProviders(modelRuntime) } satisfies ProvidersResponse)
-    }
-
-    if (method === 'POST' && path === API_PROVIDER_AUTH_PATH) {
-      const body = await readBody<Partial<ProviderAuthLoginRequest>>(req)
-      if (typeof body.providerId !== 'string' || (body.type !== 'api_key' && body.type !== 'oauth'))
-        return json(res, 400, { error: 'providerId and valid type required' })
-      sessions.assertIdle()
-      return json(res, 202, await providerAuth.start(body.providerId, body.type))
-    }
-
-    if (path.startsWith(`${API_PROVIDER_AUTH_PATH}/`)) {
-      const operationId = decodeURIComponent(path.slice(API_PROVIDER_AUTH_PATH.length + 1))
-      if (method === 'POST') {
-        const body = await readBody<Partial<ProviderAuthResponse>>(req)
-        if (typeof body.promptId !== 'string' || typeof body.value !== 'string' || body.operationId !== operationId)
-          return json(res, 400, { error: 'valid provider auth response required' })
-        return json(res, providerAuth.respond(operationId, body.promptId, body.value) ? 200 : 404, { ok: true })
-      }
-      if (method === 'DELETE')
-        return json(res, providerAuth.cancel(operationId) ? 200 : 404, { ok: true })
-    }
-
-    if (method === 'GET' && path === API_COMPOSER_PATH) {
-      const kind = url.searchParams.get('kind')
-      if (kind === 'paths') {
-        const cwd = url.searchParams.get('cwd')
-        if (!cwd)
-          return json(res, 400, { error: 'cwd required' })
-        try {
-          const paths = await completePaths(cwd, url.searchParams.get('q') ?? '')
-          return json(res, 200, { paths: paths.map(path => ({ path })) } satisfies ComposerPathsResponse)
-        }
-        catch (error) {
-          const message = error instanceof Error && error.message ? error.message : 'path lookup failed'
-          return json(res, 400, { error: message })
-        }
-      }
-      if (kind === 'commands') {
-        const session = url.searchParams.get('session')
-        if (!session)
-          return json(res, 400, { error: 'session required' })
-        const managed = sessions.get(session)
-        if (!managed)
-          return json(res, 404, { error: `session not found: ${session}` })
-        return json(res, 200, { commands: composerCommandsFromSession(managed) } satisfies ComposerCommandsResponse)
-      }
-      return json(res, 400, { error: 'kind must be paths or commands' })
-    }
-
-    if (method === 'GET' && path === API_DIRECTORIES_PATH) {
-      return json(res, 200, {
-        listing: await sessions.listDirectories(url.searchParams.get('path') ?? config.rootCwd),
-      } satisfies DirectoriesResponse)
-    }
-
-    if (method === 'GET' && path === API_FLOW_PATH) {
-      const projectPath = url.searchParams.get('projectPath') ?? config.rootCwd
-      try {
-        const state = await flow.readState(projectPath)
-        return json(res, 200, { document: state.document, stored: state.stored } satisfies FlowDocumentResponse)
-      }
-      catch (error) {
-        if (error instanceof UnsupportedProjectCanvasVersion)
-          return json(res, 409, { error: error.message })
-        throw error
-      }
-    }
-
-    if (method === 'PUT' && path === API_FLOW_PATH) {
-      const body = await readBody<ReplaceFlowRequest>(req)
-      if (typeof body.projectPath !== 'string' || !body.topology)
-        return json(res, 400, { error: 'projectPath and topology required' })
-      try {
-        const projectPath = (await flow.read(body.projectPath)).projectPath
-        const knownSessions = await sessions.listSessions()
-        const invalidNode = body.topology.nodes.find((node) => {
-          if (!node.sessionPath)
-            return false
-          const session = sessions.get(node.sessionPath) ?? knownSessions.find(session => session.path === node.sessionPath)
-          return !session || session.cwd !== projectPath
-        })
-        if (invalidNode)
-          return json(res, 400, { error: `session is not part of this project: ${invalidNode.sessionPath}` })
-        const document = await flow.replaceTopology(projectPath, body.topology, { commitGraph: body.commitGraph === true })
-        return json(res, 200, { document, stored: true } satisfies FlowDocumentResponse)
-      }
-      catch (error) {
-        if (error instanceof UnsupportedProjectCanvasVersion)
-          return json(res, 409, { error: error.message })
-        throw error
-      }
-    }
-
-    if (method === 'POST' && path === API_FLOW_ACCEPT_PATH) {
-      const body = await readBody<Partial<AcceptConductorRequest>>(req)
-      if (typeof body.projectPath !== 'string' || !conductorDraftReady(body.draft))
-        return json(res, 400, { error: 'invalid conductor draft' })
-      try {
-        const document = await flow.acceptConductor(body.projectPath, body.draft)
-        return json(res, 200, { document, stored: true } satisfies FlowDocumentResponse)
-      }
-      catch (error) {
-        if (error instanceof UnsupportedProjectCanvasVersion)
-          return json(res, 409, { error: error.message })
-        if (error instanceof Error && error.message === 'invalid conductor draft')
-          return json(res, 400, { error: error.message })
-        throw error
-      }
-    }
-
-    if (method === 'GET' && path === API_PROJECT_TRUST_PATH) {
-      const cwd = (await sessions.listDirectories(url.searchParams.get('cwd') ?? config.rootCwd)).path
-      return json(res, 200, { status: sessions.getProjectTrust(cwd) } satisfies ProjectTrustResponse)
-    }
-
-    if (method === 'POST' && path === API_PROJECT_TRUST_PATH) {
-      const body = await readBody<Partial<TrustProjectRequest>>(req)
-      if (typeof body.cwd !== 'string')
-        return json(res, 400, { error: 'cwd required' })
-      const cwd = (await sessions.listDirectories(body.cwd)).path
-      return json(res, 200, { status: await sessions.trustProject(cwd) } satisfies ProjectTrustResponse)
-    }
-
-    if (method === 'GET' && path === API_GIT_PATH) {
-      const cwd = (await sessions.listDirectories(url.searchParams.get('cwd') ?? config.rootCwd)).path
-      return json(res, 200, await readGitBranches(cwd) satisfies GitBranchesResponse)
-    }
-
-    if (method === 'POST' && path === API_GIT_PATH) {
-      const body = await readBody<Partial<GitCheckoutRequest>>(req)
-      if (typeof body.cwd !== 'string' || typeof body.branch !== 'string' || !body.branch)
-        return json(res, 400, { error: 'cwd and branch required' })
-      const cwd = (await sessions.listDirectories(body.cwd)).path
-      try {
-        sessions.assertIdle(cwd)
-        return json(res, 200, await checkoutGitBranch(cwd, body.branch) satisfies GitBranchesResponse)
-      }
-      catch (err) {
-        if (err instanceof SessionsStreamingError)
-          throw err
-        return json(res, 400, { error: err instanceof Error ? err.message : 'git failed' })
-      }
-    }
-
-    if (method === 'GET' && path === API_EXTENSIONS_PATH) {
-      const cwd = (await sessions.listDirectories(url.searchParams.get('cwd') ?? config.rootCwd)).path
-      const trust = sessions.getProjectTrust(cwd)
-      return json(res, 200, { extensions: extensions.list(cwd, trust.trusted) } satisfies ExtensionsResponse)
-    }
-
-    if (method === 'POST' && path === API_EXTENSIONS_PATH) {
-      const body = await readBody<Partial<InstallExtensionRequest>>(req)
-      if (typeof body.source !== 'string' || !body.source.trim() || typeof body.cwd !== 'string'
-        || (body.scope !== 'global' && body.scope !== 'project')) {
-        return json(res, 400, { error: 'source, cwd, and scope required' })
-      }
-      const cwd = (await sessions.listDirectories(body.cwd)).path
-      const trust = sessions.getProjectTrust(cwd)
-      if (body.scope === 'project' && !trust.trusted) {
-        return json(res, 403, { error: 'project must be trusted before changing project extensions' })
-      }
-      const affectedCwd = body.scope === 'project' ? cwd : undefined
-      sessions.assertIdle(affectedCwd)
-      await extensions.install(cwd, body.source, body.scope, trust.trusted)
-      return reloadAfterExtensionChange(res, affectedCwd)
-    }
-
-    if (method === 'DELETE' && path === API_EXTENSIONS_PATH) {
-      const body = await readBody<Partial<RemoveExtensionRequest>>(req)
-      if (typeof body.source !== 'string' || !body.source.trim() || typeof body.cwd !== 'string'
-        || (body.scope !== 'global' && body.scope !== 'project')) {
-        return json(res, 400, { error: 'source, cwd, and scope required' })
-      }
-      const cwd = (await sessions.listDirectories(body.cwd)).path
-      const trust = sessions.getProjectTrust(cwd)
-      if (body.scope === 'project' && !trust.trusted) {
-        return json(res, 403, { error: 'project must be trusted before changing project extensions' })
-      }
-      const affectedCwd = body.scope === 'project' ? cwd : undefined
-      sessions.assertIdle(affectedCwd)
-      const removed = await extensions.remove(cwd, body.source, body.scope, trust.trusted)
-      if (!removed)
-        return json(res, 404, { error: `extension not configured: ${body.source}` })
-      return reloadAfterExtensionChange(res, affectedCwd)
-    }
-
-    if (method === 'POST' && path === API_EXTENSIONS_UI_RESPONSE_PATH) {
-      const body = await readBody<Partial<ExtensionUIResponseBody>>(req)
-      if (typeof body.id !== 'string' || typeof body.session !== 'string' || body.type !== 'extension_ui_response')
-        return json(res, 400, { error: 'valid extension UI response required' })
-      if (!sessions.respondExtensionUi(body as ExtensionUIResponseBody))
-        return json(res, 404, { error: `session not open: ${body.session}` })
-      return json(res, 200, { ok: true } satisfies ApiOkResponse)
-    }
-
-    if (method === 'GET' && path === API_USAGE_PATH) {
-      const key = url.searchParams.get('key')
-      const managed = key ? sessions.get(key) : undefined
-      const provider = managed?.runtime.session.model?.provider ?? url.searchParams.get('provider')
-      if (!provider)
-        return json(res, 200, { provider: null, supported: false, windows: [] } satisfies UsageReport)
-      const fresh = url.searchParams.get('fresh') === '1'
-      const report = await getUsage(provider, fresh)
-      return json(res, 200, {
-        provider,
-        supported: !!report,
-        plan: report?.plan,
-        windows: report?.windows ?? [],
-      } satisfies UsageReport)
-    }
-
-    if (method === 'POST' && path === API_SESSIONS_OPEN_PATH) {
-      const body = await readBody<Partial<OpenSessionRequest>>(req)
-      if (typeof body.path !== 'string')
-        return json(res, 400, { error: 'path required' })
-      const managed = await sessions.openSavedSession(body.path, { refresh: true })
-      if (!managed)
-        return json(res, 404, { error: 'session not found' })
-      return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-    }
-
-    if (method === 'POST' && path === API_SESSIONS_NEW_PATH) {
-      const body = await readBody<NewSessionRequest>(req)
-      const managed = await sessions.createFreshSession(body.cwd, body.persist === true, body.conductor === true)
-      if (body.conductor === true)
-        await publishSessions()
-      return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-    }
-
-    const action = parseSessionActionPath(path)
-    if (action) {
-      // rename/fork/delete accept closed sessions (key = session file path),
-      // so they bypass the pooled-session requirement of the actions below.
-      if (action.action === 'rename' && method === 'POST') {
-        const body = await readBody<Partial<RenameSessionRequest>>(req)
-        if (typeof body.name !== 'string')
-          return json(res, 400, { error: 'name required' })
-        if (!await sessions.renameSession(action.key, body.name.trim()))
-          return json(res, 404, { error: `session not found: ${action.key}` })
-        await publishSessions()
-        return json(res, 200, { ok: true } satisfies ApiOkResponse)
-      }
-
-      if (action.action === 'fork' && method === 'GET') {
-        const points = await sessions.listForkPoints(action.key)
-        if (!points)
-          return json(res, 404, { error: `session not found: ${action.key}` })
-        return json(res, 200, { points } satisfies ForkPointsResponse)
-      }
-
-      if (action.action === 'fork' && method === 'POST') {
-        const body = await readBody<Partial<ForkSessionRequest>>(req)
-        if (typeof body.entryId !== 'string' || !body.entryId)
-          return json(res, 400, { error: 'entryId required' })
-        const managed = await sessions.forkSession(action.key, body.entryId)
-        if (!managed)
-          return json(res, 404, { error: `session not found: ${action.key}` })
-        await publishSessions()
-        return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-      }
-
-      if (action.action === 'tree' && method === 'GET') {
-        const tree = await sessions.getSessionTree(action.key)
-        if (!tree)
-          return json(res, 404, { error: `session not found: ${action.key}` })
-        return json(res, 200, tree satisfies SessionTreeResponse)
-      }
-
-      if (action.action === 'export' && method === 'GET') {
-        const managed = sessions.get(action.key)
-        const filePath = managed?.runtime.session.sessionFile
-        if (!managed && !filePath) {
-          const session = await sessions.openSavedSession(action.key)
-          if (!session)
-            return json(res, 404, { error: `session not found: ${action.key}` })
-        }
-        const active = sessions.get(action.key)
-        const inputPath = active?.runtime.session.sessionFile
-        if (!inputPath)
-          return json(res, 400, { error: 'session is not persisted' })
-        const directory = await mkdtemp(join(tmpdir(), 'piflow-export-'))
-        const outputPath = join(directory, 'session.html')
-        try {
-          await active!.runtime.session.exportToHtml(outputPath)
-          const html = await readFile(outputPath, 'utf8')
-          const inline = new URL(req.url ?? 'http://localhost').searchParams.get('inline') === '1'
-          res.writeHead(200, {
-            'content-type': 'text/html; charset=utf-8',
-            'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="session.html"`,
-            'cache-control': 'no-cache',
-          })
-          res.end(html)
-        }
-        finally {
-          await rm(directory, { recursive: true, force: true })
-        }
-        return
-      }
-
-      if (action.action === 'navigate' && method === 'POST') {
-        const body = await readBody<Partial<NavigateSessionRequest>>(req)
-        if (typeof body.targetId !== 'string' || !body.targetId)
-          return json(res, 400, { error: 'targetId required' })
-        const managed = await sessions.navigateTree(action.key, body.targetId)
-        if (!managed)
-          return json(res, 404, { error: `session not found: ${action.key}` })
-        return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-      }
-
-      if (action.action === 'delete' && method === 'POST') {
-        const result = await sessions.deleteSession(action.key)
-        if (result === 'missing')
-          return json(res, 404, { error: `session not found: ${action.key}` })
-        if (result === 'streaming')
-          return json(res, 409, { error: 'session is streaming' })
-        await publishSessions()
-        return json(res, 200, { ok: true } satisfies ApiOkResponse)
-      }
-
-      if (method === 'POST') {
-        const managed = sessions.get(action.key)
-        if (!managed)
-          return json(res, 404, { error: `session not open: ${action.key}` })
-
-        const body = await readBody(req, action.action === 'prompt' ? 140 * 1024 * 1024 : undefined)
-
-        switch (action.action) {
-          case 'prompt': {
-            const prompt = body as Partial<PromptRequest>
-            if (typeof prompt.text !== 'string' || (!prompt.text.trim() && !prompt.images?.length))
-              return json(res, 400, { error: 'text or image required' })
-            const imageError = validatePromptImages(prompt.images)
-            if (imageError)
-              return json(res, 400, { error: imageError })
-            if (prompt.streamingBehavior !== undefined && prompt.streamingBehavior !== 'steer' && prompt.streamingBehavior !== 'followUp')
-              return json(res, 400, { error: 'unknown streaming behavior' })
-            json(res, 202, { ok: true } satisfies ApiOkResponse)
-            void handlePrompt(managed, prompt as PromptRequest)
-            return
-          }
-
-          case 'abort':
-            await managed.runtime.session.abort()
-            managed.extensionUi.cancelPending()
-            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-
-          case 'clear-queue':
-            managed.runtime.session.clearQueue()
-            await publishState(managed)
-            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-
-          case 'model': {
-            const modelRequest = body as Partial<SetModelRequest>
-            const model = sessions.findModel(managed, String(modelRequest.provider), String(modelRequest.modelId))
-            if (!model) {
-              return json(res, 404, {
-                error: `model not found: ${String(modelRequest.provider)}/${String(modelRequest.modelId)}`,
-              })
-            }
-            await managed.runtime.session.setModel(model)
-            await publishState(managed)
-            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-          }
-
-          case 'thinking': {
-            const thinkingRequest = body as Partial<SetThinkingRequest>
-            const level = managed.runtime.session.getAvailableThinkingLevels().find(candidate => candidate === thinkingRequest.level)
-            if (!level)
-              return json(res, 400, { error: 'unknown thinking level' })
-            managed.runtime.session.setThinkingLevel(level)
-            await publishState(managed)
-            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-          }
-
-          case 'compact': {
-            const compactRequest = body as Partial<CompactRequest>
-            if (compactRequest.instructions !== undefined && typeof compactRequest.instructions !== 'string')
-              return json(res, 400, { error: 'instructions must be a string' })
-            if (!managed.runtime.session.isIdle || managed.runtime.session.isCompacting)
-              return json(res, 409, { error: 'session is busy' })
-            json(res, 202, { ok: true } satisfies ApiOkResponse)
-            void sessions.compact(managed, compactRequest.instructions).catch(error => sessions.publishError(managed.key, String(error)))
-            return
-          }
-
-          case 'abort-compaction':
-            sessions.abortCompaction(managed)
-            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-
-          case 'auto-compaction': {
-            const request = body as Partial<SetAutoCompactionRequest>
-            if (typeof request.enabled !== 'boolean')
-              return json(res, 400, { error: 'enabled must be a boolean' })
-            sessions.setAutoCompaction(managed, request.enabled)
-            return json(res, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
-          }
-        }
-      }
-    }
-
-    json(res, 404, { error: 'not found' })
-  }
-
-  function hasTrustedOrigin(req: IncomingMessage): boolean {
-    const origin = req.headers.origin
-    if (origin === undefined)
-      return true
-    return isAllowedOrigin(origin, req.headers.host)
-  }
-
-  function isAuthenticated(req: IncomingMessage): boolean {
-    return hasAuthCookie(req.headers.cookie, config.authToken)
-  }
-
-  async function handleAuthRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
-    if (!hasTrustedOrigin(req)) {
-      res.writeHead(403, { 'cache-control': 'no-store' }).end()
-      return
-    }
-    const suppliedToken = url.searchParams.get('token')
-    const authenticated = config.isLoopback
-      || suppliedToken === config.authToken
-      || isAuthenticated(req)
-    if (!authenticated) {
-      res.writeHead(401, { 'cache-control': 'no-store' }).end()
-      return
-    }
-    res.writeHead(204, {
-      'cache-control': 'no-store',
-      'set-cookie': config.authHeader,
-    }).end()
-  }
-
-  return (req: IncomingMessage, res: ServerResponse) => {
-    void (async () => {
-      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-      const path = url.pathname
-
-      if (path === AUTH_PATH) {
-        await handleAuthRequest(req, res, url)
-        return
-      }
-
-      if (path.startsWith('/api/')) {
-        if (!hasTrustedOrigin(req)) {
-          json(res, 403, { error: 'forbidden origin' })
-          return
-        }
-        if (!isAuthenticated(req)) {
-          json(res, 401, { error: 'unauthorized' })
-          return
-        }
-        try {
-          await handleApiRequest(req, res, url)
-        }
-        catch (err) {
-          if (res.headersSent)
-            res.end()
-          else if (err instanceof SessionsStreamingError)
-            json(res, 409, { error: String(err), sessions: err.keys })
-          else if (err instanceof ProviderAuthBusyError)
-            json(res, 409, { error: err.message })
-          else
-            json(res, 500, { error: String(err) })
-        }
-        return
-      }
-
-      await serveStatic(res, path)
-    })()
-  }
+  return app
 }
 
-export function validatePromptImages(images: unknown): string | null {
-  if (images === undefined)
-    return null
-  if (!Array.isArray(images) || images.length > MAX_PROMPT_IMAGES)
-    return `at most ${MAX_PROMPT_IMAGES} images are supported`
-  for (const image of images) {
-    if (!image || typeof image !== 'object')
-      return 'invalid image content'
-    const { type, data, mimeType } = image as Record<string, unknown>
-    if (type !== 'image' || typeof data !== 'string' || typeof mimeType !== 'string' || !mimeType.startsWith('image/'))
-      return 'invalid image content'
-    const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0
-    if (data.length % 4 !== 0 || !/^[a-z0-9+/]*={0,2}$/i.test(data) || data.length / 4 * 3 - padding > MAX_PROMPT_IMAGE_BYTES)
-      return `each image must be valid base64 data no larger than ${MAX_PROMPT_IMAGE_BYTES / 1024 / 1024} MB`
-  }
-  return null
-}
+export { validatePromptImages } from './routes-sessions'

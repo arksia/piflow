@@ -1,10 +1,9 @@
-import { createServer } from 'node:http'
 import process from 'node:process'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import { loadConfig } from './core/config'
 import { createStaticHandler } from './core/http'
 import { createProviderAuthManager } from './core/provider-auth'
-import { createRequestHandler } from './core/routes'
+import { createApp } from './core/routes'
 import { createSessionStore } from './core/sessions'
 import { createSseHub } from './core/sse'
 import { createExtensionManager } from './extensions/manager'
@@ -28,7 +27,7 @@ const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (pro
 sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
 sse.setStateSnapshotProvider(sessions.getStateSnapshot)
 const serveStatic = createStaticHandler(config.webDist)
-const httpServer = createServer(createRequestHandler({
+const app = createApp({
   config,
   sessions,
   sse,
@@ -38,14 +37,13 @@ const httpServer = createServer(createRequestHandler({
   extensions,
   modelRuntime,
   providerAuth,
-}))
-
-httpServer.listen(config.port, config.host, () => {
-  console.info(`piflow · http://${config.host}:${config.port}`)
 })
 
+await app.listen({ host: config.host, port: config.port })
+console.info(`piflow · http://${config.host}:${config.port}`)
+
 async function shutdown() {
-  httpServer.close()
+  await app.close()
   await sessions.disposeAll()
 }
 
