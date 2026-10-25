@@ -12,10 +12,15 @@ piflow is a browser GUI for the [pi coding agent](https://github.com/earendil-wo
 packages/
 ├── server/          # Node.js backend (runs via tsx, no build step for dev)
 │   └── src/
-│       ├── core/    # HTTP/SSE server: config, http, routes, sessions, sse
-│       ├── flow/    # Flow canvas domain: store (persistence), tools (agent tools)
-│       ├── usage/   # Provider quota adapters
-│       └── index.ts # Entry point
+│       ├── app.ts      # Fastify app: plugins, then routes
+│       ├── plugins/    # Support plugins (auth)
+│       ├── routes/     # Route plugins
+│       ├── server/     # Config, static files, SSE
+│       ├── sessions/   # pi session store
+│       ├── flow/       # Flow canvas domain: store, tools
+│       ├── usage/      # Provider quota adapters
+│       ├── test/       # Mirrors the folders above
+│       └── index.ts    # Listen and signals
 ├── web/             # React 19 + Vite frontend
 │   └── src/
 │       ├── components/  # Flat component folders (index.tsx + styles.module.css)
@@ -43,7 +48,7 @@ pnpm build          # production build (web dist + server tsc)
 ## Conventions
 
 - **Language**: TypeScript, ES modules, `node:test` for tests.
-- **Tests colocated**: `foo.ts` ↔ `foo.test.ts` in the same directory.
+- **Tests**: the server keeps them in `packages/server/src/test`, mirroring `plugins/`, `routes/`, and the domain folders. The web package keeps `foo.ts` beside `foo.test.ts`.
 - **Component style**: `components/Name/index.tsx` + `styles.module.css`.
 - **Protocol changes**: edit `packages/protocol/src/index.ts`; server and web consume it via `@piflow/protocol`.
 - **Product scope**: [docs/PRD.md](docs/PRD.md) defines goals and explicit non-goals (piflow does not replace IDE, terminal, or Git hosting).
@@ -53,8 +58,8 @@ pnpm build          # production build (web dist + server tsc)
 | Concern | File |
 |---|---|
 | Server bootstrap | `packages/server/src/index.ts` |
-| HTTP routes + auth | `packages/server/src/core/routes.ts` |
-| Session lifecycle | `packages/server/src/core/sessions.ts` |
+| HTTP app | `packages/server/src/app.ts` registers `plugins/` then `routes/` |
+| Session lifecycle | `packages/server/src/sessions/index.ts` |
 | Flow agent tools | `packages/server/src/flow/tools.ts` |
 | Flow persistence | `packages/server/src/flow/store.ts` |
 | Frontend event projection | `packages/web/src/session/reducer.ts` |

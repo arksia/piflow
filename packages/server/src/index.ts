@@ -1,13 +1,13 @@
 import process from 'node:process'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import { loadConfig } from './core/config'
-import { createStaticHandler } from './core/http'
-import { createProviderAuthManager } from './core/provider-auth'
-import { createApp } from './core/routes'
-import { createSessionStore } from './core/sessions'
-import { createSseHub } from './core/sse'
+import { build } from './app'
 import { createExtensionManager } from './extensions/manager'
 import { createFlowStore } from './flow/store'
+import { createProviderAuthManager } from './providers/provider-auth'
+import { loadConfig } from './server/config'
+import { createStaticHandler } from './server/http'
+import { createSseHub } from './server/sse'
+import { createSessionStore } from './sessions/index'
 import { getUsage } from './usage/index'
 
 const config = loadConfig()
@@ -27,7 +27,7 @@ const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (pro
 sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
 sse.setStateSnapshotProvider(sessions.getStateSnapshot)
 const serveStatic = createStaticHandler(config.webDist)
-const app = createApp({
+const app = build({
   config,
   sessions,
   sse,
@@ -35,6 +35,7 @@ const app = createApp({
   getUsage,
   flow,
   extensions,
+  logger: true,
   modelRuntime,
   providerAuth,
 })
@@ -44,7 +45,6 @@ console.info(`piflow · http://${config.host}:${config.port}`)
 
 async function shutdown() {
   await app.close()
-  await sessions.disposeAll()
 }
 
 process.once('SIGINT', () => void shutdown())
