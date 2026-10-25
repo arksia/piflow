@@ -1,3 +1,4 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { FlowDocument, FlowMessageRecord, FlowNode } from '@piflow/protocol'
 import type { FlowStore } from './store'
 import { findConnection, findNodeBySession, listConnectedNodes } from './store'
@@ -10,6 +11,12 @@ export interface DeliverySession {
 export interface Deliveries {
   /** Returns the delivery's state now. Does not wait for a reply. */
   send: (projectPath: string, sourceSessionPath: string, targetNodeId: string, body: string) => Promise<string>
+  /** Records the one reply and writes it into the sender session. */
+  reply: (projectPath: string, sessionPath: string, deliveryId: string, body: string) => Promise<string>
+  /** The target run ended. Reminds once, or fails the delivery and admits the next. */
+  settle: (projectPath: string, sessionPath: string, messages: AgentMessage[]) => Promise<void>
+  /** Hands the oldest waiting delivery to an idle session, including after restart. */
+  resume: (projectPath: string, sessionPath: string) => Promise<void>
 }
 
 export function createDeliveries(
@@ -85,6 +92,15 @@ export function createDeliveries(
     }
   }
 
+  async function nodeFor(projectPath: string, sessionPath: string): Promise<FlowNode | undefined> {
+    if (!sessionPath)
+      return undefined
+    const document = await flow.read(projectPath)
+    if (document.conductorPath === sessionPath)
+      return undefined
+    return findNodeBySession(document, sessionPath)
+  }
+
   return {
     async send(projectPath, sourceSessionPath, targetNodeId, body) {
       const document = await flow.read(projectPath)
@@ -119,6 +135,93 @@ export function createDeliveries(
         throw new Error('flow delivery was not saved')
       return describeDelivery(saved, target.name)
     },
+
+    async reply(projectPath, sessionPath, deliveryId, body) {
+      const text = body.trim()
+      if (!text)
+        throw new Error('reply is empty')
+      const node = await nodeFor(projectPath, sessionPath)
+      if (!node)
+        throw new Error('this session is not on the current project Flow canvas')
+      const document = await flow.read(projectPath)
+      const delivery = document.messages.find(message => message.id === deliveryId)
+      if (!delivery || delivery.target !== node.id)
+        throw new Error('delivery is not waiting on this node')
+      if (delivery.status === 'replied')
+        throw new Error('delivery already has a reply')
+      if (delivery.status !== 'delivered')
+        throw new Error('delivery is not in the transcript')
+      const source = document.nodes.find(item => item.id === delivery.source)
+      if (!source)
+        throw new Error('sender node is gone')
+      const sender = await openSession(source, projectPath)
+      if (!sender)
+        throw new Error('sender session is not available')
+      const recorded = await flow.updateMessage(projectPath, deliveryId, (message) => {
+        if (message.status !== 'delivered' || message.target !== node.id)
+          return null
+        return { ...message, status: 'replied', reply: text }
+      })
+      if (!recorded)
+        throw new Error('delivery already has a reply')
+      try {
+        const pending = sender.prompt(replyText(node.name, deliveryId, text), sender.isStreaming)
+        void pending.catch(() => {})
+      }
+      catch (error) {
+        await flow.updateMessage(projectPath, deliveryId, (message) => {
+          if (message.status !== 'replied')
+            return null
+          const { reply: _dropped, ...rest } = message
+          return { ...rest, status: 'delivered' }
+        })
+        throw error instanceof Error ? error : new Error('sender session did not accept the reply')
+      }
+      return `Reply recorded for ${deliveryId}.`
+    },
+
+    async settle(projectPath, sessionPath, messages) {
+      const node = await nodeFor(projectPath, sessionPath)
+      if (!node)
+        return
+      const document = await flow.read(projectPath)
+      const active = document.messages.find(message => message.target === node.id && message.status === 'delivered')
+      if (!active) {
+        await admit(projectPath, node)
+        return
+      }
+      if (active.reminded)
+        return
+      if (!hasAssistantText(messages, active.id)) {
+        await failAndWake(projectPath, active.id, new Error('the run ended without assistant text'))
+        await admit(projectPath, node)
+        return
+      }
+      const session = await openSession(node, projectPath)
+      if (!session || session.isStreaming)
+        return
+      const reminded = await flow.updateMessage(projectPath, active.id, (message) => {
+        if (message.status !== 'delivered' || message.reminded)
+          return null
+        return { ...message, reminded: true }
+      })
+      if (!reminded)
+        return
+      try {
+        const pending = session.prompt(reminderText(active.id), false)
+        void pending.catch(() => {})
+      }
+      catch {
+        // The reminder flag is already set, so a later settle does not send another.
+      }
+    },
+
+    async resume(projectPath, sessionPath) {
+      const node = await nodeFor(projectPath, sessionPath)
+      if (!node)
+        return
+      await admit(projectPath, node)
+    },
   }
 }
 
@@ -139,6 +242,47 @@ function inboundText(sourceName: string, id: string, body: string): string {
     '',
     'Reply with reply_flow_message and this delivery id.',
   ].join('\n')
+}
+
+function reminderText(id: string): string {
+  return `Reply to delivery ${id} with reply_flow_message. That delivery is still waiting.`
+}
+
+function replyText(fromName: string, id: string, body: string): string {
+  return `Reply from Flow node "${fromName}" for delivery ${id}:\n\n${body}`
+}
+
+function hasAssistantText(messages: AgentMessage[], deliveryId: string): boolean {
+  let start = -1
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message?.role === 'user' && textOf(message).includes(deliveryId)) {
+      start = index
+      break
+    }
+  }
+  if (start < 0)
+    return false
+  for (let index = start + 1; index < messages.length; index++) {
+    const message = messages[index]
+    if (message?.role === 'assistant' && textOf(message).trim())
+      return true
+  }
+  return false
+}
+
+function textOf(message: AgentMessage): string {
+  if (!('content' in message))
+    return ''
+  if (typeof message.content === 'string')
+    return message.content
+  if (!Array.isArray(message.content))
+    return ''
+  return message.content.flatMap((block) => {
+    if (typeof block === 'object' && block && 'type' in block && block.type === 'text' && 'text' in block && typeof block.text === 'string')
+      return [block.text]
+    return []
+  }).join('\n')
 }
 
 function describeDelivery(message: FlowMessageRecord, targetName: string): string {

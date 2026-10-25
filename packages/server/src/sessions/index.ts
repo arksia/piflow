@@ -33,6 +33,7 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import { createExtensionUIContext } from '../extensions/extension-ui'
 import { conductorContext } from '../flow/conductor'
+import { createDeliveries } from '../flow/delivery'
 import { findNodeBySession } from '../flow/store'
 import { createFlowTools, formatFlowDirectory, moduleContext } from '../flow/tools'
 import { toJsonEvent } from './json-event'
@@ -110,6 +111,18 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   const opening = new Map<string, Promise<ManagedSession>>()
   const statuses = new Map<string, SessionStatusRecord>()
   const publish = options.publish
+  const deliveries = createDeliveries(flow, async (node, projectPath) => {
+    const managed = await openSavedSession(node.sessionPath)
+    if (!managed || managed.cwd !== projectPath)
+      return null
+    const session = managed.runtime.session
+    return {
+      get isStreaming() {
+        return session.isStreaming
+      },
+      prompt: (text, followUp) => prompt(managed, text, undefined, followUp ? 'followUp' : undefined),
+    }
+  })
 
   function activeSessions(): ManagedSession[] {
     return [...new Set(pool.values())]
@@ -228,6 +241,13 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       publish({ type: 'event', session: managed.key, event: toJsonEvent(event), context: session.getContextUsage() ?? null })
       if (event.type === 'agent_settled' || event.type === 'compaction_end')
         publish({ type: 'state', state: getState(managed) })
+      if (event.type === 'agent_settled') {
+        const sessionFile = session.sessionFile
+        if (sessionFile) {
+          void deliveries.settle(managed.cwd, sessionFile, session.messages)
+            .catch(error => publishError(managed.key, error instanceof Error ? error.message : String(error)))
+        }
+      }
     })
     return session.bindExtensions({
       uiContext: extensionUi,
@@ -358,11 +378,21 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         managed!.cwd = runtime.cwd
         await bind(managed!, session)
         touch(managed!)
+        const sessionFile = session.sessionFile
+        if (sessionFile) {
+          await deliveries.resume(managed!.cwd, sessionFile)
+            .catch(error => publishError(managed!.key, error instanceof Error ? error.message : String(error)))
+        }
       })
       try {
         await bind(managed, runtime.session)
         updateStatus(managed)
         await evictIfNeeded(managed)
+        const sessionFile = managed.runtime.session.sessionFile
+        if (sessionFile) {
+          await deliveries.resume(managed.cwd, sessionFile)
+            .catch(error => publishError(managed.key, error instanceof Error ? error.message : String(error)))
+        }
         return managed
       }
       catch (error) {

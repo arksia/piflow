@@ -1,3 +1,4 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { FlowNode } from '@piflow/protocol'
 import type { DeliverySession } from '../../flow/delivery'
 import assert from 'node:assert/strict'
@@ -94,6 +95,126 @@ it('refuses a peer that is not connected', async () => {
       /not a connected Flow peer/,
     )
     assert.equal((await harness.store.read(harness.projectPath)).messages.length, 0)
+  }
+  finally {
+    await harness.cleanup()
+  }
+})
+
+it('does not prompt a delivery that is already in the transcript', async () => {
+  const harness = await createHarness()
+  try {
+    await harness.deliveries.send(harness.projectPath, harness.sessionPath('a'), 'b', 'already there')
+    await harness.deliveries.resume(harness.projectPath, harness.sessionPath('b'))
+    assert.equal(harness.sessions.get('b')!.prompts.length, 1)
+
+    const sentAt = new Date().toISOString()
+    await harness.store.appendMessage(harness.projectPath, {
+      id: 'later',
+      edgeId: 'a-b',
+      source: 'a',
+      target: 'b',
+      body: 'after restart',
+      preview: 'after restart',
+      sentAt,
+      status: 'queued',
+      read: false,
+      reminded: false,
+    })
+    const open = (await harness.store.read(harness.projectPath)).messages[0]
+    if (!open)
+      throw new Error('missing delivery')
+    await harness.store.updateMessage(harness.projectPath, open.id, message => ({ ...message, status: 'replied', reply: 'done' }))
+    await harness.deliveries.resume(harness.projectPath, harness.sessionPath('b'))
+    assert.equal(harness.sessions.get('b')!.prompts.length, 2)
+    assert.match(harness.sessions.get('b')!.prompts[1]?.text ?? '', /after restart/)
+  }
+  finally {
+    await harness.cleanup()
+  }
+})
+
+it('writes one reply back to the sender and refuses a second', async () => {
+  const harness = await createHarness()
+  try {
+    await harness.deliveries.send(harness.projectPath, harness.sessionPath('a'), 'b', 'question')
+    const delivery = (await harness.store.read(harness.projectPath)).messages[0]
+    if (!delivery)
+      throw new Error('missing delivery')
+    harness.sessions.get('a')!.streaming = true
+    const recorded = await harness.deliveries.reply(harness.projectPath, harness.sessionPath('b'), delivery.id, 'the answer')
+    assert.match(recorded, new RegExp(`Reply recorded for ${delivery.id}`))
+    const wakes = harness.sessions.get('a')!.prompts
+    assert.equal(wakes.length, 1)
+    assert.equal(wakes[0]?.followUp, true)
+    assert.match(wakes[0]?.text ?? '', /the answer/)
+    assert.equal((await harness.store.read(harness.projectPath)).messages.length, 1)
+    assert.equal((await harness.store.read(harness.projectPath)).messages[0]?.status, 'replied')
+    await assert.rejects(
+      harness.deliveries.reply(harness.projectPath, harness.sessionPath('b'), delivery.id, 'again'),
+      /already has a reply/,
+    )
+    await assert.rejects(
+      harness.deliveries.reply(harness.projectPath, harness.sessionPath('a'), delivery.id, 'nope'),
+      /not waiting on this node/,
+    )
+  }
+  finally {
+    await harness.cleanup()
+  }
+})
+
+it('reminds the target once when the run ends without a reply', async () => {
+  const harness = await createHarness()
+  try {
+    await harness.deliveries.send(harness.projectPath, harness.sessionPath('a'), 'b', 'question')
+    const delivery = (await harness.store.read(harness.projectPath)).messages[0]
+    if (!delivery)
+      throw new Error('missing delivery')
+    const transcript = [
+      { role: 'user', content: `Delivery ${delivery.id}.` },
+      { role: 'assistant', content: 'I looked at it.' },
+    ] as AgentMessage[]
+    await harness.deliveries.settle(harness.projectPath, harness.sessionPath('b'), transcript)
+    await harness.deliveries.settle(harness.projectPath, harness.sessionPath('b'), transcript)
+    const prompts = harness.sessions.get('b')!.prompts
+    assert.equal(prompts.length, 2)
+    assert.match(prompts[1]?.text ?? '', new RegExp(delivery.id))
+    assert.equal(harness.sessions.get('a')!.prompts.length, 0)
+    assert.equal((await harness.store.read(harness.projectPath)).messages[0]?.reminded, true)
+    assert.equal((await harness.store.read(harness.projectPath)).messages[0]?.status, 'delivered')
+  }
+  finally {
+    await harness.cleanup()
+  }
+})
+
+it('fails a delivery with no assistant text and then admits the next', async () => {
+  const harness = await createHarness()
+  try {
+    await harness.deliveries.send(harness.projectPath, harness.sessionPath('a'), 'b', 'first')
+    const delivery = (await harness.store.read(harness.projectPath)).messages[0]
+    if (!delivery)
+      throw new Error('missing delivery')
+    await harness.store.appendMessage(harness.projectPath, {
+      id: 'next',
+      edgeId: 'a-b',
+      source: 'a',
+      target: 'b',
+      body: 'second',
+      preview: 'second',
+      sentAt: new Date().toISOString(),
+      status: 'queued',
+      read: false,
+      reminded: false,
+    })
+    await harness.deliveries.settle(harness.projectPath, harness.sessionPath('b'), [
+      { role: 'user', content: `Delivery ${delivery.id}.` },
+    ] as AgentMessage[])
+    assert.equal((await harness.store.read(harness.projectPath)).messages[0]?.status, 'failed')
+    assert.match(harness.sessions.get('a')!.prompts[0]?.text ?? '', /without assistant text/)
+    assert.match(harness.sessions.get('b')!.prompts.at(-1)?.text ?? '', /second/)
+    assert.equal((await harness.store.read(harness.projectPath)).messages[1]?.status, 'delivered')
   }
   finally {
     await harness.cleanup()

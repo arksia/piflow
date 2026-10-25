@@ -85,6 +85,26 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
     },
   })
 
+  const replyMessage = defineTool({
+    name: 'reply_flow_message',
+    label: 'Reply to Flow message',
+    description: 'Reply once to a delivery addressed to this node. Pass the delivery id from the transcript. The reply is written into the sender session, not sent as a new delivery.',
+    promptSnippet: 'Reply to one Flow delivery by its id',
+    promptGuidelines: [
+      'Call this once for a delivery id that appeared in your transcript. A second reply to the same id is refused.',
+    ],
+    parameters: Type.Object({
+      deliveryId: Type.String({ description: 'Delivery id from the message sent to this node' }),
+      message: Type.String({ minLength: 1, maxLength: 12_000, description: 'The reply the sender should read' }),
+    }),
+    async execute(_toolCallId, params) {
+      const source = requireSource(options)
+      if (!source.sessionPath)
+        throw new Error('Flow tools require a persisted pi session')
+      return textResult(await deliveries.reply(source.cwd, source.sessionPath, params.deliveryId, params.message))
+    },
+  })
+
   const searchContext = defineTool({
     name: 'search_flow_context',
     label: 'Search Flow context',
@@ -143,7 +163,7 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
     },
   })
 
-  return [listConnections, sendMessage, searchContext, readContext]
+  return [listConnections, sendMessage, replyMessage, searchContext, readContext]
 }
 
 export function moduleContext(node: Pick<FlowNode, 'brief'>): { path: string, content: string } | null {
@@ -160,7 +180,7 @@ export function formatFlowDirectory(document: Awaited<ReturnType<FlowStore['read
   const peers = listConnectedNodes(document, node.id)
   return [
     'Flow collaboration directory updated. Connections are explicit capability boundaries between peer sessions.',
-    'Connected peers may be searched with search_flow_context and may receive send_flow_message.',
+    'Connected peers may be searched with search_flow_context, may receive send_flow_message, and reply with reply_flow_message.',
     '',
     'Peers:',
     ...directoryLines(peers),
