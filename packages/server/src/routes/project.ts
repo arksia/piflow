@@ -19,7 +19,7 @@ import {
 import { composerCommandsFromSession } from '../project/composer-commands'
 import { completePaths } from '../project/composer-paths'
 import { checkoutGitBranch, readGitBranches } from '../project/git'
-import { payload, searchParams, send } from '../server/reply'
+import { payload, query, send } from '../server/reply'
 import { SessionsStreamingError } from '../sessions/index'
 
 interface ProjectRouteOptions {
@@ -31,14 +31,12 @@ export const projectRoutes: FastifyPluginAsync<ProjectRouteOptions> = async (app
   const { config, sessions } = options
 
   app.get(API_COMPOSER_PATH, async (request, reply) => {
-    const query = searchParams(request)
-    const kind = query.get('kind')
+    const { cwd, kind, q, session } = query(request)
     if (kind === 'paths') {
-      const cwd = query.get('cwd')
       if (!cwd)
         return send(reply, 400, { error: 'cwd required' })
       try {
-        const paths = await completePaths(cwd, query.get('q') ?? '')
+        const paths = await completePaths(cwd, q ?? '')
         return send(reply, 200, { paths: paths.map(path => ({ path })) } satisfies ComposerPathsResponse)
       }
       catch (error) {
@@ -47,7 +45,6 @@ export const projectRoutes: FastifyPluginAsync<ProjectRouteOptions> = async (app
       }
     }
     if (kind === 'commands') {
-      const session = query.get('session')
       if (!session)
         return send(reply, 400, { error: 'session required' })
       const managed = sessions.get(session)
@@ -60,12 +57,12 @@ export const projectRoutes: FastifyPluginAsync<ProjectRouteOptions> = async (app
 
   app.get(API_DIRECTORIES_PATH, async (request, reply) => {
     return send(reply, 200, {
-      listing: await sessions.listDirectories(searchParams(request).get('path') ?? config.rootCwd),
+      listing: await sessions.listDirectories(query(request).path ?? config.rootCwd),
     } satisfies DirectoriesResponse)
   })
 
   app.get(API_PROJECT_TRUST_PATH, async (request, reply) => {
-    const cwd = (await sessions.listDirectories(searchParams(request).get('cwd') ?? config.rootCwd)).path
+    const cwd = (await sessions.listDirectories(query(request).cwd ?? config.rootCwd)).path
     return send(reply, 200, { status: sessions.getProjectTrust(cwd) } satisfies ProjectTrustResponse)
   })
 
@@ -78,7 +75,7 @@ export const projectRoutes: FastifyPluginAsync<ProjectRouteOptions> = async (app
   })
 
   app.get(API_GIT_PATH, async (request, reply) => {
-    const cwd = (await sessions.listDirectories(searchParams(request).get('cwd') ?? config.rootCwd)).path
+    const cwd = (await sessions.listDirectories(query(request).cwd ?? config.rootCwd)).path
     return send(reply, 200, await readGitBranches(cwd) satisfies GitBranchesResponse)
   })
 

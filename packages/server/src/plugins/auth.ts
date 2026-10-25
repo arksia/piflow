@@ -3,6 +3,7 @@ import type { ServerConfig } from '../server/config'
 import { AUTH_PATH } from '@piflow/protocol'
 import fp from 'fastify-plugin'
 import { hasAuthCookie, isAllowedOrigin } from '../auth'
+import { query } from '../server/reply'
 
 function one(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
@@ -31,7 +32,7 @@ const httpAuthPlugin: FastifyPluginAsync<HttpAuthOptions> = async (app, config) 
   app.all(AUTH_PATH, async (request, reply) => {
     if (!trustedOrigin(request))
       return reply.code(403).header('cache-control', 'no-store').send()
-    const supplied = new URL(request.url, 'http://localhost').searchParams.get('token')
+    const supplied = query(request).token
     const authenticated = config.isLoopback
       || supplied === config.authToken
       || hasAuthCookie(one(request.headers.cookie), config.authToken)

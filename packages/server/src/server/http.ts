@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ServerResponse } from 'node:http'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
@@ -11,24 +11,6 @@ const MIME: Record<string, string> = {
   '.png': 'image/png',
   '.woff2': 'font/woff2',
   '.json': 'application/json',
-}
-
-export function json(res: ServerResponse, status: number, data: unknown) {
-  res.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-  })
-  res.end(JSON.stringify(data))
-}
-
-export async function readBody<T extends object = Record<string, unknown>>(req: IncomingMessage, maxLength = 1_000_000): Promise<T> {
-  let body = ''
-  for await (const chunk of req) {
-    body += chunk
-    if (body.length > maxLength)
-      throw new Error('request body too large')
-  }
-  return (body ? JSON.parse(body) : {}) as T
 }
 
 export type StaticHandler = (res: ServerResponse, path: string) => Promise<void>

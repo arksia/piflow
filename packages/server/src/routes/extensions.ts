@@ -14,7 +14,7 @@ import {
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
 } from '@piflow/protocol'
-import { payload, searchParams, send } from '../server/reply'
+import { payload, query, send } from '../server/reply'
 
 interface ExtensionRouteOptions {
   config: Pick<ServerConfig, 'rootCwd'>
@@ -31,7 +31,7 @@ export const extensionRoutes: FastifyPluginAsync<ExtensionRouteOptions> = async 
   }
 
   app.get(API_EXTENSIONS_PATH, async (request, reply) => {
-    const cwd = (await sessions.listDirectories(searchParams(request).get('cwd') ?? config.rootCwd)).path
+    const cwd = (await sessions.listDirectories(query(request).cwd ?? config.rootCwd)).path
     const trust = sessions.getProjectTrust(cwd)
     return send(reply, 200, { extensions: extensions.list(cwd, trust.trusted) } satisfies ExtensionsResponse)
   })

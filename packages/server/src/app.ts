@@ -37,7 +37,12 @@ interface CreateAppOptions {
 
 export function build(options: CreateAppOptions) {
   const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime, providerAuth } = options
-  const app = Fastify({ logger: options.logger ?? false })
+  const app = Fastify({
+    logger: options.logger ?? false,
+    routerOptions: {
+      querystringParser: search => Object.fromEntries(new URLSearchParams(search)),
+    },
+  })
   app.register(httpAuth, config)
 
   app.setErrorHandler((err, _request, reply) => {

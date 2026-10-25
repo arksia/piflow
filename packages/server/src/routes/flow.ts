@@ -13,7 +13,7 @@ import {
   conductorDraftReady,
   UnsupportedProjectCanvasVersion,
 } from '@piflow/protocol'
-import { payload, searchParams, send } from '../server/reply'
+import { payload, query, send } from '../server/reply'
 
 interface RegisterFlowRoutesOptions {
   config: ServerConfig
@@ -25,7 +25,7 @@ export const flowRoutes: FastifyPluginAsync<RegisterFlowRoutesOptions> = async (
   const { config, flow, sessions } = options
 
   app.get(API_FLOW_PATH, async (request, reply) => {
-    const projectPath = searchParams(request).get('projectPath') ?? config.rootCwd
+    const projectPath = query(request).projectPath ?? config.rootCwd
     try {
       const state = await flow.readState(projectPath)
       return send(reply, 200, { document: state.document, stored: state.stored } satisfies FlowDocumentResponse)

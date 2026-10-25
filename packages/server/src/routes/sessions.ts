@@ -30,7 +30,7 @@ import {
   MAX_PROMPT_IMAGE_BYTES,
   MAX_PROMPT_IMAGES,
 } from '@piflow/protocol'
-import { param, payload, searchParams, send } from '../server/reply'
+import { param, payload, query, send } from '../server/reply'
 
 interface RegisterSessionRoutesOptions {
   sessions: SessionStore
@@ -78,7 +78,7 @@ export const sessionRoutes: FastifyPluginAsync<RegisterSessionRoutesOptions> = a
   })
 
   app.get(API_MODELS_PATH, async (request, reply) => {
-    const key = searchParams(request).get('key')
+    const key = query(request).key
     const managed = key ? sessions.get(key) : undefined
     if (!managed)
       return send(reply, 404, { error: `session not open: ${String(key)}` })
@@ -160,7 +160,7 @@ export const sessionRoutes: FastifyPluginAsync<RegisterSessionRoutesOptions> = a
     try {
       await active!.runtime.session.exportToHtml(outputPath)
       const html = await readFile(outputPath, 'utf8')
-      const inline = searchParams(request).get('inline') === '1'
+      const inline = query(request).inline === '1'
       return reply.code(200)
         .header('content-type', 'text/html; charset=utf-8')
         .header('content-disposition', `${inline ? 'inline' : 'attachment'}; filename="session.html"`)
