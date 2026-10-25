@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { FlowDocument, FlowEdge, FlowMessageRecord, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
+import type { FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
 import type {
   Edge,
   EdgeChange,
@@ -24,9 +24,10 @@ import {
   ReactFlow,
 } from '@xyflow/react'
 import { ArrowRight, CircleAlert, PanelLeft } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptConductor, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
+import { activeDeliveryEdges, sameDeliveryState } from '../../flow/edges'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
 import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
@@ -66,9 +67,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [edges, setEdges] = useState<Edge[]>([])
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
-  const [activeEdges, setActiveEdges] = useState(() => new Map<string, { source: string, target: string }>())
-  const activeTimersRef = useRef(new Map<string, number>())
-  const seenMessageIdsRef = useRef(new Set<string>())
+  const activeEdges = useMemo(() => activeDeliveryEdges(document?.messages ?? []), [document])
   const saveRevRef = useRef(0)
   const pendingSaveRef = useRef<FlowDocument | null>(null)
   const graphChangedRef = useRef(false)
@@ -193,12 +192,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     return () => media.removeEventListener('change', onChange)
   }, [])
 
-  // Keep a mutable reference to the latest document and mark the initial messages
-  // as seen so the message-activity animation does not replay history on load.
+  // Keep a mutable reference to the latest document.
   useEffect(() => {
     documentRef.current = document
-    if (document && seenMessageIdsRef.current.size === 0)
-      seenMessageIdsRef.current = new Set(document.messages.map(m => m.id))
   }, [document])
 
   const activeRef = useRef(active)
@@ -211,46 +207,19 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       return
     let cancelled = false
     let intervalId: number | null = null
-    const timers = activeTimersRef.current
-
-    function processIncoming(messages: FlowMessageRecord[]) {
-      const currentDocument = documentRef.current
-      if (!currentDocument)
-        return
-      const newMessages = messages.filter(message => !seenMessageIdsRef.current.has(message.id))
-      if (newMessages.length === 0)
-        return
-      for (const message of newMessages) {
-        seenMessageIdsRef.current.add(message.id)
-        const edge = currentDocument.edges.find(e => e.id === message.edgeId)
-        if (!edge)
-          continue
-        const previousTimer = activeTimersRef.current.get(message.edgeId)
-        if (previousTimer)
-          window.clearTimeout(previousTimer)
-        const timer = window.setTimeout(() => {
-          setActiveEdges((current) => {
-            const next = new Map(current)
-            next.delete(message.edgeId)
-            return next
-          })
-          activeTimersRef.current.delete(message.edgeId)
-        }, 3000)
-        activeTimersRef.current.set(message.edgeId, timer)
-        setActiveEdges((current) => {
-          const next = new Map(current)
-          next.set(message.edgeId, { source: message.source, target: message.target })
-          return next
-        })
-      }
-    }
 
     function tick() {
       void loadFlow(projectPath)
         .then((loaded) => {
           if (cancelled)
             return
-          processIncoming(loaded.document.messages)
+          setDocument((current) => {
+            if (!current || current.projectPath !== loaded.document.projectPath)
+              return current
+            if (sameDeliveryState(current.messages, loaded.document.messages))
+              return current
+            return { ...current, messages: loaded.document.messages }
+          })
         })
         .catch(() => {
           // Polling failures are not surfaced; the next tick will retry.
@@ -285,11 +254,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       cancelled = true
       stop()
       window.document.removeEventListener('visibilitychange', handleVisibility)
-      for (const timer of timers.values())
-        window.clearTimeout(timer)
-      timers.clear()
-      seenMessageIdsRef.current.clear()
-      setActiveEdges(new Map())
     }
   }, [projectPath])
 
