@@ -4,11 +4,10 @@ import type { FlowNode } from '@piflow/protocol'
 import type { FlowStore } from './store'
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
-import { canAccessNode, findConnection, findNodeBySession, listConnectedNodes } from './store'
+import { createDeliveries } from './delivery'
+import { canAccessNode, findNodeBySession, listConnectedNodes } from './store'
 
-const MAX_HOPS = 8
 const MAX_RESULTS = 8
-const FLOW_META = /<!-- piflow:chain=([\w-]+);hop=(\d+) -->/
 
 interface ToolSession {
   cwd: string
@@ -27,6 +26,26 @@ interface CreateFlowToolsOptions {
 }
 
 export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition[] {
+  const deliveries = createDeliveries(options.flow, async (node, projectPath) => {
+    try {
+      const target = await options.resolveTarget(node, projectPath)
+      return {
+        get isStreaming() {
+          return target.isStreaming
+        },
+        prompt(text, followUp) {
+          return target.prompt(text, followUp).catch((error: unknown) => {
+            options.onDispatchError(target, error)
+            throw error
+          })
+        },
+      }
+    }
+    catch {
+      return null
+    }
+  })
+
   const listConnections = defineTool({
     name: 'list_flow_connections',
     label: 'Flow connections',
@@ -47,11 +66,11 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   const sendMessage = defineTool({
     name: 'send_flow_message',
     label: 'Send Flow message',
-    description: 'Send an explicit task or result to a directly connected Flow peer. The target runs immediately when idle or receives a follow-up when busy.',
+    description: 'Send a task to a directly connected Flow peer. Returns whether it is still queued, already in the peer transcript, or already failed. Does not wait for a reply.',
     promptSnippet: 'Send a deliberate message to a connected Flow peer',
     promptGuidelines: [
       'Send only information the target needs. Do not paste your complete conversation or tool history.',
-      `A user-started collaboration chain allows at most ${MAX_HOPS} inter-node messages.`,
+      'The result names the delivery id and its state. A reply arrives later as a user message.',
     ],
     parameters: Type.Object({
       targetNodeId: Type.String({ description: 'Node id returned by list_flow_connections' }),
@@ -59,44 +78,10 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
     }),
     executionMode: 'sequential',
     async execute(_toolCallId, params) {
-      const sourceSession = requireSource(options)
-      const { document, node: sourceNode } = await getSourceContext(options)
-      const targetNode = listConnectedNodes(document, sourceNode.id).find(node => node.id === params.targetNodeId)
-      if (!targetNode)
-        throw new Error('target is not a connected Flow peer')
-      const edge = findConnection(document, sourceNode.id, targetNode.id)
-      if (!edge)
-        throw new Error('Flow edge not found')
-
-      const chain = readChain(sourceSession.messages)
-      const hop = chain.hop + 1
-      if (hop > MAX_HOPS)
-        throw new Error(`Flow chain reached its ${MAX_HOPS}-message limit; ask the user before continuing`)
-
-      const message = params.message.trim()
-      await options.flow.appendMessage(document.projectPath, {
-        id: crypto.randomUUID(),
-        edgeId: edge.id,
-        source: sourceNode.id,
-        target: targetNode.id,
-        body: message,
-        preview: message.slice(0, 160),
-        sentAt: new Date().toISOString(),
-        status: 'delivered',
-        read: true,
-        reminded: false,
-      })
-
-      const target = await options.resolveTarget(targetNode, document.projectPath)
-      const envelope = [
-        `Message from Flow node "${sourceNode.name}":`,
-        '',
-        message,
-        '',
-        `<!-- piflow:chain=${chain.id};hop=${hop} -->`,
-      ].join('\n')
-      void target.prompt(envelope, target.isStreaming).catch(error => options.onDispatchError(target, error))
-      return textResult(`Message sent to ${targetNode.name} (${hop}/${MAX_HOPS} in this collaboration chain).`)
+      const source = requireSource(options)
+      if (!source.sessionPath)
+        throw new Error('Flow tools require a persisted pi session')
+      return textResult(await deliveries.send(source.cwd, source.sessionPath, params.targetNodeId, params.message))
     },
   })
 
@@ -211,17 +196,6 @@ function directoryLines(nodes: FlowNode[]) {
         return `- ${node.id} | ${node.name} | ${node.goal.slice(0, 160) || 'No current goal'}${brief ? ` | ${brief}` : ''}`
       })
     : ['- None']
-}
-
-function readChain(messages: AgentMessage[]): { id: string, hop: number } {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const match = messageText(messages[index]!).match(FLOW_META)
-    if (match?.[1] && match[2])
-      return { id: match[1], hop: Number(match[2]) }
-    if (messages[index]?.role === 'user')
-      break
-  }
-  return { id: crypto.randomUUID(), hop: 0 }
 }
 
 export function searchMessages(messages: AgentMessage[], query: string) {
