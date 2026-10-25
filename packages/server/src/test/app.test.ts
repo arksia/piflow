@@ -32,7 +32,7 @@ function testApp() {
 
 describe('fastify app', () => {
   it('serves hello when the cookie is present', async () => {
-    const app = testApp()
+    const app = await testApp()
     const response = await app.inject({
       headers: { cookie: `${AUTH_COOKIE}=${token}` },
       method: 'GET',
@@ -44,7 +44,7 @@ describe('fastify app', () => {
   })
 
   it('serves the static handler outside the api', async () => {
-    const app = testApp()
+    const app = await testApp()
     const response = await app.inject({ method: 'GET', url: '/' })
     assert.equal(response.statusCode, 200)
     assert.equal(response.body, 'static')
@@ -52,7 +52,7 @@ describe('fastify app', () => {
   })
 
   it('returns not found for an unknown api path', async () => {
-    const app = testApp()
+    const app = await testApp()
     const response = await app.inject({
       headers: { cookie: `${AUTH_COOKIE}=${token}` },
       method: 'GET',

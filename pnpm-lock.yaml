@@ -53,6 +53,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: ^1.2.0
         version: 1.2.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(ws@8.21.1)(zod@4.4.3)
+      '@fastify/sse':
+        specifier: ^0.6.1
+        version: 0.6.1(fastify@5.12.7)
       '@piflow/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -716,6 +719,12 @@ packages:
 
   '@fastify/proxy-addr@5.1.2':
     resolution: {integrity: sha512-uqB4QsgVoro0XDC+DIftIMGXHdBPn+lK6Ek3xXAIxPMCJfqxnbtyEoMCm2KPUVOuIosd7Cyw9HawEqMFM/UA+g==}
+
+  '@fastify/sse@0.6.1':
+    resolution: {integrity: sha512-Q1n2JBE1yQTDg9u3/mI2WraMs5vqmDLsI7cfkHJv3OYjRm1ST/zaMtbGK9OcBdHLlkTVMW0XCQMDmxG/nyb0OA==}
+    engines: {node: '>=20.20.2'}
+    peerDependencies:
+      fastify: ^5.x
 
   '@fontsource/dm-mono@5.3.0':
     resolution: {integrity: sha512-OINjI8C1S/wpchhQxl7njZdMn4+hnDCpQ4YtvvOpKNARo+0J8O1x1IcrChxNjHOhfVv1by8C/FQoy3hXK+C1Ug==}
@@ -3933,6 +3942,12 @@ snapshots:
       '@fastify/forwarded': 3.1.2
       ipaddr.js: 2.5.0
 
+  '@fastify/sse@0.6.1(fastify@5.12.7)':
+    dependencies:
+      '@fastify/error': 4.2.1
+      fastify: 5.12.7
+      fastify-plugin: 6.0.1
+
   '@fontsource/dm-mono@5.3.0': {}
 
   '@fontsource/inter@5.3.0': {}
@@ -4303,7 +4318,7 @@ snapshots:
       '@typescript-eslint/types': 8.65.0
       '@typescript-eslint/visitor-keys': 8.65.0
       debug: 4.4.3
-      minimatch: 10.2.5
+      minimatch: 10.2.6
       semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)

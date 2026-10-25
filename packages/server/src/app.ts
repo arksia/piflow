@@ -9,6 +9,7 @@ import type { ServerConfig } from './server/config'
 import type { StaticHandler } from './server/http'
 import type { SseHub } from './server/sse'
 import type { SessionStore } from './sessions/index'
+import fastifySse from '@fastify/sse'
 import { API_EVENTS_PATH, API_HELLO_PATH } from '@piflow/protocol'
 import Fastify from 'fastify'
 import { httpAuth } from './plugins/auth'
@@ -35,7 +36,7 @@ interface CreateAppOptions {
   logger?: FastifyServerOptions['logger']
 }
 
-export function build(options: CreateAppOptions) {
+export async function build(options: CreateAppOptions) {
   const { config, sessions, sse, serveStatic, getUsage, flow, extensions, modelRuntime, providerAuth } = options
   const app = Fastify({
     logger: options.logger ?? false,
@@ -62,9 +63,9 @@ export function build(options: CreateAppOptions) {
     return send(reply, 500, { error: String(err) })
   })
 
-  app.get(API_EVENTS_PATH, (request, reply) => {
-    reply.hijack()
-    sse.open(request.raw, reply.raw)
+  await app.register(fastifySse)
+  app.get(API_EVENTS_PATH, { sse: 'only' }, (_request, reply) => {
+    sse.open(reply)
   })
 
   app.get(API_HELLO_PATH, async (_request, reply) => {

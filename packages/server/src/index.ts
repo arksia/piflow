@@ -27,7 +27,7 @@ const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (pro
 sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
 sse.setStateSnapshotProvider(sessions.getStateSnapshot)
 const serveStatic = createStaticHandler(config.webDist)
-const app = build({
+const app = await build({
   config,
   sessions,
   sse,

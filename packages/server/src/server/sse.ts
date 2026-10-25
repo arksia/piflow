@@ -1,50 +1,42 @@
 import type { ServerMessage, SessionState, SessionStatusRecord } from '@piflow/protocol'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { FastifyReply } from 'fastify'
 
 export interface SseHub {
-  open: (req: IncomingMessage, res: ServerResponse) => void
+  open: (reply: FastifyReply) => void
   broadcast: (message: ServerMessage) => void
   setStatusSnapshotProvider: (provider: () => SessionStatusRecord[]) => void
   setStateSnapshotProvider: (provider: () => SessionState[]) => void
 }
 
 export function createSseHub(cwd: string): SseHub {
-  const clients = new Set<ServerResponse>()
+  const clients = new Set<FastifyReply>()
   let statusSnapshotProvider: (() => SessionStatusRecord[]) | undefined
   let stateSnapshotProvider: (() => SessionState[]) | undefined
 
-  function write(res: ServerResponse, message: ServerMessage) {
-    res.write(`data: ${JSON.stringify(message)}\n\n`)
+  function push(reply: FastifyReply, message: ServerMessage) {
+    void reply.sse.send({ data: message }).catch(() => {
+      clients.delete(reply)
+    })
   }
 
   return {
-    open(req, res) {
-      res.writeHead(200, {
-        'content-type': 'text/event-stream',
-        'cache-control': 'no-cache, no-transform',
-        'connection': 'keep-alive',
-        'x-accel-buffering': 'no',
+    open(reply) {
+      reply.sse.keepAlive()
+      clients.add(reply)
+      reply.sse.onClose(() => {
+        clients.delete(reply)
       })
-      res.flushHeaders()
-      clients.add(res)
-      write(res, { type: 'hello', cwd })
-      if (statusSnapshotProvider) {
-        const statuses = statusSnapshotProvider()
-        write(res, { type: 'status_snapshot', statuses })
-      }
+      push(reply, { type: 'hello', cwd })
+      if (statusSnapshotProvider)
+        push(reply, { type: 'status_snapshot', statuses: statusSnapshotProvider() })
       if (stateSnapshotProvider) {
         for (const state of stateSnapshotProvider())
-          write(res, { type: 'state', state })
+          push(reply, { type: 'state', state })
       }
-      const heartbeat = setInterval(() => res.write(': hb\n\n'), 25_000)
-      req.on('close', () => {
-        clearInterval(heartbeat)
-        clients.delete(res)
-      })
     },
     broadcast(message) {
-      for (const res of clients)
-        write(res, message)
+      for (const reply of clients)
+        push(reply, message)
     },
     setStatusSnapshotProvider(provider) {
       statusSnapshotProvider = provider
