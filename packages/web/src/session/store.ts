@@ -35,6 +35,7 @@ export const store: StoreState = {
   projectTrust: {},
   sidebarOpen: false,
   conductorNonce: 0,
+  workspaceView: 'chat',
 }
 
 export function requestConductorPanel() {
@@ -53,6 +54,13 @@ export function getStoreVersion(): number {
 
 export function setSidebarOpen(open: boolean) {
   store.sidebarOpen = open
+  notify()
+}
+
+export function setWorkspaceView(view: 'chat' | 'flow') {
+  if (store.workspaceView === view)
+    return
+  store.workspaceView = view
   notify()
 }
 

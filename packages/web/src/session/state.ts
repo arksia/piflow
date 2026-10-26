@@ -71,4 +71,5 @@ export interface StoreState {
   projectTrust: Record<string, ProjectTrustStatus>
   sidebarOpen: boolean
   conductorNonce: number
+  workspaceView: 'chat' | 'flow'
 }

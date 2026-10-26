@@ -290,7 +290,11 @@ export function applyStatusDelta(status: SessionStatusRecord) {
   const key = status.sessionFile ?? status.key
   const current = store.statuses[key]
   if (!current || status.updatedAt >= current.updatedAt) {
-    if (current?.status === 'running' && status.status === 'idle' && key !== store.activeKey) {
+    // Only suppress the unread badge when the user is actively viewing this session
+    // in the chat pane. On the flow canvas, or when the session is merely active in
+    // the background, treat completion as something the user may not have seen yet.
+    const viewing = key === store.activeKey && store.workspaceView === 'chat'
+    if (current?.status === 'running' && status.status === 'idle' && !viewing) {
       const unread = new Set(store.unreadSessions)
       unread.add(key)
       store.unreadSessions = unread

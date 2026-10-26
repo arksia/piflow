@@ -4,7 +4,7 @@ import styles from './App.module.css'
 import ChatView from './components/ChatView'
 import ExtensionDialog from './components/ExtensionDialog'
 import SessionList from './components/SessionList'
-import { setSidebarOpen } from './session/store'
+import { setSidebarOpen, setWorkspaceView as setStoreWorkspaceView } from './session/store'
 import { useStore } from './session/use-store'
 
 const FlowView = lazy(() => import('./components/FlowView'))
@@ -33,6 +33,10 @@ export default function App() {
   const [narrow, setNarrow] = useState(() => window.matchMedia('(width <= 768px)').matches)
   // ponytail: Flow's chrome is display:none on this breakpoint, so show chat without clearing the saved view
   const view = narrow ? 'chat' : workspaceView
+
+  useEffect(() => {
+    setStoreWorkspaceView(view)
+  }, [view])
 
   useEffect(() => {
     const media = window.matchMedia('(width <= 768px)')

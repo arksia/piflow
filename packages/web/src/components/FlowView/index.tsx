@@ -30,7 +30,8 @@ import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../.
 import { activeDeliveryEdges, sameDeliveryState } from '../../flow/edges'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
-import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
+import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust, sendPrompt } from '../../session/actions'
+import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
 import ChatView from '../ChatView'
 import FlowSessionNode from '../FlowSessionNode'
@@ -77,6 +78,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const seenConductorRef = useRef(0)
   const openingRef = useRef(new Set<string>())
   const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<void>>(async () => {})
+  // Keep the task draft keyed by node so switching selection resets the input.
+  const [taskDraft, setTaskDraft] = useState<{ id: string, text: string } | null>(null)
+  const [dispatching, setDispatching] = useState(false)
   const [conductorOpen, setConductorOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [name, setName] = useState('')
@@ -90,28 +94,34 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const pollRef = useRef({ start() {}, stop() {} })
-  const focusSession = useCallback(async (id: string) => {
-    if (openingRef.current.has(id))
-      return
+  const ensureNodeSession = useCallback(async (id: string): Promise<string | null> => {
     const current = documentRef.current
     const node = current?.nodes.find(item => item.id === id)
     if (!current || !node)
+      return null
+    let path = node.sessionPath
+    if (!path) {
+      const state = await createBackgroundSession(current.projectPath)
+      if (!state.sessionFile)
+        throw new Error('新会话尚未生成可持久化路径')
+      path = state.sessionFile
+      const latest = documentRef.current ?? current
+      await persistRef.current({
+        ...latest,
+        nodes: latest.nodes.map(item => item.id === id ? { ...item, sessionPath: path, updatedAt: new Date().toISOString() } : item),
+      })
+    }
+    return path
+  }, [])
+  const focusSession = useCallback(async (id: string) => {
+    if (openingRef.current.has(id))
       return
     openingRef.current.add(id)
     setError(null)
     try {
-      let path = node.sessionPath
-      if (!path) {
-        const state = await createBackgroundSession(current.projectPath)
-        if (!state.sessionFile)
-          throw new Error('新会话尚未生成可持久化路径')
-        path = state.sessionFile
-        const latest = documentRef.current ?? current
-        await persistRef.current({
-          ...latest,
-          nodes: latest.nodes.map(item => item.id === id ? { ...item, sessionPath: path, updatedAt: new Date().toISOString() } : item),
-        })
-      }
+      const path = await ensureNodeSession(id)
+      if (!path)
+        return
       await openSession(path)
       onShowChat()
     }
@@ -121,7 +131,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     finally {
       openingRef.current.delete(id)
     }
-  }, [onShowChat])
+  }, [ensureNodeSession, onShowChat])
 
   if (store.conductorNonce !== seenConductorRef.current) {
     seenConductorRef.current = store.conductorNonce
@@ -426,6 +436,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       setBriefOpen(false)
     if (connectMode && !selectedNodes.some(node => node.id === connectMode.sourceId))
       setConnectMode(null)
+    const selectedPath = selectedNodes[0]?.data.sessionPath
+    if (selectedPath && next.nodes.length === 1)
+      clearSessionUnread(selectedPath)
   }, [connectMode])
 
   function onMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
@@ -527,7 +540,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           throw new Error('新会话尚未生成可持久化路径')
         path = state.sessionFile
       }
-      const point = instance?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? { x: 120, y: 120 }
+      const center = instance?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? { x: 120, y: 120 }
+      const point = findFreeNodePosition(document.nodes, center)
       const now = new Date().toISOString()
       const next: FlowDocument = {
         ...document,
@@ -572,6 +586,35 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     if (selection.nodes.length === 1)
       setConnectMode({ sourceId: selection.nodes[0]! })
   }, [selection])
+
+  const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
+  const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
+  const draftText = taskDraft && taskDraft.id === selectedNodeId ? taskDraft.text : ''
+
+  // Send a task straight to the selected node's pi session without leaving the canvas.
+  async function dispatchTask(event: React.FormEvent) {
+    event.preventDefault()
+    const text = draftText.trim()
+    const id = selectedNodeId
+    if (!text || !id || dispatching)
+      return
+    setDispatching(true)
+    setError(null)
+    try {
+      const path = await ensureNodeSession(id)
+      if (!path)
+        return
+      const opened = await openBackgroundSession(path)
+      await sendPrompt(text, undefined, undefined, opened.key)
+      setTaskDraft(null)
+    }
+    catch (reason) {
+      setError(String(reason))
+    }
+    finally {
+      setDispatching(false)
+    }
+  }
 
   const conductorPath = document?.conductorPath
   const conductorView = viewForSession(store.views, conductorPath)
@@ -760,6 +803,21 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
             </ReactFlow>
           )}
 
+      {selectedNode && !connectMode
+        ? (
+            <form className={styles.dispatch} onSubmit={event => void dispatchTask(event)}>
+              <input
+                value={draftText}
+                onChange={event => setTaskDraft({ id: selectedNode.id, text: event.target.value })}
+                placeholder={selectedNode.sessionPath ? `发送任务给「${selectedNode.name}」…` : `发送任务给「${selectedNode.name}」（将新建会话）…`}
+                maxLength={4000}
+                aria-label={`发送任务给${selectedNode.name}`}
+              />
+              <button type="submit" className={styles.send} disabled={dispatching || !draftText.trim()}>{dispatching ? '发送中…' : '发送'}</button>
+            </form>
+          )
+        : null}
+
       {connectMode && sourceNode
         ? (
             <div className={styles.mode}>
@@ -834,6 +892,25 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
 
 function sessionLabel(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
+}
+
+const NODE_WIDTH = 288
+const NODE_HEIGHT = 156
+const NODE_MARGIN = 32
+
+function rectsOverlap(a: { x: number, y: number, w: number, h: number }, b: { x: number, y: number, w: number, h: number }) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+}
+
+function findFreeNodePosition(existing: FlowNode[], center: { x: number, y: number }) {
+  const bounds = existing.map(node => ({ x: node.position.x, y: node.position.y, w: NODE_WIDTH + NODE_MARGIN, h: NODE_HEIGHT + NODE_MARGIN }))
+  for (let step = 0; step < 40; step++) {
+    const candidate = { x: center.x + step * 48, y: center.y + step * 32 }
+    const rect = { x: candidate.x, y: candidate.y, w: NODE_WIDTH + NODE_MARGIN, h: NODE_HEIGHT + NODE_MARGIN }
+    if (!bounds.some(other => rectsOverlap(rect, other)))
+      return candidate
+  }
+  return center
 }
 
 function viewForSession(views: Record<string, SessionView>, path: string | undefined) {
