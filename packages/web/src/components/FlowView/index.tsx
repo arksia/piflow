@@ -702,14 +702,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           <span title={projectPath}>{shortenPath(projectPath)}</span>
         </div>
         {saving ? <span className={styles.saving}><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
-        {selection.nodes.length || selection.edges.length ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button> : null}
-        {selection.nodes.length === 1 && !connectMode
-          ? (
-              <>
-                <button className={styles.connect} onClick={startConnect}>连接</button>
-                <button className={styles.connect} onClick={openBrief}>Brief</button>
-              </>
-            )
+        {(selection.nodes.length > 1 || selection.edges.length) && !connectMode
+          ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button>
           : null}
         {connectMode
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
@@ -808,62 +802,76 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
             </aside>
           )
         : null}
-      {!document
-        ? <div className={styles.loading}>正在读取项目 Flow…</div>
-        : (
-            <ReactFlow<FlowCanvasNode, Edge>
-              nodes={visibleNodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              defaultViewport={document.viewport}
-              minZoom={0.2}
-              maxZoom={2}
-              zoomOnScroll={false}
-              panOnScroll
-              fitView={document.nodes.length > 0 && document.viewport.zoom === 1 && document.viewport.x === 0 && document.viewport.y === 0}
-              onInit={setInstance}
-              onNodesChange={onNodesChange}
-              onNodeClick={onNodeClick}
-              onNodeDragStop={onNodeDragStop}
-              onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
-              onPaneClick={onPaneClick}
-              onNodesDelete={onNodesDelete}
-              onEdgesChange={onEdgesChange}
-              onEdgesDelete={onEdgesDelete}
-              onMove={onMove}
-              onMoveEnd={onMoveEnd}
-              onSelectionChange={onSelectionChange}
-              deleteKeyCode={['Backspace', 'Delete']}
-              colorMode="dark"
-            >
-              <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#292929" />
-              <Controls showInteractive={false} />
-              <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
-            </ReactFlow>
-          )}
+      <div className={styles.canvas}>
+        {!document
+          ? <div className={styles.loading}>正在读取项目 Flow…</div>
+          : (
+              <ReactFlow<FlowCanvasNode, Edge>
+                nodes={visibleNodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                defaultViewport={document.viewport}
+                minZoom={0.2}
+                maxZoom={2}
+                zoomOnScroll={false}
+                panOnScroll
+                fitView={document.nodes.length > 0 && document.viewport.zoom === 1 && document.viewport.x === 0 && document.viewport.y === 0}
+                onInit={setInstance}
+                onNodesChange={onNodesChange}
+                onNodeClick={onNodeClick}
+                onNodeDragStop={onNodeDragStop}
+                onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
+                onPaneClick={onPaneClick}
+                onNodesDelete={onNodesDelete}
+                onEdgesChange={onEdgesChange}
+                onEdgesDelete={onEdgesDelete}
+                onMove={onMove}
+                onMoveEnd={onMoveEnd}
+                onSelectionChange={onSelectionChange}
+                deleteKeyCode={['Backspace', 'Delete']}
+                colorMode="dark"
+              >
+                <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#292929" />
+                <Controls showInteractive={false} />
+                <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
+              </ReactFlow>
+            )}
 
-      {selectedCanvasNode && !connectMode
-        ? (
-            <NodeComposer
-              node={selectedCanvasNode}
-              viewport={viewport}
-              view={selectedNodeView}
-              text={composerText}
-              focusVersion={composerFocusVersion}
-              onTextChange={setComposerText}
-            />
-          )
-        : null}
+        {selectedCanvasNode && !connectMode
+          ? (
+              <NodeToolbar
+                node={selectedCanvasNode}
+                viewport={viewport}
+                onConnect={startConnect}
+                onBrief={openBrief}
+                onRemove={() => deleteSelection()}
+              />
+            )
+          : null}
 
-      {connectMode && sourceNode
-        ? (
-            <div className={styles.mode}>
-              已选择“
-              {sourceNode.name}
-              ”，点击另一个会话建立关系，或按 Esc / 取消连接退出。
-            </div>
-          )
-        : null}
+        {selectedCanvasNode && !connectMode
+          ? (
+              <NodeComposer
+                node={selectedCanvasNode}
+                viewport={viewport}
+                view={selectedNodeView}
+                text={composerText}
+                focusVersion={composerFocusVersion}
+                onTextChange={setComposerText}
+              />
+            )
+          : null}
+
+        {connectMode && sourceNode
+          ? (
+              <div className={styles.mode}>
+                已选择“
+                {sourceNode.name}
+                ”，点击另一个会话建立关系，或按 Esc / 取消连接退出。
+              </div>
+            )
+          : null}
+      </div>
     </div>
   )
 }
@@ -882,7 +890,7 @@ function NodeComposer({ node, viewport, view, text, focusVersion, onTextChange }
   const screenX = node.position.x * viewport.zoom + viewport.x
   const screenY = node.position.y * viewport.zoom + viewport.y
   const left = screenX + (nodeWidth * viewport.zoom) / 2 - composerWidth / 2
-  const top = screenY + nodeHeight * viewport.zoom + 16
+  const top = screenY + nodeHeight * viewport.zoom + 28
   return (
     <div
       className={styles.nodeComposer}
@@ -902,6 +910,32 @@ function NodeComposer({ node, viewport, view, text, focusVersion, onTextChange }
             />
           )
         : <div className={styles.nodeComposerLoading}>正在打开节点会话…</div>}
+    </div>
+  )
+}
+
+function NodeToolbar({ node, viewport, onConnect, onBrief, onRemove }: {
+  node: FlowCanvasNode
+  viewport: Viewport
+  onConnect: () => void
+  onBrief: () => void
+  onRemove: () => void
+}) {
+  const nodeWidth = node.measured?.width ?? NODE_WIDTH
+  const screenX = node.position.x * viewport.zoom + viewport.x
+  const screenY = node.position.y * viewport.zoom + viewport.y
+  const left = screenX + (nodeWidth * viewport.zoom) / 2
+  const top = screenY - 12
+  return (
+    <div
+      className={styles.nodeToolbar}
+      style={{ left, top }}
+      role="toolbar"
+      aria-label="节点操作"
+    >
+      <button type="button" className={styles.connect} onClick={onConnect}>连接</button>
+      <button type="button" className={styles.connect} onClick={onBrief}>Brief</button>
+      <button type="button" className={styles.delete} onClick={onRemove}>移出画布</button>
     </div>
   )
 }

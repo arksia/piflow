@@ -7,6 +7,14 @@
   background: var(--c-canvas);
 }
 
+.canvas {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .bar {
   z-index: 4;
   display: flex;
@@ -172,6 +180,19 @@
   position: absolute;
   z-index: 5;
   filter: drop-shadow(0 8px 24px rgb(0 0 0 / 28%));
+}
+
+.node-toolbar {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  transform: translate(-50%, -100%);
+  padding: 4px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  background: var(--c-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
 
 .node-composer-loading {
