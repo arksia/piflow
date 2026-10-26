@@ -238,6 +238,35 @@
   color: var(--c-faint);
 }
 
+.bar[data-floating='true'] {
+  margin-top: 0;
+  margin-right: 0;
+  padding: 0;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.bar[data-floating='true'] .column {
+  width: 100%;
+  margin: 0;
+}
+
+.bar[data-floating='true'] .box {
+  border-radius: 999px;
+}
+
+.bar[data-floating='true'] .box::before {
+  display: none;
+}
+
+.bar[data-floating='true'] .box.wide {
+  border-radius: 999px;
+}
+
+.bar[data-floating='true'] .composer textarea::placeholder {
+  white-space: nowrap;
+}
+
 .images {
   display: flex;
   gap: 6px;

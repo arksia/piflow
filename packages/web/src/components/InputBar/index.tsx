@@ -23,12 +23,14 @@ interface Props {
   focusVersion: number
   onTextChange: (text: string) => void
   draftKey: string
+  hideMeta?: boolean
+  floating?: boolean
 }
 
 const RING_R = 6
 const RING_C = 2 * Math.PI * RING_R
 
-export default function InputBar({ view, text, focusVersion, onTextChange, draftKey }: Props) {
+export default function InputBar({ view, text, focusVersion, onTextChange, draftKey, hideMeta = false, floating = false }: Props) {
   const store = useStore()
   const [modelOpen, setModelOpen] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
@@ -458,7 +460,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     menuItems.push({ key: diagnostic.message, label: diagnostic.message, disabled: true })
 
   return (
-    <div ref={barRef} className={styles.bar}>
+    <div ref={barRef} className={styles.bar} data-floating={floating}>
       <div className={styles.column} data-composer="">
         {operationError ? <div className={styles.error} role="alert">{operationError}</div> : null}
         {!store.connected
@@ -607,35 +609,39 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
           </div>
         </div>
 
-        <div className={styles.meta}>
-          {view?.cwd ? <BranchNavigator cwd={view.cwd} /> : null}
-          {view?.context
-            ? (
-                <div className={styles.meter}>
-                  <button type="button" className={`${styles.ring} ${contextLevel}`} aria-label={`上下文已用 ${contextPercent}%`} aria-describedby="composer-usage">
-                    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                      <circle className={styles.track} cx="8" cy="8" r={RING_R} />
-                      {contextPercent > 0
-                        ? (
-                            <circle
-                              className={styles.value}
-                              cx="8"
-                              cy="8"
-                              r={RING_R}
-                              strokeDasharray={`${(contextPercent / 100) * RING_C} ${RING_C}`}
-                              transform="rotate(-90 8 8)"
-                            />
-                          )
-                        : null}
-                    </svg>
-                  </button>
-                  <div className={styles.meterTip} id="composer-usage" role="tooltip">
-                    {`已用 ${contextPercent}% · ${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}`}
-                  </div>
-                </div>
-              )
-            : null}
-        </div>
+        {hideMeta
+          ? null
+          : (
+              <div className={styles.meta}>
+                {view?.cwd ? <BranchNavigator cwd={view.cwd} /> : null}
+                {view?.context
+                  ? (
+                      <div className={styles.meter}>
+                        <button type="button" className={`${styles.ring} ${contextLevel}`} aria-label={`上下文已用 ${contextPercent}%`} aria-describedby="composer-usage">
+                          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                            <circle className={styles.track} cx="8" cy="8" r={RING_R} />
+                            {contextPercent > 0
+                              ? (
+                                  <circle
+                                    className={styles.value}
+                                    cx="8"
+                                    cy="8"
+                                    r={RING_R}
+                                    strokeDasharray={`${(contextPercent / 100) * RING_C} ${RING_C}`}
+                                    transform="rotate(-90 8 8)"
+                                  />
+                                )
+                              : null}
+                          </svg>
+                        </button>
+                        <div className={styles.meterTip} id="composer-usage" role="tooltip">
+                          {`已用 ${contextPercent}% · ${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}`}
+                        </div>
+                      </div>
+                    )
+                  : null}
+              </div>
+            )}
       </div>
     </div>
   )

@@ -30,16 +30,37 @@ import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../.
 import { activeDeliveryEdges, sameDeliveryState } from '../../flow/edges'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
-import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust, sendPrompt } from '../../session/actions'
+import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
+import { readDraft } from '../../session/persistence'
 import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
 import ChatView from '../ChatView'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
+import InputBar from '../InputBar'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
 const nodeTypes = { session: FlowSessionNode }
+
+const NODE_WIDTH = 288
+const NODE_HEIGHT = 156
+const NODE_MARGIN = 32
+
+function rectsOverlap(a: { x: number, y: number, w: number, h: number }, b: { x: number, y: number, w: number, h: number }) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+}
+
+function findFreeNodePosition(existing: FlowNode[], center: { x: number, y: number }) {
+  const bounds = existing.map(node => ({ x: node.position.x, y: node.position.y, w: NODE_WIDTH + NODE_MARGIN, h: NODE_HEIGHT + NODE_MARGIN }))
+  for (let step = 0; step < 40; step++) {
+    const candidate = { x: center.x + step * 48, y: center.y + step * 32 }
+    const rect = { x: candidate.x, y: candidate.y, w: NODE_WIDTH + NODE_MARGIN, h: NODE_HEIGHT + NODE_MARGIN }
+    if (!bounds.some(other => rectsOverlap(rect, other)))
+      return candidate
+  }
+  return center
+}
 
 interface FlowViewProps {
   active?: boolean
@@ -78,10 +99,11 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const seenConductorRef = useRef(0)
   const openingRef = useRef(new Set<string>())
   const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<void>>(async () => {})
-  // Keep the task draft keyed by node so switching selection resets the input.
-  const [taskDraft, setTaskDraft] = useState<{ id: string, text: string } | null>(null)
-  const [dispatching, setDispatching] = useState(false)
   const [conductorOpen, setConductorOpen] = useState(false)
+  const [composerText, setComposerText] = useState('')
+  const [composerFocusVersion, setComposerFocusVersion] = useState(0)
+  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 })
+  const openingNodeRef = useRef(new Set<string>())
   const [panelOpen, setPanelOpen] = useState(false)
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('')
@@ -173,6 +195,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           return
         setDocument(resolved)
         setNodes(resolved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+        setViewport(resolved.viewport)
         if (instance)
           void instance.setViewport(resolved.viewport)
       })
@@ -182,7 +205,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     }
   }, [focusSession, instance, projectPath, seedSessionCwd, seedSessionGoal, seedSessionName, seedSessionPath])
 
-  // Press Escape to cancel peer-connect mode.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape')
@@ -439,7 +461,15 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     const selectedPath = selectedNodes[0]?.data.sessionPath
     if (selectedPath && next.nodes.length === 1)
       clearSessionUnread(selectedPath)
+    const nextSelectedId = next.nodes.length === 1 ? next.nodes[0] : undefined
+    setComposerText(nextSelectedId ? readDraft(`flow-node:${nextSelectedId}`).text : '')
+    if (nextSelectedId)
+      setComposerFocusVersion(v => v + 1)
   }, [connectMode])
+
+  function onMove(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
+    setViewport(viewport)
+  }
 
   function onMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
     const current = documentRef.current
@@ -589,32 +619,40 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
   const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
   const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
-  const draftText = taskDraft && taskDraft.id === selectedNodeId ? taskDraft.text : ''
+  const selectedCanvasNode = selectedNodeId ? nodes.find(node => node.id === selectedNodeId) : undefined
+  const selectedNodeView = selectedNode ? (viewForSession(store.views, selectedNode.sessionPath) ?? null) : null
 
-  // Send a task straight to the selected node's pi session without leaving the canvas.
-  async function dispatchTask(event: React.FormEvent) {
-    event.preventDefault()
-    const text = draftText.trim()
-    const id = selectedNodeId
-    if (!text || !id || dispatching)
+  // Open the node's binding session in the background as soon as it is selected
+  // so the composer has a live view (queue, model, abort, steer behavior).
+  useEffect(() => {
+    if (!selectedNodeId)
       return
-    setDispatching(true)
-    setError(null)
-    try {
-      const path = await ensureNodeSession(id)
-      if (!path)
-        return
-      const opened = await openBackgroundSession(path)
-      await sendPrompt(text, undefined, undefined, opened.key)
-      setTaskDraft(null)
+    if (openingNodeRef.current.has(selectedNodeId))
+      return
+    const id = selectedNodeId
+    let cancelled = false
+    async function run() {
+      openingNodeRef.current.add(id)
+      try {
+        const path = await ensureNodeSession(id)
+        if (!path || cancelled)
+          return
+        const opened = await openBackgroundSession(path)
+        await requestModels(opened.key)
+      }
+      catch (reason) {
+        if (!cancelled)
+          setError(String(reason))
+      }
+      finally {
+        openingNodeRef.current.delete(id)
+      }
     }
-    catch (reason) {
-      setError(String(reason))
+    run()
+    return () => {
+      cancelled = true
     }
-    finally {
-      setDispatching(false)
-    }
-  }
+  }, [selectedNodeId, ensureNodeSession])
 
   const conductorPath = document?.conductorPath
   const conductorView = viewForSession(store.views, conductorPath)
@@ -792,6 +830,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
               onNodesDelete={onNodesDelete}
               onEdgesChange={onEdgesChange}
               onEdgesDelete={onEdgesDelete}
+              onMove={onMove}
               onMoveEnd={onMoveEnd}
               onSelectionChange={onSelectionChange}
               deleteKeyCode={['Backspace', 'Delete']}
@@ -803,18 +842,16 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
             </ReactFlow>
           )}
 
-      {selectedNode && !connectMode
+      {selectedCanvasNode && !connectMode
         ? (
-            <form className={styles.dispatch} onSubmit={event => void dispatchTask(event)}>
-              <input
-                value={draftText}
-                onChange={event => setTaskDraft({ id: selectedNode.id, text: event.target.value })}
-                placeholder={selectedNode.sessionPath ? `发送任务给「${selectedNode.name}」…` : `发送任务给「${selectedNode.name}」（将新建会话）…`}
-                maxLength={4000}
-                aria-label={`发送任务给${selectedNode.name}`}
-              />
-              <button type="submit" className={styles.send} disabled={dispatching || !draftText.trim()}>{dispatching ? '发送中…' : '发送'}</button>
-            </form>
+            <NodeComposer
+              node={selectedCanvasNode}
+              viewport={viewport}
+              view={selectedNodeView}
+              text={composerText}
+              focusVersion={composerFocusVersion}
+              onTextChange={setComposerText}
+            />
           )
         : null}
 
@@ -827,6 +864,44 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
             </div>
           )
         : null}
+    </div>
+  )
+}
+
+function NodeComposer({ node, viewport, view, text, focusVersion, onTextChange }: {
+  node: FlowCanvasNode
+  viewport: Viewport
+  view: SessionView | null
+  text: string
+  focusVersion: number
+  onTextChange: (text: string) => void
+}) {
+  const nodeWidth = node.measured?.width ?? NODE_WIDTH
+  const nodeHeight = node.measured?.height ?? NODE_HEIGHT
+  const composerWidth = 420
+  const screenX = node.position.x * viewport.zoom + viewport.x
+  const screenY = node.position.y * viewport.zoom + viewport.y
+  const left = screenX + (nodeWidth * viewport.zoom) / 2 - composerWidth / 2
+  const top = screenY + nodeHeight * viewport.zoom + 16
+  return (
+    <div
+      className={styles.nodeComposer}
+      style={{ left, top, width: composerWidth }}
+      data-composer=""
+    >
+      {view
+        ? (
+            <InputBar
+              view={view}
+              text={text}
+              focusVersion={focusVersion}
+              onTextChange={onTextChange}
+              draftKey={`flow-node:${node.id}`}
+              hideMeta
+              floating
+            />
+          )
+        : <div className={styles.nodeComposerLoading}>正在打开节点会话…</div>}
     </div>
   )
 }
@@ -892,25 +967,6 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
 
 function sessionLabel(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
-}
-
-const NODE_WIDTH = 288
-const NODE_HEIGHT = 156
-const NODE_MARGIN = 32
-
-function rectsOverlap(a: { x: number, y: number, w: number, h: number }, b: { x: number, y: number, w: number, h: number }) {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
-}
-
-function findFreeNodePosition(existing: FlowNode[], center: { x: number, y: number }) {
-  const bounds = existing.map(node => ({ x: node.position.x, y: node.position.y, w: NODE_WIDTH + NODE_MARGIN, h: NODE_HEIGHT + NODE_MARGIN }))
-  for (let step = 0; step < 40; step++) {
-    const candidate = { x: center.x + step * 48, y: center.y + step * 32 }
-    const rect = { x: candidate.x, y: candidate.y, w: NODE_WIDTH + NODE_MARGIN, h: NODE_HEIGHT + NODE_MARGIN }
-    if (!bounds.some(other => rectsOverlap(rect, other)))
-      return candidate
-  }
-  return center
 }
 
 function viewForSession(views: Record<string, SessionView>, path: string | undefined) {
