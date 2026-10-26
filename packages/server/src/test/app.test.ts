@@ -71,4 +71,18 @@ describe('fastify app', () => {
     assert.equal(response.json().error, 'not found')
     await app.close()
   })
+
+  it('accepts long Windows session keys in action paths', async () => {
+    const app = await testApp()
+    const key = 'C:\\Users\\Ark\\.pi\\agent\\sessions\\--D--Projects-JavaScript-piflow--\\2026-10-26T13-03-06-794Z_01a1784e-b62a-728a-978e-8b34ee8282cc.jsonl'
+    const response = await app.inject({
+      headers: { 'content-type': 'application/json', 'cookie': `${AUTH_COOKIE}=${token}` },
+      method: 'POST',
+      payload: { text: 'hi' },
+      url: `/api/sessions/${encodeURIComponent(key)}/prompt`,
+    })
+    assert.equal(response.statusCode, 404)
+    assert.equal(response.json().error, `session not open: ${key}`)
+    await app.close()
+  })
 })

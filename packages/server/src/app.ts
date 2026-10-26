@@ -40,6 +40,8 @@ export async function build(options: CreateAppOptions) {
   const app = Fastify({
     logger: options.logger ?? false,
     routerOptions: {
+      // Windows session keys are absolute paths that easily exceed the 100-char default.
+      maxParamLength: 500,
       querystringParser: search => Object.fromEntries(new URLSearchParams(search)),
     },
   })
