@@ -28,6 +28,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { acceptConductor, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
 import { changedDeliveryActivities, sameDeliveryState } from '../../flow/edges'
+import { routeGraphEdges } from '../../flow/routes'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
 import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
@@ -347,8 +348,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       return
     // Edges are derived from user-owned topology and transient message activity.
     // eslint-disable-next-line react/set-state-in-effect
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion, selection.nodes[0], nodes))
-  }, [document, activities, selection.edges, selection.nodes, reducedMotion, nodes])
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion, selection.nodes[0], nodes, instance))
+  }, [document, activities, selection.edges, selection.nodes, reducedMotion, nodes, instance])
 
   async function persist(next: FlowDocument, commitGraph = false) {
     const previous = documentRef.current
@@ -966,7 +967,19 @@ function toCanvasEdges(
   reducedMotion: boolean,
   selectedNodeId?: string,
   nodes: FlowCanvasNode[] = [],
+  instance: ReactFlowInstance<FlowCanvasNode, Edge> | null = null,
 ): Edge[] {
+  const routes = routeGraphEdges(edges, nodes.map((node) => {
+    const internal = instance?.getInternalNode(node.id)
+    const handle = internal?.internals.handleBounds?.source?.[0]
+    const position = internal?.internals.positionAbsolute ?? node.position
+    return {
+      id: node.id,
+      x: position.x + (handle ? handle.x + handle.width / 2 : (node.measured?.width ?? NODE_WIDTH) / 2),
+      y: position.y + (handle ? handle.y + handle.height / 2 : (node.measured?.height ?? NODE_HEIGHT) / 2),
+      size: 51,
+    }
+  }))
   return edges.map((edge) => {
     const selected = selectedEdgeIds.has(edge.id)
     const adjacent = !selectedNodeId || edge.source === selectedNodeId || edge.target === selectedNodeId
@@ -979,14 +992,7 @@ function toCanvasEdges(
         activities: activities.filter(activity => activity.edgeId === edge.id),
         reducedMotion,
         dimmed: !adjacent,
-        obstacles: nodes
-          .filter(node => node.id !== edge.source && node.id !== edge.target)
-          .map(node => ({
-            x: node.position.x,
-            y: node.position.y,
-            width: node.measured?.width ?? NODE_WIDTH,
-            height: node.measured?.height ?? NODE_HEIGHT,
-          })),
+        route: routes.get(edge.id),
       },
       selected,
     }

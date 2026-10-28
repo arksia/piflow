@@ -1,24 +1,25 @@
 import type { Edge, EdgeProps } from '@xyflow/react'
-import type { FlowEdgeActivity, FlowRouteObstacle } from '../../flow/edges'
+import type { FlowEdgeActivity } from '../../flow/edges'
+import type { FlowRoutePoint } from '../../flow/routes'
 import { BaseEdge, EdgeLabelRenderer } from '@xyflow/react'
-import { roundedOrthogonalPath, routeOrthogonalPoints } from '../../flow/edges'
+import { roundedOrthogonalPath } from '../../flow/routes'
 import styles from './styles.module.css'
 
 export interface FlowMessageEdgeData extends Record<string, unknown> {
   activities: FlowEdgeActivity[]
   reducedMotion: boolean
   dimmed: boolean
-  obstacles: FlowRouteObstacle[]
+  route?: FlowRoutePoint[]
 }
 
 export type FlowMessageEdgeType = Edge<FlowMessageEdgeData, 'message'>
 
 export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX, targetY, data, selected }: EdgeProps<FlowMessageEdgeType>) {
-  const points = routeOrthogonalPoints(
+  const points = data?.route ?? [
     { x: sourceX, y: sourceY },
+    { x: targetX, y: sourceY },
     { x: targetX, y: targetY },
-    data?.obstacles ?? [],
-  )
+  ]
   const path = roundedOrthogonalPath(points)
   const lengths = points.slice(1).map((point, index) => Math.abs(point.x - points[index]!.x) + Math.abs(point.y - points[index]!.y))
   let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2
@@ -47,6 +48,8 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
         style={{
           stroke: selected ? 'var(--c-mid)' : 'var(--c-muted)',
           strokeWidth: 1.5,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
           opacity: data?.dimmed ? 0.14 : 1,
           transition: 'stroke 140ms ease-out, opacity 140ms ease-out',
         }}
