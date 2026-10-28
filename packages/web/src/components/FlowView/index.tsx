@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite } from '@piflow/protocol'
+import type { FlowDeliveryStatus, FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite, SessionStatusRecord } from '@piflow/protocol'
 import type {
   Edge,
   EdgeChange,
@@ -10,6 +10,7 @@ import type {
   ReactFlowInstance,
   Viewport,
 } from '@xyflow/react'
+import type { FlowEdgeActivity } from '../../flow/edges'
 import type { SessionView } from '../../session/state'
 import type { FlowCanvasNode } from '../FlowSessionNode'
 import { conductorDraftReady, parseConductorDraft } from '@piflow/protocol'
@@ -19,32 +20,31 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MarkerType,
   MiniMap,
   ReactFlow,
 } from '@xyflow/react'
-import { ArrowRight, CircleAlert, PanelLeft } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { acceptConductor, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
-import { activeDeliveryEdges, sameDeliveryState } from '../../flow/edges'
+import { changedDeliveryActivities, sameDeliveryState } from '../../flow/edges'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
 import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
-import { readDraft } from '../../session/persistence'
 import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
 import ChatView from '../ChatView'
+import FlowMessageEdge from '../FlowMessageEdge'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
-import InputBar from '../InputBar'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
 const nodeTypes = { session: FlowSessionNode }
+const edgeTypes = { message: FlowMessageEdge }
 
-const NODE_WIDTH = 288
-const NODE_HEIGHT = 156
+const NODE_WIDTH = 172
+const NODE_HEIGHT = 128
 const NODE_MARGIN = 32
 
 function rectsOverlap(a: { x: number, y: number, w: number, h: number }, b: { x: number, y: number, w: number, h: number }) {
@@ -89,7 +89,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [edges, setEdges] = useState<Edge[]>([])
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
-  const activeEdges = useMemo(() => activeDeliveryEdges(document?.messages ?? []), [document])
+  const [activities, setActivities] = useState<FlowEdgeActivity[]>([])
+  const previousMessagesRef = useRef<FlowDocument['messages'] | null>(null)
+  const messageProjectRef = useRef<string | null>(null)
+  const activityTimersRef = useRef(new Map<string, number>())
   const saveRevRef = useRef(0)
   const pendingSaveRef = useRef<FlowDocument | null>(null)
   const graphChangedRef = useRef(false)
@@ -100,9 +103,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const openingRef = useRef(new Set<string>())
   const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<void>>(async () => {})
   const [conductorOpen, setConductorOpen] = useState(false)
-  const [composerText, setComposerText] = useState('')
-  const [composerFocusVersion, setComposerFocusVersion] = useState(0)
-  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 })
   const openingNodeRef = useRef(new Set<string>())
   const [panelOpen, setPanelOpen] = useState(false)
   const [name, setName] = useState('')
@@ -195,7 +195,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           return
         setDocument(resolved)
         setNodes(resolved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
-        setViewport(resolved.viewport)
         if (instance)
           void instance.setViewport(resolved.viewport)
       })
@@ -207,12 +206,16 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape')
+      if (event.key !== 'Escape' || (event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable="true"]')))
+        return
+      if (connectMode)
         setConnectMode(null)
+      else if (selection.nodes.length === 1)
+        closeRuntimePanel()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [connectMode, selection.nodes])
 
   // Honor prefers-reduced-motion for animated message arrows.
   useEffect(() => {
@@ -297,6 +300,36 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   }, [active])
 
   useEffect(() => {
+    if (!document)
+      return
+    if (messageProjectRef.current !== document.projectPath) {
+      messageProjectRef.current = document.projectPath
+      previousMessagesRef.current = document.messages
+      return
+    }
+    const previous = previousMessagesRef.current
+    previousMessagesRef.current = document.messages
+    if (!previous)
+      return
+    const next = changedDeliveryActivities(previous, document.messages)
+    for (const [index, activity] of next.entries()) {
+      const key = `${activity.messageId}:${activity.kind}:${Date.now()}:${index}`
+      // eslint-disable-next-line react/set-state-in-effect -- this projects a transient event observed from a completed poll.
+      setActivities(current => [...current, activity])
+      const timer = window.setTimeout(() => {
+        setActivities(current => current.filter(item => item !== activity))
+        activityTimersRef.current.delete(key)
+      }, 1200 + index * 120)
+      activityTimersRef.current.set(key, timer)
+    }
+  }, [document])
+
+  useEffect(() => () => {
+    for (const timer of activityTimersRef.current.values())
+      window.clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
     if (!active || !instance)
       return
     const target = nodes.find(node => node.data.sessionPath === activeSessionPath)
@@ -308,14 +341,14 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     // eslint-disable-next-line react/exhaustive-deps -- reading the latest session here would refit on every edit
   }, [active, instance, nodes.length])
 
-  // Re-render edges when topology, active message events, selection, or motion preference change.
+  // Re-render authored edges when per-message activity, selection, or motion preference changes.
   useEffect(() => {
     if (!document)
       return
-    // Edges are derived from document topology, active messages, selection, and motion preference.
+    // Edges are derived from user-owned topology and transient message activity.
     // eslint-disable-next-line react/set-state-in-effect
-    setEdges(toCanvasEdges(document.edges, activeEdges, new Set(selection.edges), reducedMotion))
-  }, [document, activeEdges, selection.edges, reducedMotion])
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion, selection.nodes[0], nodes))
+  }, [document, activities, selection.edges, selection.nodes, reducedMotion, nodes])
 
   async function persist(next: FlowDocument, commitGraph = false) {
     const previous = documentRef.current
@@ -416,6 +449,11 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     setConnectMode(null)
   }
 
+  function closeRuntimePanel() {
+    setSelection({ nodes: [], edges: [] })
+    setNodes(current => current.map(node => node.selected ? { ...node, selected: false } : node))
+  }
+
   function onNodeDragStop(_event: MouseEvent | TouchEvent, node: FlowCanvasNode) {
     const current = documentRef.current
     if (!current)
@@ -461,15 +499,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     const selectedPath = selectedNodes[0]?.data.sessionPath
     if (selectedPath && next.nodes.length === 1)
       clearSessionUnread(selectedPath)
-    const nextSelectedId = next.nodes.length === 1 ? next.nodes[0] : undefined
-    setComposerText(nextSelectedId ? readDraft(`flow-node:${nextSelectedId}`).text : '')
-    if (nextSelectedId)
-      setComposerFocusVersion(v => v + 1)
   }, [connectMode])
-
-  function onMove(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
-    setViewport(viewport)
-  }
 
   function onMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
     const current = documentRef.current
@@ -619,8 +649,13 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
   const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
   const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
-  const selectedCanvasNode = selectedNodeId ? nodes.find(node => node.id === selectedNodeId) : undefined
   const selectedNodeView = selectedNode ? (viewForSession(store.views, selectedNode.sessionPath) ?? null) : null
+  const selectedNeighbors = selectedNodeId
+    ? new Set(document?.edges.flatMap(edge => edge.source === selectedNodeId ? [edge.target] : edge.target === selectedNodeId ? [edge.source] : []) ?? [])
+    : null
+  const recentMessages = selectedNodeId
+    ? (document?.messages.filter(message => message.source === selectedNodeId || message.target === selectedNodeId).slice(-5).reverse() ?? [])
+    : []
 
   // Open the node's binding session in the background as soon as it is selected
   // so the composer has a live view (queue, model, abort, steer behavior).
@@ -665,11 +700,14 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     ...node,
     data: {
       ...node.data,
+      modelName: viewForSession(store.views, node.data.sessionPath)?.model?.id,
       status: sessionStatusFor(node.data.sessionPath, store.statuses),
       needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
       unread: store.unreadSessions.has(node.data.sessionPath),
       isCurrent: node.data.sessionPath === activeSessionPath,
       isAnchor: connectMode?.sourceId === node.id,
+      isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
+      isDimmed: Boolean(selectedNodeId && node.id !== selectedNodeId && !selectedNeighbors?.has(node.id)),
     },
   }))
   const attentionItems = flowAttentionItems(document?.nodes ?? [], store.statuses)
@@ -810,6 +848,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 nodes={visibleNodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 defaultViewport={document.viewport}
                 minZoom={0.2}
                 maxZoom={2}
@@ -825,7 +864,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 onNodesDelete={onNodesDelete}
                 onEdgesChange={onEdgesChange}
                 onEdgesDelete={onEdgesDelete}
-                onMove={onMove}
                 onMoveEnd={onMoveEnd}
                 onSelectionChange={onSelectionChange}
                 deleteKeyCode={['Backspace', 'Delete']}
@@ -837,28 +875,64 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
               </ReactFlow>
             )}
 
-        {selectedCanvasNode && !connectMode
+        {selectedNode && !connectMode && !briefOpen
           ? (
-              <NodeToolbar
-                node={selectedCanvasNode}
-                viewport={viewport}
-                onConnect={startConnect}
-                onBrief={openBrief}
-                onRemove={() => deleteSelection()}
-              />
-            )
-          : null}
-
-        {selectedCanvasNode && !connectMode
-          ? (
-              <NodeComposer
-                node={selectedCanvasNode}
-                viewport={viewport}
-                view={selectedNodeView}
-                text={composerText}
-                focusVersion={composerFocusVersion}
-                onTextChange={setComposerText}
-              />
+              <aside className={styles.runtimePanel} aria-label={`会话运行面板：${selectedNode.name}`}>
+                <header className={styles.runtimeHeader}>
+                  <div className={styles.runtimeIdentity}>
+                    <strong title={selectedNode.name}>{selectedNode.name}</strong>
+                    <span className={`${styles.runtimeStatus} ${styles[`runtime${panelStatusKind(selectedNodeView, selectedNode.sessionPath, store.statuses)}`]}`}>
+                      {panelStatusLabel(selectedNodeView, selectedNode.sessionPath, store.statuses)}
+                    </span>
+                  </div>
+                  <div className={styles.runtimeActions}>
+                    <button type="button" title="在完整聊天视图中打开" onClick={() => void focusSession(selectedNode.id)}>
+                      <ExternalLink size={14} aria-hidden="true" />
+                      <span>打开聊天</span>
+                    </button>
+                    <IconButton label="关闭运行面板" onClick={closeRuntimePanel}>
+                      <X />
+                    </IconButton>
+                  </div>
+                </header>
+                <div className={styles.runtimeSummary}>
+                  <p>{selectedNode.goal || '尚未设置目标'}</p>
+                  {selectedNode.brief?.trim() ? <p className={styles.runtimeBrief}>{selectedNode.brief.trim()}</p> : null}
+                </div>
+                <div className={styles.runtimeToolbar} role="toolbar" aria-label="节点操作">
+                  <button type="button" className={styles.runtimeTool} onClick={startConnect}>
+                    <Link2 size={14} aria-hidden="true" />
+                    连接
+                  </button>
+                  <button type="button" className={styles.runtimeTool} onClick={openBrief}>
+                    <FileText size={14} aria-hidden="true" />
+                    Brief
+                  </button>
+                  <button type="button" className={`${styles.runtimeTool} ${styles.runtimeDelete}`} onClick={deleteSelection}>
+                    <Trash2 size={14} aria-hidden="true" />
+                    移出画布
+                  </button>
+                </div>
+                {recentMessages.length
+                  ? (
+                      <section className={styles.deliveryList} aria-label="最近的跨会话消息">
+                        <h3>最近消息</h3>
+                        {recentMessages.map(message => (
+                          <article key={message.id} className={styles.delivery}>
+                            <span className={`${styles.deliveryState} ${styles[`delivery${message.status}`]}`}>{deliveryStatusLabel(message.status)}</span>
+                            <p>{message.preview || message.body}</p>
+                            {message.reply ? <p className={styles.deliveryReply}>{message.reply}</p> : null}
+                          </article>
+                        ))}
+                      </section>
+                    )
+                  : null}
+                <div className={styles.runtimeChat}>
+                  {selectedNodeView
+                    ? <ChatView sessionKey={selectedNodeView.key} />
+                    : <p className={styles.runtimeEmpty}>正在打开会话运行状态…</p>}
+                </div>
+              </aside>
             )
           : null}
 
@@ -876,70 +950,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   )
 }
 
-function NodeComposer({ node, viewport, view, text, focusVersion, onTextChange }: {
-  node: FlowCanvasNode
-  viewport: Viewport
-  view: SessionView | null
-  text: string
-  focusVersion: number
-  onTextChange: (text: string) => void
-}) {
-  const nodeWidth = node.measured?.width ?? NODE_WIDTH
-  const nodeHeight = node.measured?.height ?? NODE_HEIGHT
-  const composerWidth = 420
-  const screenX = node.position.x * viewport.zoom + viewport.x
-  const screenY = node.position.y * viewport.zoom + viewport.y
-  const left = screenX + (nodeWidth * viewport.zoom) / 2 - composerWidth / 2
-  const top = screenY + nodeHeight * viewport.zoom + 28
-  return (
-    <div
-      className={styles.nodeComposer}
-      style={{ left, top, width: composerWidth }}
-      data-composer=""
-    >
-      {view
-        ? (
-            <InputBar
-              view={view}
-              text={text}
-              focusVersion={focusVersion}
-              onTextChange={onTextChange}
-              draftKey={`flow-node:${node.id}`}
-              hideMeta
-              floating
-            />
-          )
-        : <div className={styles.nodeComposerLoading}>正在打开节点会话…</div>}
-    </div>
-  )
-}
-
-function NodeToolbar({ node, viewport, onConnect, onBrief, onRemove }: {
-  node: FlowCanvasNode
-  viewport: Viewport
-  onConnect: () => void
-  onBrief: () => void
-  onRemove: () => void
-}) {
-  const nodeWidth = node.measured?.width ?? NODE_WIDTH
-  const screenX = node.position.x * viewport.zoom + viewport.x
-  const screenY = node.position.y * viewport.zoom + viewport.y
-  const left = screenX + (nodeWidth * viewport.zoom) / 2
-  const top = screenY - 12
-  return (
-    <div
-      className={styles.nodeToolbar}
-      style={{ left, top }}
-      role="toolbar"
-      aria-label="节点操作"
-    >
-      <button type="button" className={styles.connect} onClick={onConnect}>连接</button>
-      <button type="button" className={styles.connect} onClick={onBrief}>Brief</button>
-      <button type="button" className={styles.delete} onClick={onRemove}>移出画布</button>
-    </div>
-  )
-}
-
 function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
   return {
     id: node.id,
@@ -951,35 +961,34 @@ function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
 
 function toCanvasEdges(
   edges: FlowEdge[],
-  activeEdges: Map<string, { source: string, target: string }>,
+  activities: FlowEdgeActivity[],
   selectedEdgeIds: Set<string>,
   reducedMotion: boolean,
+  selectedNodeId?: string,
+  nodes: FlowCanvasNode[] = [],
 ): Edge[] {
   return edges.map((edge) => {
-    const active = activeEdges.get(edge.id)
     const selected = selectedEdgeIds.has(edge.id)
-    if (active) {
-      return {
-        id: edge.id,
-        source: active.source,
-        target: active.target,
-        type: 'default',
-        pathOptions: { curvature: 0.5 },
-        animated: !reducedMotion,
-        selected,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: 'var(--c-signal)' },
-        style: { stroke: 'var(--c-signal)', strokeWidth: 2 },
-      }
-    }
+    const adjacent = !selectedNodeId || edge.source === selectedNodeId || edge.target === selectedNodeId
     return {
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      type: 'default',
-      pathOptions: { curvature: 0.5 },
-      animated: false,
+      type: 'message',
+      data: {
+        activities: activities.filter(activity => activity.edgeId === edge.id),
+        reducedMotion,
+        dimmed: !adjacent,
+        obstacles: nodes
+          .filter(node => node.id !== edge.source && node.id !== edge.target)
+          .map(node => ({
+            x: node.position.x,
+            y: node.position.y,
+            width: node.measured?.width ?? NODE_WIDTH,
+            height: node.measured?.height ?? NODE_HEIGHT,
+          })),
+      },
       selected,
-      style: { stroke: 'var(--c-muted)', strokeWidth: 1.5 },
     }
   })
 }
@@ -1001,6 +1010,32 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
 
 function sessionLabel(session: SessionInfoLite) {
   return session.name || session.firstMessage || '空会话'
+}
+
+function panelStatusKind(view: SessionView | null, sessionPath: string, statuses: Record<string, SessionStatusRecord>) {
+  if (sessionNeedsInputFor(sessionPath, statuses))
+    return 'NeedsInput'
+  const status = sessionStatusFor(sessionPath, statuses)
+  if (status === 'failed')
+    return 'Failed'
+  if (view?.isStreaming || status === 'running')
+    return 'Running'
+  return 'Idle'
+}
+
+function panelStatusLabel(view: SessionView | null, sessionPath: string, statuses: Record<string, SessionStatusRecord>) {
+  const kind = panelStatusKind(view, sessionPath, statuses)
+  if (kind === 'NeedsInput')
+    return '待回答'
+  if (kind === 'Failed')
+    return '失败'
+  if (kind === 'Running')
+    return '运行中'
+  return '空闲'
+}
+
+function deliveryStatusLabel(status: FlowDeliveryStatus) {
+  return ({ queued: '排队中', delivered: '已送达', replied: '已回复', failed: '失败' } satisfies Record<FlowDeliveryStatus, string>)[status]
 }
 
 function viewForSession(views: Record<string, SessionView>, path: string | undefined) {

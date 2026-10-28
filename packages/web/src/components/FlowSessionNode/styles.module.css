@@ -1,103 +1,149 @@
 .node {
-  width: 288px;
-  min-height: 156px;
-  padding: 16px;
-  border: 1px solid var(--c-line);
-  border-radius: 8px;
-  background: var(--c-raise);
+  position: relative;
+  display: grid;
+  width: 172px;
+  min-height: 128px;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 8px 7px;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  background: transparent;
   color: var(--c-body);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: opacity 140ms var(--ease), background 140ms var(--ease);
 }
 
-.node.current {
-  border-color: var(--c-faint);
+.node.dimmed {
+  opacity: 0.3;
 }
 
-.node.selected,
-.node.anchor {
+.node:focus-visible {
+  outline: 2px solid var(--c-signal);
+  outline-offset: 4px;
+}
+
+.agent-icon {
+  position: relative;
+  display: grid;
+  width: 51px;
+  height: 51px;
+  flex: 0 0 51px;
+  place-items: center;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 17px;
+  background: var(--c-surface);
+  color: var(--c-mid);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-line) 35%, transparent);
+  transition: border-color 140ms var(--ease), color 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+
+.node[data-status='running'] .agent-icon {
+  border-color: color-mix(in srgb, var(--c-signal) 65%, var(--c-line-strong));
+  color: var(--c-signal);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-signal) 13%, transparent);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.node[data-status='needsInput'] .agent-icon {
+  border-color: var(--c-warning);
+  color: var(--c-warning);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-warning) 14%, transparent);
+}
+
+.node[data-status='failed'] .agent-icon {
+  border-color: var(--c-danger);
+  color: var(--c-danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-danger) 14%, transparent);
+}
+
+.node.current .agent-icon {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-mid) 13%, transparent);
+}
+
+.node.selected .agent-icon,
+.node.anchor .agent-icon {
   border-color: var(--c-signal);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-signal) 16%, transparent);
 }
 
-.node.anchor {
-  box-shadow: 0 0 0 1px var(--c-signal);
+.node:hover .agent-icon {
+  border-color: var(--c-line-strong);
 }
 
-.topline {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 18px;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
+.status-mark {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--c-canvas);
   border-radius: 50%;
-  background: var(--c-faint);
+  background: var(--c-signal);
 }
 
-.status-dot.running { background: var(--c-signal); }
-.status-dot.failed { background: var(--c-danger); }
-.status-dot.needs-input { background: var(--c-warning); }
-.status-dot.unread { background: var(--c-mid); }
+.status-mark.running { background: var(--c-signal); }
+.status-mark.needs-input { background: var(--c-warning); }
+.status-mark.failed { background: var(--c-danger); }
+.status-mark.unread { background: var(--c-success); }
+
+.identity {
+  max-width: 158px;
+}
+
+.identity p {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--c-muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--c-faint);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .status.running { color: var(--c-signal); }
 .status.failed { color: var(--c-danger); }
 .status.needs-input { color: var(--c-warning); }
+.status.unread { color: var(--c-success); }
+.current-status { color: var(--c-faint); }
 
-.status {
-  color: var(--c-muted);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
-
-.node h2 {
-  margin: 10px 0 5px;
-  color: var(--c-ink);
-  font-size: 0.98rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.node p {
-  min-height: 40px;
-  margin: 0 0 10px;
-  color: var(--c-muted);
-  font-size: 0.78rem;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.node p.empty {
-  color: var(--c-faint);
-}
-
-.brief {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  min-height: 0;
-  color: var(--c-body);
-}
-
-.node button {
-  color: var(--c-mid);
-  font-size: 0.76rem;
-  line-height: 1.5;
-}
-
-.node button:hover {
-  color: var(--c-ink);
-}
-
-/* Invisible anchors for React Flow edges. They must exist so edges can render,
-   but they are not visible, not clickable, and carry no port metaphor. */
+/* Invisible anchors preserve user-authored edges without suggesting executable ports. */
 .node .hidden-handle {
+  top: 50%;
+  left: 50%;
   width: 1px;
   height: 1px;
+  transform: translate(-50%, -50%);
   border: none;
   background: transparent;
   opacity: 0;
   pointer-events: none;
+}
+
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-signal) 10%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--c-signal) 5%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node,
+  .agent-icon {
+    animation: none;
+    transition: none;
+  }
 }

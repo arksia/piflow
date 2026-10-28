@@ -9,6 +9,7 @@ import '@fontsource/dm-mono/400.css'
 import '@fontsource/dm-mono/500.css'
 import 'katex/dist/katex.min.css'
 import './styles/main.css'
+import 'virtual:uno.css'
 
 const root = document.querySelector('#app')
 

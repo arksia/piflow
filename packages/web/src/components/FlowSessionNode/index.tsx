@@ -1,10 +1,12 @@
 import type { Node, NodeProps } from '@xyflow/react'
 import { Handle, Position } from '@xyflow/react'
+import { Bot } from 'lucide-react'
 import styles from './styles.module.css'
 
 export type FlowSessionNodeData = Record<string, unknown> & {
   sessionPath: string
   name: string
+  modelName?: string
   goal: string
   brief?: string
   status: 'idle' | 'running' | 'failed'
@@ -12,6 +14,8 @@ export type FlowSessionNodeData = Record<string, unknown> & {
   unread?: boolean
   isCurrent?: boolean
   isAnchor?: boolean
+  isDimmed?: boolean
+  isStreaming?: boolean
   onOpen: () => void
 }
 
@@ -31,27 +35,34 @@ function nodeAttention(data: FlowSessionNodeData) {
 
 export default function FlowSessionNode({ data, selected }: NodeProps<FlowCanvasNode>) {
   const attention = nodeAttention(data)
+  const modelName = data.modelName || '模型未加载'
+  const statusKind = attention?.kind ?? 'idle'
 
   return (
-    <article className={`${styles.node} ${selected ? styles.selected : ''} ${data.isCurrent ? styles.current : ''} ${data.isAnchor ? styles.anchor : ''}`}>
-      <Handle className={styles['hidden-handle']} type="target" position={Position.Left} isConnectable={false} />
-      <div className={styles.topline}>
+    <button
+      type="button"
+      className={`${styles.node} ${selected ? styles.selected : ''} ${data.isCurrent ? styles.current : ''} ${data.isAnchor ? styles.anchor : ''} ${data.isDimmed ? styles.dimmed : ''}`}
+      data-status={statusKind}
+      aria-label={`${data.name}，${modelName}，${attention?.label ?? (data.isCurrent ? '当前会话' : '空闲')}`}
+      aria-expanded={Boolean(selected)}
+    >
+      <div className={styles.agentIcon} aria-hidden="true">
+        <Handle className={styles.hiddenHandle} type="target" position={Position.Top} isConnectable={false} />
+        <Handle className={styles.hiddenHandle} type="source" position={Position.Top} isConnectable={false} />
+        <Bot size={23} strokeWidth={1.8} />
         {attention
-          ? (
-              <>
-                <span className={`${styles.statusDot} ${styles[attention.kind]}`} />
-                <span className={`${styles.status} ${styles[attention.kind]}`}>{attention.label}</span>
-              </>
-            )
-          : <span className={styles.status}> </span>}
+          ? <span className={`${styles.statusMark} ${styles[attention.kind]}`} />
+          : null}
       </div>
-      <h2>{data.name}</h2>
-      {data.goal ? <p>{data.goal}</p> : <p className={styles.empty}>尚未设置目标</p>}
-      {data.brief?.trim()
-        ? <p className={styles.brief}>{data.brief.trim()}</p>
-        : <p className={`${styles.brief} ${styles.empty}`}>还没有 Brief</p>}
-      <button type="button" className="nodrag" onClick={data.onOpen}>{data.sessionPath ? '打开会话' : '新建会话'}</button>
-      <Handle className={styles['hidden-handle']} type="source" position={Position.Right} isConnectable={false} />
-    </article>
+      <div className={`${styles.identity} pf-flex pf-w-full pf-min-w-0 pf-flex-col pf-items-center pf-gap-0.5`}>
+        <h2 className="pf-m-0 pf-max-w-full pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.86rem] pf-font-semibold pf-leading-[1.35] pf-text-[var(--c-ink)]" title={data.name}>{data.name}</h2>
+        <p title={modelName}>{modelName}</p>
+        {attention
+          ? <span className={`${styles.status} ${styles[statusKind]}`}>{attention.label}</span>
+          : data.isCurrent
+            ? <span className={`${styles.status} ${styles.currentStatus}`}>当前会话</span>
+            : null}
+      </div>
+    </button>
   )
 }
