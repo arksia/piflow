@@ -1,9 +1,12 @@
+import type { AgentConfiguration, FlowMembership } from './agents'
+import { parseAgentConfiguration, parseFlowMemberships } from './agents'
+
 export const PROJECT_CANVAS_FILE = '.piflow/canvas.json'
 export const LEGACY_MODULES_FILE = '.piflow/modules.json'
 export const PROJECT_CANVAS_VERSION = 1
 
-const ROOT_KEYS = ['version', 'nodes', 'links']
-const NODE_KEYS = ['id', 'name', 'brief', 'position']
+const ROOT_KEYS = ['version', 'nodes', 'links', 'memberships']
+const NODE_KEYS = ['id', 'name', 'brief', 'position', 'roleLabel', 'rolePrompt', 'orchestrationEnabled']
 const LINK_KEYS = ['id', 'source', 'target']
 
 export interface CanvasPosition {
@@ -11,7 +14,7 @@ export interface CanvasPosition {
   y: number
 }
 
-export interface CanvasNode {
+export interface CanvasNode extends AgentConfiguration {
   id: string
   name: string
   brief: string
@@ -25,6 +28,7 @@ export interface CanvasLink {
 }
 
 export interface ProjectCanvas {
+  memberships?: FlowMembership[]
   version: typeof PROJECT_CANVAS_VERSION
   nodes: CanvasNode[]
   links: CanvasLink[]
@@ -83,7 +87,7 @@ export function parseProjectCanvas(value: unknown): ProjectCanvasDocument {
     throw new Error('duplicate canvas link')
 
   return {
-    canvas: { version: PROJECT_CANVAS_VERSION, nodes: nodes.map(node => node.node), links: links.map(link => link.link) },
+    canvas: { version: PROJECT_CANVAS_VERSION, nodes: nodes.map(node => node.node), links: links.map(link => link.link), ...(value.memberships === undefined ? {} : { memberships: parseFlowMemberships(value.memberships, nodes.map(node => node.node)) }) },
     extras: extrasOf(value, ROOT_KEYS),
     nodeExtras: Object.fromEntries(nodes.map(node => [node.node.id, node.extras])),
     linkExtras: Object.fromEntries(links.map(link => [link.link.id, link.extras])),
@@ -93,11 +97,9 @@ export function parseProjectCanvas(value: unknown): ProjectCanvasDocument {
 export function serializeProjectCanvas(document: ProjectCanvasDocument): Record<string, unknown> {
   return {
     version: document.canvas.version,
+    ...(document.canvas.memberships === undefined ? {} : { memberships: document.canvas.memberships }),
     nodes: document.canvas.nodes.map(node => ({
-      id: node.id,
-      name: node.name,
-      brief: node.brief,
-      position: node.position,
+      ...node,
       ...(document.nodeExtras[node.id] ?? {}),
     })),
     links: document.canvas.links.map(link => ({
@@ -147,7 +149,7 @@ function parseNode(value: unknown): { node: CanvasNode, extras: Record<string, u
     throw new Error('invalid canvas node name')
   const brief = typeof value.brief === 'string' ? value.brief.trim().slice(0, 8000) : ''
   return {
-    node: { id, name, brief, position: parsePosition(value.position) },
+    node: { id, name, brief, position: parsePosition(value.position), ...parseAgentConfiguration(value) },
     extras: extrasOf(value, NODE_KEYS),
   }
 }

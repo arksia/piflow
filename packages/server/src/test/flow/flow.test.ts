@@ -406,3 +406,50 @@ function fixtureTopology(root: string): FlowTopology {
     viewport: { x: 0, y: 0, zoom: 1 },
   }
 }
+
+it('persists Agent roles and multi-owner memberships independently of communication edges', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-agents-'))
+  try {
+    const dataDir = join(root, 'local')
+    const topology = fixtureTopology(root)
+    topology.nodes = topology.nodes.map(node => ({
+      ...node,
+      orchestrationEnabled: node.id !== 'b',
+      roleLabel: node.id === 'b' ? '测试' : '编排者',
+      rolePrompt: node.id === 'b' ? '验证验收标准' : '拆解任务',
+    }))
+    topology.memberships = [
+      { orchestratorId: 'a', memberId: 'b' },
+      { orchestratorId: 'c', memberId: 'b' },
+    ]
+    const store = createFlowStore(dataDir)
+    await store.replaceTopology(root, topology, { commitGraph: true })
+    const restored = await createFlowStore(dataDir).read(root)
+    assert.deepEqual(restored.memberships, topology.memberships)
+    assert.equal(restored.nodes.find(node => node.id === 'b')?.rolePrompt, '验证验收标准')
+    assert.deepEqual(restored.edges, topology.edges)
+    const shared = await createFlowStore(join(root, 'another-local')).read(root)
+    assert.deepEqual(shared.memberships, topology.memberships)
+    assert.equal(shared.nodes.find(node => node.id === 'b')?.roleLabel, '测试')
+    assert.equal(shared.nodes.find(node => node.id === 'a')?.orchestrationEnabled, true)
+    assert.equal(shared.nodes[0]?.sessionPath, '')
+
+    await store.replaceTopology(root, { ...topology, memberships: [], nodes: topology.nodes.map(node => ({ ...node, rolePrompt: '不应从视口保存覆盖配置' })) })
+    assert.deepEqual((await store.read(root)).memberships, topology.memberships)
+    assert.equal((await store.read(root)).nodes.find(node => node.id === 'b')?.rolePrompt, '验证验收标准')
+
+    await assert.rejects(store.replaceTopology(root, {
+      ...topology,
+      nodes: topology.nodes.map(node => ({ ...node, orchestrationEnabled: true })),
+    }, { commitGraph: true }), /编排者不能成为成员/)
+    await assert.rejects(store.replaceTopology(root, {
+      ...topology,
+      memberships: [{ orchestratorId: 'a', memberId: 'missing' }],
+    }, { commitGraph: true }), /不存在的 Agent/)
+    assert.deepEqual((await store.read(root)).memberships, topology.memberships)
+    assert.match(moduleContext(restored.nodes.find(node => node.id === 'b')!)?.content ?? '', /用户角色指令\n验证验收标准/)
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

@@ -11,6 +11,7 @@ import {
   API_FLOW_ACCEPT_PATH,
   API_FLOW_PATH,
   conductorDraftReady,
+  InvalidAgentConfiguration,
   UnsupportedProjectCanvasVersion,
 } from '@piflow/protocol'
 import { payload, query, send } from '../server/reply'
@@ -33,6 +34,8 @@ export const flowRoutes: FastifyPluginAsync<RegisterFlowRoutesOptions> = async (
     catch (error) {
       if (error instanceof UnsupportedProjectCanvasVersion)
         return send(reply, 409, { error: error.message })
+      if (error instanceof InvalidAgentConfiguration)
+        return send(reply, 400, { error: error.message })
       throw error
     }
   })
@@ -58,6 +61,8 @@ export const flowRoutes: FastifyPluginAsync<RegisterFlowRoutesOptions> = async (
     catch (error) {
       if (error instanceof UnsupportedProjectCanvasVersion)
         return send(reply, 409, { error: error.message })
+      if (error instanceof InvalidAgentConfiguration)
+        return send(reply, 400, { error: error.message })
       throw error
     }
   })

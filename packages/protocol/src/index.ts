@@ -10,6 +10,10 @@ import type {
   RpcExtensionUIResponse,
   SessionStats,
 } from '@earendil-works/pi-coding-agent'
+import type { AgentConfiguration, FlowMembership } from './agents'
+
+export { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
+export type { AgentConfiguration, FlowMembership } from './agents'
 
 export {
   LEGACY_MODULES_FILE,
@@ -125,7 +129,7 @@ export interface FlowViewport extends FlowPosition {
   zoom: number
 }
 
-export interface FlowNode {
+export interface FlowNode extends AgentConfiguration {
   id: string
   sessionPath: string
   name: string
@@ -164,6 +168,7 @@ export interface FlowMessageRecord {
 }
 
 export interface FlowTopology {
+  memberships?: FlowMembership[]
   nodes: FlowNode[]
   edges: FlowEdge[]
   viewport: FlowViewport

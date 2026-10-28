@@ -2,6 +2,7 @@ import type {
   ConductorDraft,
   FlowDocument,
   FlowEdge,
+  FlowMembership,
   FlowMessageRecord,
   FlowNode,
   FlowTopology,
@@ -11,7 +12,7 @@ import type {
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { LEGACY_MODULES_FILE, mergeConductorDraft, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
+import { LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
 
 const VERSION = 1 as const
 const MAX_MESSAGES = 500
@@ -191,10 +192,11 @@ export function createFlowStore(dataDir: string): FlowStore {
         ...current.document,
         nodes: [...committed, ...parsed.nodes.filter(node => localOnly.has(node.id))],
         edges: parsed.edges,
+        memberships: parsed.memberships,
         viewport: parsed.viewport,
         updatedAt: now,
       }
-      const nextProject = projectFromNodes(committed, committedEdges, project)
+      const nextProject = projectFromNodes(committed, committedEdges, project, parsed.memberships)
       remember(document, true, nextProject)
       await persist(document, nextProject)
       return structuredClone(document)
@@ -278,7 +280,7 @@ export function createFlowStore(dataDir: string): FlowStore {
       if (!merged)
         throw new Error('invalid conductor draft')
       const document = layoutModules({ ...current.document, updatedAt: new Date().toISOString() }, merged)
-      const project = projectFromNodes(document.nodes, document.edges, previous)
+      const project = projectFromNodes(document.nodes, document.edges, previous, document.memberships)
       remember(document, true, project)
       await persist(document, project)
       return structuredClone(document)
@@ -300,6 +302,7 @@ function applyCanvas(document: FlowDocument, project: ProjectCanvasDocument): Fl
       name: node.name,
       goal: local?.goal ?? '',
       brief: node.brief,
+      ...parseAgentConfiguration({ ...node }),
       position: node.position,
       createdAt: local?.createdAt ?? document.updatedAt,
       updatedAt: local?.updatedAt ?? document.updatedAt,
@@ -318,19 +321,25 @@ function applyCanvas(document: FlowDocument, project: ProjectCanvasDocument): Fl
     })),
     ...document.edges.filter(edge => !committedIds.has(edge.source) || !committedIds.has(edge.target)),
   ]
-  return { ...document, nodes, edges }
+  const memberships = [
+    ...(project.canvas.memberships ?? []),
+    ...(document.memberships ?? []).filter(item => !committedIds.has(item.orchestratorId) || !committedIds.has(item.memberId)),
+  ]
+  return { ...document, nodes, edges, memberships: parseFlowMemberships(memberships, nodes) }
 }
 
-function projectFromNodes(nodes: FlowNode[], edges: FlowEdge[], previous: ProjectCanvasDocument | null): ProjectCanvasDocument {
+function projectFromNodes(nodes: FlowNode[], edges: FlowEdge[], previous: ProjectCanvasDocument | null, memberships?: FlowMembership[]): ProjectCanvasDocument {
   const nodeExtras = previous?.nodeExtras ?? {}
   const linkExtras = previous?.linkExtras ?? {}
   return {
     canvas: {
       version: PROJECT_CANVAS_VERSION,
+      memberships: (memberships ?? []).filter(item => nodes.some(node => node.id === item.orchestratorId) && nodes.some(node => node.id === item.memberId)),
       nodes: nodes.map(node => ({
         id: node.id,
         name: node.name,
         brief: node.brief?.trim() ?? '',
+        ...parseAgentConfiguration({ ...node }),
         position: node.position,
       })),
       links: edges.map(edge => ({
@@ -420,6 +429,7 @@ function layoutModules(document: FlowDocument, modules: { modules: Array<{ id: s
   let added = 0
   return {
     ...document,
+    memberships: (document.memberships ?? []).filter(item => kept.has(item.orchestratorId) && kept.has(item.memberId)),
     nodes: modules.modules.map((module) => {
       const local = localNodes.get(module.id)
       if (local)
@@ -468,6 +478,7 @@ function parseTopology(value: unknown): FlowTopology {
   return {
     nodes,
     edges,
+    memberships: parseFlowMemberships(value.memberships, nodes),
     viewport: {
       x: asNumber(value.viewport.x, 'viewport.x'),
       y: asNumber(value.viewport.y, 'viewport.y'),
@@ -488,6 +499,7 @@ function parseNode(value: unknown): FlowNode {
     name,
     goal: asString(value.goal, 'node.goal').slice(0, 500),
     brief: typeof value.brief === 'string' ? value.brief.trim().slice(0, 8000) : '',
+    ...parseAgentConfiguration(value),
     position: {
       x: asNumber(value.position.x, 'node.position.x'),
       y: asNumber(value.position.y, 'node.position.y'),

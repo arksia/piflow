@@ -24,10 +24,11 @@ import {
   ReactFlow,
 } from '@xyflow/react'
 import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptConductor, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
 import { changedDeliveryActivities, sameDeliveryState } from '../../flow/edges'
+import { memberPlacements } from '../../flow/members'
 import { routeGraphEdges } from '../../flow/routes'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
@@ -43,6 +44,12 @@ import '@xyflow/react/dist/style.css'
 
 const nodeTypes = { session: FlowSessionNode }
 const edgeTypes = { message: FlowMessageEdge }
+
+const ROLE_TEMPLATES = [
+  { label: '程序员', prompt: '你负责实现代码。先理解需求和现有实现，再完成范围明确的改动，验证行为，并汇报结果、测试与剩余风险。' },
+  { label: '产品经理', prompt: '你负责澄清用户目标、边界和验收标准。将需求拆成可执行工作，明确依赖与优先级；有不确定性时先提出关键问题。' },
+  { label: '测试', prompt: '你负责验证功能与质量。根据验收标准覆盖关键路径、失败路径和边界条件，提供可复现的问题步骤与验证结论。' },
+]
 
 const NODE_WIDTH = 172
 const NODE_HEIGHT = 128
@@ -88,6 +95,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const documentRef = useRef<FlowDocument | null>(null)
   const [nodes, setNodes] = useState<FlowCanvasNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
+  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => new Set())
+  const [movedAgents, setMovedAgents] = useState<Set<string>>(() => new Set())
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
   const [activities, setActivities] = useState<FlowEdgeActivity[]>([])
@@ -112,6 +121,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [sessionPath, setSessionPath] = useState('')
   const [briefOpen, setBriefOpen] = useState(false)
   const [brief, setBrief] = useState('')
+  const [roleLabel, setRoleLabel] = useState('')
+  const [rolePrompt, setRolePrompt] = useState('')
+  const [orchestrationEnabled, setOrchestrationEnabled] = useState(false)
+  const [memberIds, setMemberIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
@@ -195,7 +208,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         if (cancelled || rev !== saveRevRef.current)
           return
         setDocument(resolved)
-        setNodes(resolved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+        setNodes(current => reconcileCanvasNodes(current, resolved.nodes, focusSession))
         if (instance)
           void instance.setViewport(resolved.viewport)
       })
@@ -342,15 +355,6 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     // eslint-disable-next-line react/exhaustive-deps -- reading the latest session here would refit on every edit
   }, [active, instance, nodes.length])
 
-  // Re-render authored edges when per-message activity, selection, or motion preference changes.
-  useEffect(() => {
-    if (!document)
-      return
-    // Edges are derived from user-owned topology and transient message activity.
-    // eslint-disable-next-line react/set-state-in-effect
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion, selection.nodes[0], nodes, instance))
-  }, [document, activities, selection.edges, selection.nodes, reducedMotion, nodes, instance])
-
   async function persist(next: FlowDocument, commitGraph = false) {
     const previous = documentRef.current
     // Replacing nodes drops measured size, and React Flow hides a node until it is measured again.
@@ -365,7 +369,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     pendingSaveRef.current = next
     setDocument(next)
     if (graphChanged)
-      setNodes(next.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+      setNodes(current => reconcileCanvasNodes(current, next.nodes, focusSession))
     if (saveRunningRef.current)
       return
     saveRunningRef.current = true
@@ -397,7 +401,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         documentRef.current = saved
         setDocument(saved)
         if (replaceNodes)
-          setNodes(saved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+          setNodes(current => reconcileCanvasNodes(current, saved.nodes, focusSession))
       }
     }
     catch (reason) {
@@ -438,12 +442,19 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     setNodes(current => applyNodeChanges(changes, current))
   }
 
-  const onNodeClick: NodeMouseHandler = (_event, node) => {
-    if (!connectMode)
+  const onNodeClick: NodeMouseHandler<FlowCanvasNode> = (_event, node) => {
+    if (!connectMode) {
+      if (node.data.agentId) {
+        const id = node.data.agentId
+        setNodes(current => current.map(item => ({ ...item, selected: item.id === id })))
+        setSelection({ nodes: [id], edges: [] })
+      }
       return
-    if (node.id === connectMode.sourceId)
+    }
+    const agentId = node.data.agentId ?? node.id
+    if (agentId === connectMode.sourceId)
       return
-    connectNodes(connectMode.sourceId, node.id)
+    connectNodes(connectMode.sourceId, agentId)
   }
 
   function onPaneClick() {
@@ -473,6 +484,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     void persist({
       ...document,
       nodes: document.nodes.filter(node => !ids.has(node.id)),
+      memberships: (document.memberships ?? []).filter(item => !ids.has(item.orchestratorId) && !ids.has(item.memberId)),
       edges: document.edges.filter(edge => !ids.has(edge.source) && !ids.has(edge.target)),
     }, true)
     if (connectMode && ids.has(connectMode.sourceId))
@@ -491,7 +503,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   }
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: FlowCanvasNode[], edges: Edge[] }) => {
-    const next = { nodes: selectedNodes.map(node => node.id), edges: selectedEdges.map(edge => edge.id) }
+    const next = { nodes: [...new Set(selectedNodes.map(node => node.data.agentId ?? node.id))], edges: selectedEdges.map(edge => edge.id) }
     setSelection(current => sameSelection(current, next) ? current : next)
     if (next.nodes.length !== 1)
       setBriefOpen(false)
@@ -553,7 +565,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       const saved = await acceptConductor(projectPath, draft)
       documentRef.current = saved
       setDocument(saved)
-      setNodes(saved.nodes.map(node => toCanvasNode(node, () => void focusSession(node.id))))
+      setNodes(current => reconcileCanvasNodes(current, saved.nodes, focusSession))
     }
     catch (reason) {
       setError(String(reason))
@@ -570,6 +582,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     if (!node)
       return
     setBrief(node.brief ?? '')
+    setRoleLabel(node.roleLabel ?? '')
+    setRolePrompt(node.rolePrompt ?? '')
+    setOrchestrationEnabled(Boolean(node.orchestrationEnabled))
+    setMemberIds((document?.memberships ?? []).filter(item => item.orchestratorId === id).map(item => item.memberId))
     setBriefOpen(true)
     setPanelOpen(false)
   }
@@ -579,10 +595,18 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     const id = selection.nodes[0]
     if (!document || !id)
       return
+    if (orchestrationEnabled && document.memberships?.some(item => item.memberId === id)) {
+      setError('该 Agent 仍属于其他编排者，请先移除归属关系，再启用编排能力。')
+      return
+    }
     const now = new Date().toISOString()
     void persist({
       ...document,
-      nodes: document.nodes.map(node => node.id === id ? { ...node, brief: brief.trim(), updatedAt: now } : node),
+      memberships: [
+        ...(document.memberships ?? []).filter(item => item.orchestratorId !== id),
+        ...(orchestrationEnabled ? memberIds.map(memberId => ({ orchestratorId: id, memberId })) : []),
+      ],
+      nodes: document.nodes.map(node => node.id === id ? { ...node, brief: brief.trim(), roleLabel: roleLabel.trim(), rolePrompt: rolePrompt.trim(), orchestrationEnabled, updatedAt: now } : node),
     }, true)
     setBriefOpen(false)
   }
@@ -638,6 +662,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     void persist({
       ...document,
       nodes: document.nodes.filter(node => !nodeIds.has(node.id)),
+      memberships: (document.memberships ?? []).filter(item => !nodeIds.has(item.orchestratorId) && !nodeIds.has(item.memberId)),
       edges: document.edges.filter(edge => !edgeIds.has(edge.id) && !nodeIds.has(edge.source) && !nodeIds.has(edge.target)),
     }, true)
     setSelection({ nodes: [], edges: [] })
@@ -696,11 +721,51 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const draftMessage = latestDraftMessage(conductorView)
   const conductorReady = conductorDraftReady(parseConductorDraft(draftMessage ? messageText(draftMessage) : '')) && !conductorStreaming
   const availableSessions = store.sessions.filter(session => session.cwd === document?.projectPath && session.path !== conductorPath && !session.conductor && !document.nodes.some(node => node.sessionPath === session.path))
+  const projectedNodes = useMemo(() => {
+    const placements = memberPlacements(nodes, document?.memberships ?? [], expandedAgents, movedAgents)
+    const primary = new Map(placements.filter(item => !item.reference).map(item => [item.agentId, item]))
+    const originals = nodes.map(node => ({ ...node, position: primary.get(node.id)?.position ?? node.position, data: { ...node.data, displayOwnerId: primary.get(node.id)?.ownerId } }))
+    const references = placements.filter(item => item.reference).flatMap((item) => {
+      const source = nodes.find(node => node.id === item.agentId)
+      return source
+        ? [{ ...source, id: item.id, position: item.position, selected: source.selected, draggable: false, deletable: false, data: { ...source.data, agentId: item.agentId, displayOwnerId: item.ownerId, referenceLabel: '共享引用' } }]
+        : []
+    })
+    return [...originals, ...references]
+  }, [nodes, document?.memberships, expandedAgents, movedAgents])
+
+  useEffect(() => {
+    if (!document)
+      return
+    // eslint-disable-next-line react/set-state-in-effect -- derived user edges and live message activity
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion, selection.nodes[0], projectedNodes, instance))
+  }, [document, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance])
+
+  function toggleMembers(id: string) {
+    setExpandedAgents((current) => {
+      const next = new Set(current)
+      if (next.has(id))
+        next.delete(id)
+      else
+        next.add(id)
+      return next
+    })
+  }
+
   // The store is mutable and keeps a stable identity, so derive status on every notified render.
-  const visibleNodes = nodes.map(node => ({
+  const visibleNodes = projectedNodes.map(node => ({
     ...node,
     data: {
       ...node.data,
+      memberSummary: node.data.orchestrationEnabled
+        ? (() => {
+            const members = (document?.memberships ?? []).filter(item => item.orchestratorId === node.id)
+            const paths = members.map(item => document?.nodes.find(agent => agent.id === item.memberId)?.sessionPath ?? '')
+            return { total: members.length, running: paths.filter(path => sessionStatusFor(path, store.statuses) === 'running').length, failed: paths.filter(path => sessionStatusFor(path, store.statuses) === 'failed').length }
+          })()
+        : undefined,
+      membersExpanded: expandedAgents.has(node.id),
+      onToggleMembers: () => toggleMembers(node.id),
       modelName: viewForSession(store.views, node.data.sessionPath)?.model?.id,
       status: sessionStatusFor(node.data.sessionPath, store.statuses),
       needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
@@ -708,7 +773,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       isCurrent: node.data.sessionPath === activeSessionPath,
       isAnchor: connectMode?.sourceId === node.id,
       isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
-      isDimmed: Boolean(selectedNodeId && node.id !== selectedNodeId && !selectedNeighbors?.has(node.id)),
+      isDimmed: Boolean(selectedNodeId && (node.data.agentId ?? node.id) !== selectedNodeId && !selectedNeighbors?.has(node.data.agentId ?? node.id) && !(expandedAgents.has(selectedNodeId) && document?.memberships?.some(item => item.orchestratorId === selectedNodeId && item.memberId === (node.data.agentId ?? node.id)))),
     },
   }))
   const attentionItems = flowAttentionItems(document?.nodes ?? [], store.statuses)
@@ -806,10 +871,54 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
       {briefOpen
         ? (
-            <form className={styles.panel} onSubmit={saveBrief}>
+            <form className={styles.panel} onSubmit={saveBrief} aria-label="Agent 配置">
+              <strong>Agent 配置</strong>
+              <label>
+                从角色模板开始
+                <select
+                  defaultValue=""
+                  onChange={(event) => {
+                    const template = ROLE_TEMPLATES.find(item => item.label === event.target.value)
+                    if (template) {
+                      setRoleLabel(template.label)
+                      setRolePrompt(template.prompt)
+                    }
+                  }}
+                >
+                  <option value="">自定义（选择模板将替换当前角色提示词）</option>
+                  {ROLE_TEMPLATES.map(item => <option key={item.label} value={item.label}>{item.label}</option>)}
+                </select>
+              </label>
+              <label>
+                角色名称
+                <input autoFocus maxLength={80} value={roleLabel} onChange={event => setRoleLabel(event.target.value)} placeholder="例如：程序员、产品经理、测试" />
+              </label>
+              <label>
+                角色提示词
+                <textarea maxLength={8000} rows={5} value={rolePrompt} onChange={event => setRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求；从下次运行开始生效。" />
+              </label>
+              <label className={styles.toggleField}>
+                <input type="checkbox" checked={orchestrationEnabled} disabled={Boolean(document?.memberships?.some(item => item.memberId === selection.nodes[0]))} onChange={event => setOrchestrationEnabled(event.target.checked)} />
+                启用编排能力
+              </label>
+              {document?.memberships?.some(item => item.memberId === selection.nodes[0]) ? <p className={styles.configHint}>启用前请先从所属编排者的成员列表中移除该 Agent。</p> : null}
+              {orchestrationEnabled
+                ? (
+                    <fieldset className={styles.members}>
+                      <legend>成员（不创建通信连接）</legend>
+                      {document?.nodes.filter(node => node.id !== selection.nodes[0] && !node.orchestrationEnabled).map(node => (
+                        <label key={node.id} className={styles.toggleField}>
+                          <input type="checkbox" checked={memberIds.includes(node.id)} onChange={event => setMemberIds(current => event.target.checked ? [...current, node.id] : current.filter(id => id !== node.id))} />
+                          {node.name}
+                        </label>
+                      ))}
+                      {!document?.nodes.some(node => node.id !== selection.nodes[0] && !node.orchestrationEnabled) ? <p>先在画布上添加普通 Agent。</p> : null}
+                    </fieldset>
+                  )
+                : null}
               <label>
                 Brief
-                <textarea maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" autoFocus />
+                <textarea maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
               </label>
               <div className={styles.panelActions}>
                 <button type="button" onClick={() => setBriefOpen(false)}>取消</button>
@@ -859,6 +968,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 onInit={setInstance}
                 onNodesChange={onNodesChange}
                 onNodeClick={onNodeClick}
+                onNodeDragStart={(_event, node) => {
+                  setNodes(current => current.map(item => item.id === node.id ? { ...item, position: node.position } : item))
+                  setMovedAgents(current => new Set([...current, node.id]))
+                }}
                 onNodeDragStop={onNodeDragStop}
                 onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
                 onPaneClick={onPaneClick}
@@ -897,17 +1010,25 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                   </div>
                 </header>
                 <div className={styles.runtimeSummary}>
+                  <p>{[selectedNode.orchestrationEnabled ? '编排者' : '', selectedNode.roleLabel].filter(Boolean).join(' · ') || '自定义 Agent'}</p>
                   <p>{selectedNode.goal || '尚未设置目标'}</p>
                   {selectedNode.brief?.trim() ? <p className={styles.runtimeBrief}>{selectedNode.brief.trim()}</p> : null}
                 </div>
                 <div className={styles.runtimeToolbar} role="toolbar" aria-label="节点操作">
+                  {expandedAgents.has(selectedNode.id)
+                    ? (
+                        <button type="button" className={styles.runtimeTool} onClick={() => void instance?.fitView({ nodes: visibleNodes.filter(node => node.id === selectedNode.id || node.data.displayOwnerId === selectedNode.id), padding: 0.5, maxZoom: 1, duration: reducedMotion ? 0 : 180 })}>
+                          聚焦成员
+                        </button>
+                      )
+                    : null}
                   <button type="button" className={styles.runtimeTool} onClick={startConnect}>
                     <Link2 size={14} aria-hidden="true" />
                     连接
                   </button>
                   <button type="button" className={styles.runtimeTool} onClick={openBrief}>
                     <FileText size={14} aria-hidden="true" />
-                    Brief
+                    Agent 配置
                   </button>
                   <button type="button" className={`${styles.runtimeTool} ${styles.runtimeDelete}`} onClick={deleteSelection}>
                     <Trash2 size={14} aria-hidden="true" />
@@ -951,12 +1072,17 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   )
 }
 
+function reconcileCanvasNodes(previous: FlowCanvasNode[], next: FlowNode[], onOpen: (id: string) => void): FlowCanvasNode[] {
+  const byId = new Map(previous.map(node => [node.id, node]))
+  return next.map(node => ({ ...byId.get(node.id), ...toCanvasNode(node, () => onOpen(node.id)), selected: byId.get(node.id)?.selected ?? false }))
+}
+
 function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
   return {
     id: node.id,
     type: 'session',
     position: node.position,
-    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, brief: node.brief, status: 'idle', needsInput: false, onOpen },
+    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, brief: node.brief, orchestrationEnabled: node.orchestrationEnabled, status: 'idle', needsInput: false, onOpen },
   }
 }
 
@@ -972,7 +1098,7 @@ function toCanvasEdges(
   const routes = routeGraphEdges(edges, nodes.map((node) => {
     const internal = instance?.getInternalNode(node.id)
     const handle = internal?.internals.handleBounds?.source?.[0]
-    const position = internal?.internals.positionAbsolute ?? node.position
+    const position = node.position
     return {
       id: node.id,
       x: position.x + (handle ? handle.x + handle.width / 2 : (node.measured?.width ?? NODE_WIDTH) / 2),
@@ -1000,7 +1126,7 @@ function toCanvasEdges(
 }
 
 function topologyOf(document: FlowDocument): FlowTopology {
-  return { nodes: document.nodes, edges: document.edges, viewport: document.viewport }
+  return { nodes: document.nodes, edges: document.edges, memberships: document.memberships, viewport: document.viewport }
 }
 
 function sameViewport(a: Viewport, b: Viewport) {

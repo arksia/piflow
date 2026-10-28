@@ -166,8 +166,8 @@ export function createFlowTools(options: CreateFlowToolsOptions): ToolDefinition
   return [listConnections, sendMessage, replyMessage, searchContext, readContext]
 }
 
-export function moduleContext(node: Pick<FlowNode, 'brief'>): { path: string, content: string } | null {
-  const content = node.brief?.trim()
+export function moduleContext(node: Pick<FlowNode, 'brief' | 'rolePrompt'>): { path: string, content: string } | null {
+  const content = [node.brief?.trim(), node.rolePrompt?.trim() ? `# 用户角色指令\n${node.rolePrompt.trim()}` : ''].filter(Boolean).join('\n\n')
   if (!content)
     return null
   return { path: 'piflow-module.md', content }
