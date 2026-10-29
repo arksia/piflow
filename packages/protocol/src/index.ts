@@ -10,10 +10,10 @@ import type {
   RpcExtensionUIResponse,
   SessionStats,
 } from '@earendil-works/pi-coding-agent'
-import type { AgentConfiguration, FlowMembership } from './agents'
+import type { AgentConfiguration, FlowMembership, SubagentRun } from './agents'
 
 export { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
-export type { AgentConfiguration, FlowMembership } from './agents'
+export type { AgentConfiguration, FlowMembership, SubagentRun } from './agents'
 
 export {
   LEGACY_MODULES_FILE,
@@ -175,6 +175,7 @@ export interface FlowTopology {
 }
 
 export interface FlowDocument extends FlowTopology {
+  runs?: SubagentRun[]
   version: 1
   projectPath: string
   messages: FlowMessageRecord[]

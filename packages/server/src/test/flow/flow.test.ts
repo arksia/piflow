@@ -150,12 +150,12 @@ it('writes the module graph into the project and leaves bindings local', async (
     })
     assert.equal(await readFile(projectFile, 'utf8'), beforeMessage)
 
-    const edited = JSON.parse(first) as { nodes: Array<{ id: string, brief?: string, kind?: string }> }
+    const edited = JSON.parse(first) as { nodes: Array<{ id: string, brief?: string, customKind?: string }> }
     const moduleA = edited.nodes.find(module => module.id === 'a')
     if (!moduleA)
       throw new Error('missing module')
     moduleA.brief = 'From the repo.'
-    moduleA.kind = 'review'
+    moduleA.customKind = 'review'
     await writeFile(projectFile, `${JSON.stringify(edited, null, 2)}\n`)
     const reopened = await createFlowStore(dataDir).read(root)
     assert.equal(reopened.nodes.find(node => node.id === 'a')?.brief, 'From the repo.')
@@ -167,7 +167,7 @@ it('writes the module graph into the project and leaves bindings local', async (
       edges: reopened.edges,
       viewport: reopened.viewport,
     }, { commitGraph: true })
-    assert.match(await readFile(projectFile, 'utf8'), /"kind": "review"/)
+    assert.match(await readFile(projectFile, 'utf8'), /"customKind": "review"/)
   }
   finally {
     await rm(root, { recursive: true, force: true })
@@ -259,7 +259,7 @@ it('moves modules.json into canvas.json and keeps the local position', async () 
     await mkdir(join(dataDir, 'flows'), { recursive: true })
     await writeFile(join(root, LEGACY_MODULES_FILE), `${JSON.stringify({
       version: 1,
-      modules: [{ id: 'login', name: '登录', brief: '会话边界', kind: 'review' }],
+      modules: [{ id: 'login', name: '登录', brief: '会话边界', customKind: 'review' }],
       links: [],
     }, null, 2)}\n`)
     await writeFile(join(dataDir, 'flows', `${id}.json`), `${JSON.stringify({
@@ -284,7 +284,7 @@ it('moves modules.json into canvas.json and keeps the local position', async () 
     assert.equal(opened.nodes[0]?.brief, '会话边界')
     assert.equal(opened.nodes[0]?.goal, '本地目标')
     assert.deepEqual(opened.nodes[0]?.position, { x: 40, y: 50 })
-    assert.match(await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8'), /"kind": "review"/)
+    assert.match(await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8'), /"customKind": "review"/)
     await assert.rejects(readFile(join(root, LEGACY_MODULES_FILE), 'utf8'))
   }
   finally {
@@ -414,10 +414,13 @@ it('persists Agent roles and multi-owner memberships independently of communicat
     const topology = fixtureTopology(root)
     topology.nodes = topology.nodes.map(node => ({
       ...node,
+      kind: node.id === 'b' ? 'subagent-role' as const : 'persistent' as const,
+      sessionPath: node.id === 'b' ? '' : node.sessionPath,
       orchestrationEnabled: node.id !== 'b',
       roleLabel: node.id === 'b' ? '测试' : '编排者',
       rolePrompt: node.id === 'b' ? '验证验收标准' : '拆解任务',
     }))
+    topology.edges = []
     topology.memberships = [
       { orchestratorId: 'a', memberId: 'b' },
       { orchestratorId: 'c', memberId: 'b' },
@@ -441,7 +444,7 @@ it('persists Agent roles and multi-owner memberships independently of communicat
     await assert.rejects(store.replaceTopology(root, {
       ...topology,
       nodes: topology.nodes.map(node => ({ ...node, orchestrationEnabled: true })),
-    }, { commitGraph: true }), /编排者不能成为成员/)
+    }, { commitGraph: true }), /Subagent 角色不能启用编排能力/)
     await assert.rejects(store.replaceTopology(root, {
       ...topology,
       memberships: [{ orchestratorId: 'a', memberId: 'missing' }],

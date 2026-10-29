@@ -7,7 +7,7 @@ it('keeps unknown fields and defaults a missing brief', () => {
     version: 1,
     owner: 'team',
     nodes: [
-      { id: 'login', name: '登录', position: { x: 1, y: 2 }, kind: 'review' },
+      { id: 'login', name: '登录', position: { x: 1, y: 2 }, customKind: 'review' },
       { id: 'session', name: '会话', position: { x: 3, y: 4 } },
     ],
     links: [{ id: 'link', source: 'login', target: 'session' }],
@@ -16,7 +16,7 @@ it('keeps unknown fields and defaults a missing brief', () => {
   assert.equal(parsed.canvas.nodes[0]?.brief, '')
   assert.deepEqual(parsed.canvas.nodes[0]?.position, { x: 1, y: 2 })
   assert.equal(parsed.extras.owner, 'team')
-  assert.equal(parsed.nodeExtras.login?.kind, 'review')
+  assert.equal(parsed.nodeExtras.login?.customKind, 'review')
   assert.throws(() => parseProjectCanvas({
     version: 1,
     nodes: [{ id: 'login', name: '登录', position: { x: 0, y: 0 } }],
@@ -27,7 +27,7 @@ it('keeps unknown fields and defaults a missing brief', () => {
 it('writes unknown fields back and refuses a newer version', () => {
   const parsed = parseProjectCanvas({
     version: 1,
-    nodes: [{ id: 'login', name: '登录', brief: '边界', position: { x: 8, y: 9 }, kind: 'review' }],
+    nodes: [{ id: 'login', name: '登录', brief: '边界', position: { x: 8, y: 9 }, customKind: 'review' }],
     links: [],
     note: true,
   })
@@ -35,7 +35,7 @@ it('writes unknown fields back and refuses a newer version', () => {
 
   assert.deepEqual(written, {
     version: 1,
-    nodes: [{ id: 'login', name: '登录', brief: '边界', position: { x: 8, y: 9 }, kind: 'review' }],
+    nodes: [{ id: 'login', name: '登录', brief: '边界', position: { x: 8, y: 9 }, customKind: 'review' }],
     links: [],
     note: true,
   })
@@ -53,7 +53,7 @@ it('validates organization separately from communication topology', () => {
     version: 1,
     nodes: [
       { id: 'owner', name: '编排者', orchestrationEnabled: true, position: { x: 0, y: 0 } },
-      { id: 'worker', name: '程序员', rolePrompt: '实现需求', position: { x: 100, y: 0 } },
+      { id: 'worker', kind: 'subagent-role', name: '程序员', rolePrompt: '实现需求', position: { x: 100, y: 0 } },
     ],
     links: [],
     memberships: [{ orchestratorId: 'owner', memberId: 'worker' }],

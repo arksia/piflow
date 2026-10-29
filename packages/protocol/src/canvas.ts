@@ -1,12 +1,12 @@
 import type { AgentConfiguration, FlowMembership } from './agents'
-import { parseAgentConfiguration, parseFlowMemberships } from './agents'
+import { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
 
 export const PROJECT_CANVAS_FILE = '.piflow/canvas.json'
 export const LEGACY_MODULES_FILE = '.piflow/modules.json'
 export const PROJECT_CANVAS_VERSION = 1
 
 const ROOT_KEYS = ['version', 'nodes', 'links', 'memberships']
-const NODE_KEYS = ['id', 'name', 'brief', 'position', 'roleLabel', 'rolePrompt', 'orchestrationEnabled']
+const NODE_KEYS = ['id', 'name', 'brief', 'position', 'roleLabel', 'rolePrompt', 'orchestrationEnabled', 'kind', 'model', 'tools']
 const LINK_KEYS = ['id', 'source', 'target']
 
 export interface CanvasPosition {
@@ -83,6 +83,8 @@ export function parseProjectCanvas(value: unknown): ProjectCanvasDocument {
     throw new Error('duplicate canvas link')
   if (links.some(item => item.link.source === item.link.target || !nodeIds.has(item.link.source) || !nodeIds.has(item.link.target)))
     throw new Error('invalid canvas link')
+  if (links.some(item => nodes.some(node => node.node.kind === 'subagent-role' && (item.link.source === node.node.id || item.link.target === node.node.id))))
+    throw new InvalidAgentConfiguration('通信边只能连接长期 Agent；角色通过 subagent 调用')
   if (new Set(links.map(linkKey)).size !== links.length)
     throw new Error('duplicate canvas link')
 

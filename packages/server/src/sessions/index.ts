@@ -35,6 +35,7 @@ import { createExtensionUIContext } from '../extensions/extension-ui'
 import { conductorContext } from '../flow/conductor'
 import { createDeliveries } from '../flow/delivery'
 import { findNodeBySession } from '../flow/store'
+import { createSubagentTools, orchestrationContext } from '../flow/subagents'
 import { createFlowTools, formatFlowDirectory, moduleContext } from '../flow/tools'
 import { toJsonEvent } from './json-event'
 
@@ -319,9 +320,11 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
                   }
                   const node = findNodeBySession(document, activeFile)
                   const context = node ? moduleContext(node) : null
-                  if (!context)
-                    return
-                  event.systemPromptOptions.contextFiles.push(context)
+                  if (context)
+                    event.systemPromptOptions.contextFiles.push(context)
+                  const orchestration = node ? orchestrationContext(document, node) : null
+                  if (orchestration)
+                    event.systemPromptOptions.contextFiles.push(orchestration)
                 })
               },
             }],
@@ -336,7 +339,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
           sessionStartEvent,
           customTools: conductor
             ? []
-            : createFlowTools({
+            : [...createFlowTools({
                 flow,
                 source: () => managed ? toolSession(managed) : undefined,
                 resolveTarget: async (node, projectPath) => {
@@ -347,7 +350,14 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
                 },
                 readMessages: (node, projectPath) => readMessages(node.sessionPath, projectPath),
                 onDispatchError: (target, error) => publishError(target.sessionPath ?? target.cwd, String(error)),
-              }),
+              }), ...createSubagentTools({
+                flow,
+                agentDir: runtimeAgentDir,
+                isTrusted: cwd => !hasTrustRequiringProjectResources(cwd) || trustStore.get(cwd) === true,
+                source: () => managed
+                  ? { cwd: managed.cwd, sessionPath: managed.runtime.session.sessionManager.getSessionFile() ?? null, model: managed.runtime.session.model ? `${managed.runtime.session.model.provider}/${managed.runtime.session.model.id}` : '', thinkingLevel: managed.runtime.session.thinkingLevel, tools: managed.runtime.session.getActiveToolNames() }
+                  : undefined,
+              })],
         })
         return { ...created, services, diagnostics: services.diagnostics }
       }

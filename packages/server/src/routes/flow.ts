@@ -14,6 +14,7 @@ import {
   InvalidAgentConfiguration,
   UnsupportedProjectCanvasVersion,
 } from '@piflow/protocol'
+import { cancelSubagentRun } from '../flow/subagents'
 import { payload, query, send } from '../server/reply'
 
 interface RegisterFlowRoutesOptions {
@@ -65,6 +66,19 @@ export const flowRoutes: FastifyPluginAsync<RegisterFlowRoutesOptions> = async (
         return send(reply, 400, { error: error.message })
       throw error
     }
+  })
+
+  app.post(`${API_FLOW_PATH}/runs/:id/cancel`, async (request, reply) => {
+    const body = payload<{ projectPath?: string }>(request)
+    if (typeof body.projectPath !== 'string')
+      return send(reply, 400, { error: 'projectPath required' })
+    const document = await flow.read(body.projectPath)
+    const id = (request.params as { id: string }).id
+    if (!document.runs?.some(run => run.id === id))
+      return send(reply, 404, { error: 'run not found' })
+    if (!cancelSubagentRun(document.projectPath, id))
+      return send(reply, 409, { error: 'run is no longer active' })
+    return send(reply, 200, { ok: true })
   })
 
   app.post(API_FLOW_ACCEPT_PATH, {

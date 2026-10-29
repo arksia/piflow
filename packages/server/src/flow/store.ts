@@ -8,11 +8,12 @@ import type {
   FlowTopology,
   LegacyModules,
   ProjectCanvasDocument,
+  SubagentRun,
 } from '@piflow/protocol'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
+import { InvalidAgentConfiguration, LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
 
 const VERSION = 1 as const
 const MAX_MESSAGES = 500
@@ -23,6 +24,7 @@ export interface FlowStore {
   replaceTopology: (projectPath: string, topology: FlowTopology, options?: { commitGraph?: boolean }) => Promise<FlowDocument>
   appendMessage: (projectPath: string, message: FlowMessageRecord) => Promise<FlowDocument>
   updateMessage: (projectPath: string, id: string, mutate: (message: FlowMessageRecord, messages: readonly FlowMessageRecord[]) => FlowMessageRecord | null) => Promise<FlowMessageRecord | null>
+  saveRun: (projectPath: string, run: SubagentRun) => Promise<void>
   readModules: (projectPath: string) => Promise<{ nodes: Array<{ id: string, name: string, brief: string }> }>
   setConductor: (projectPath: string, sessionPath: string) => Promise<void>
   acceptConductor: (projectPath: string, draft: ConductorDraft) => Promise<FlowDocument>
@@ -162,6 +164,15 @@ export function createFlowStore(dataDir: string): FlowStore {
     return update(normalized, async () => {
       const current = await readState(normalized)
       const parsed = parseTopology(topology)
+      if (options?.commitGraph) {
+        for (const node of parsed.nodes) {
+          const previous = current.document.nodes.find(item => item.id === node.id)
+          if (previous && (previous.kind ?? 'persistent') !== (node.kind ?? 'persistent')
+            && current.document.runs?.some(run => run.roleId === node.id || run.orchestratorId === node.id)) {
+            throw new InvalidAgentConfiguration('该节点已有运行记录，请新建另一种执行类型的节点')
+          }
+        }
+      }
       const project = documents.get(normalized)?.project ?? null
       const projectIds = new Set(project?.canvas.nodes.map(node => node.id) ?? [])
       const now = new Date().toISOString()
@@ -172,7 +183,7 @@ export function createFlowStore(dataDir: string): FlowStore {
           if (!next)
             return node
           if (projectIds.has(node.id))
-            return { ...node, sessionPath: next.sessionPath, goal: next.goal }
+            return { ...node, sessionPath: node.kind === 'subagent-role' ? '' : next.sessionPath, goal: next.goal }
           return next
         })
         for (const node of parsed.nodes) {
@@ -243,6 +254,18 @@ export function createFlowStore(dataDir: string): FlowStore {
     })
   }
 
+  async function saveRun(projectPath: string, run: SubagentRun): Promise<void> {
+    const normalized = await normalizeProject(projectPath)
+    await update(normalized, async () => {
+      const current = await readState(normalized)
+      const runs = [...(current.document.runs ?? []).filter(item => item.id !== run.id), structuredClone(run)]
+      const document = { ...current.document, runs, updatedAt: new Date().toISOString() }
+      const project = documents.get(normalized)?.project ?? null
+      await persist(document, null)
+      remember(document, true, project)
+    })
+  }
+
   async function readModules(projectPath: string): Promise<{ nodes: Array<{ id: string, name: string, brief: string }> }> {
     const normalized = await normalizeProject(projectPath)
     await readState(normalized)
@@ -287,7 +310,7 @@ export function createFlowStore(dataDir: string): FlowStore {
     })
   }
 
-  return { read, readState, replaceTopology, appendMessage, updateMessage, readModules, setConductor, acceptConductor }
+  return { saveRun, read, readState, replaceTopology, appendMessage, updateMessage, readModules, setConductor, acceptConductor }
 }
 
 function applyCanvas(document: FlowDocument, project: ProjectCanvasDocument): FlowDocument {
@@ -298,11 +321,11 @@ function applyCanvas(document: FlowDocument, project: ProjectCanvasDocument): Fl
     const local = localNodes.get(node.id)
     return {
       id: node.id,
-      sessionPath: local?.sessionPath ?? '',
       name: node.name,
       goal: local?.goal ?? '',
       brief: node.brief,
       ...parseAgentConfiguration({ ...node }),
+      sessionPath: node.kind === 'subagent-role' ? '' : local?.sessionPath ?? '',
       position: node.position,
       createdAt: local?.createdAt ?? document.updatedAt,
       updatedAt: local?.updatedAt ?? document.updatedAt,
@@ -408,6 +431,25 @@ export function canAccessNode(document: FlowDocument, readerId: string, sourceId
   return findConnection(document, readerId, sourceId) !== undefined
 }
 
+function parseRuns(value: unknown): SubagentRun[] {
+  if (value === undefined)
+    return []
+  if (!Array.isArray(value))
+    throw new Error('invalid subagent runs')
+  return value.map((item: unknown) => {
+    if (!isRecord(item) || typeof item.id !== 'string' || typeof item.orchestratorId !== 'string' || typeof item.roleId !== 'string'
+      || typeof item.parentSessionPath !== 'string' || typeof item.parentToolCallId !== 'string' || typeof item.task !== 'string'
+      || typeof item.output !== 'string' || typeof item.createdAt !== 'string' || !isRecord(item.configurationSnapshot)
+      || !['running', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(String(item.status))) {
+      throw new Error('invalid subagent run')
+    }
+    const run = item as unknown as SubagentRun
+    return run.status === 'running'
+      ? { ...run, status: 'interrupted' as const, completedAt: new Date().toISOString(), error: '服务重启，运行已中断；请检查结果后重新委派。' }
+      : run
+  })
+}
+
 function parseDocument(value: unknown, projectPath: string): FlowDocument {
   if (!isRecord(value) || value.version !== VERSION || value.projectPath !== projectPath)
     throw new Error('invalid flow document')
@@ -415,6 +457,7 @@ function parseDocument(value: unknown, projectPath: string): FlowDocument {
     version: VERSION,
     projectPath,
     ...parseTopology(value),
+    runs: parseRuns(value.runs),
     messages: asArray(value.messages).map(parseMessage),
     conductorPath: typeof value.conductorPath === 'string' ? value.conductorPath : undefined,
     updatedAt: asString(value.updatedAt, 'updatedAt'),
@@ -470,6 +513,8 @@ function parseTopology(value: unknown): FlowTopology {
     throw new Error('duplicate flow edge')
   if (edges.some(edge => edge.source === edge.target || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)))
     throw new Error('invalid flow edge endpoints')
+  if (edges.some(edge => nodes.some(node => node.kind === 'subagent-role' && (node.id === edge.source || node.id === edge.target))))
+    throw new InvalidAgentConfiguration('通信边只能连接长期 Agent；角色通过 subagent 调用')
   if (new Set(edges.map(connectionKey)).size !== edges.length)
     throw new Error('duplicate flow connection')
   if (!isRecord(value.viewport))
@@ -493,6 +538,8 @@ function parseNode(value: unknown): FlowNode {
   const name = asString(value.name, 'node.name').trim()
   if (!name || name.length > 80)
     throw new Error('invalid flow node name')
+  if (value.kind === 'subagent-role' && value.sessionPath !== '')
+    throw new InvalidAgentConfiguration('Subagent 角色不能绑定长期会话')
   return {
     id: asString(value.id, 'node.id'),
     sessionPath: asString(value.sessionPath, 'node.sessionPath'),
