@@ -18,8 +18,6 @@ import WorkspaceWelcome from '../WorkspaceWelcome'
 import styles from './styles.module.css'
 
 const SCROLL_KEY = 'piflow.scroll'
-const messageIds = new WeakMap<AgentMessage, number>()
-let nextMessageId = 1
 
 function readScrollMap(): Record<string, number> {
   try {
@@ -110,7 +108,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
     const element = event.currentTarget
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(persist, 200, key, element.scrollTop)
-    stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 160
+    stickToBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24
   }
 
   function markUserScroll() {
@@ -285,7 +283,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
                   if (!headMessage)
                     return null
                   return (
-                    <div key={messageKey(headMessage)}>
+                    <div key={`${sessionKey}:${head}:${headMessage.timestamp ?? ''}`}>
                       {indices.map((index) => {
                         const message = shown[index]
                         if (!message)
@@ -293,7 +291,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
                         if (message.role === 'user')
                           userCount += 1
                         return (
-                          <Fragment key={messageKey(message)}>
+                          <Fragment key={`${sessionKey}:${index}:${message.role}:${message.timestamp ?? ''}`}>
                             <MessageItem
                               message={message}
                               toolResults={view.toolResults}
@@ -348,15 +346,6 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
       />
     </div>
   )
-}
-
-function messageKey(message: AgentMessage) {
-  let id = messageIds.get(message)
-  if (!id) {
-    id = nextMessageId++
-    messageIds.set(message, id)
-  }
-  return `${message.role}:${message.timestamp ?? 'untimed'}:${id}`
 }
 
 function formatTokens(value: number) {

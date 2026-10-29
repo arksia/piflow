@@ -350,11 +350,19 @@ button:disabled {
 
 .streaming-tail {
   display: inline-block;
-  margin-left: 2px;
-  color: var(--c-faint);
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  vertical-align: 0.12em;
+  background: var(--c-faint);
   animation: streaming-tail-breathe 1.2s ease-in-out infinite;
 }
 
 @keyframes streaming-tail-breathe {
   50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-tail { animation: none; }
 }

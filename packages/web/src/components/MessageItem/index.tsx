@@ -7,7 +7,6 @@ import { AccChevron } from '../../motion'
 import { fetchForkPoints, forkSession } from '../../session/actions'
 import ContentImage from '../ContentImage'
 import IconButton from '../IconButton'
-import MarkdownView from '../MarkdownView'
 import Popover from '../Popover'
 import StreamingMarkdownView from '../StreamingMarkdownView'
 import ToolCallCard from '../ToolCallCard'
@@ -112,13 +111,13 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
     return (
       <div className={styles.message}>
         {parts.map((part, index) => {
-          const node = renderAssistantPart(part, toolResults, live)
-          if (!node || index !== lastText)
-            return node
+          const node = renderAssistantPart(part, toolResults, live, part.type === 'block' && part.index === message.content.length - 1)
+          if (!node)
+            return null
           return (
             <Fragment key={node.key}>
               {node}
-              <MessageActions message={message} showTime={showTime} sessionPath={sessionPath} forkOrdinal={forkOrdinal} tools={tools} />
+              {index === lastText && !live ? <MessageActions message={message} showTime={showTime} sessionPath={sessionPath} forkOrdinal={forkOrdinal} tools={tools} /> : null}
             </Fragment>
           )
         })}
@@ -148,7 +147,7 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
   return null
 }
 
-function renderAssistantPart(part: AssistantPart, toolResults: Record<string, ToolState>, live: boolean) {
+function renderAssistantPart(part: AssistantPart, toolResults: Record<string, ToolState>, live: boolean, active: boolean) {
   if (part.type === 'tools') {
     const call = part.calls[0]
     if (!call)
@@ -158,17 +157,15 @@ function renderAssistantPart(part: AssistantPart, toolResults: Record<string, To
     return <ToolRunGroup key={call.id} calls={part.calls} toolResults={toolResults} />
   }
   const { block, index } = part
-  const key = live ? `live:${block.type}:${index}` : blockKey(block)
+  const key = `${block.type}:${index}`
   if (block.type === 'text') {
     const text = stripConductorFences(block.text).trim()
     if (!text)
       return null
-    return live
-      ? <StreamingMarkdownView key={key} text={text} />
-      : <MarkdownView key={key} text={text} />
+    return <StreamingMarkdownView key={key} text={text} streaming={live && active} />
   }
   if (block.type === 'thinking')
-    return <ThinkingBlock key={key} text={block.thinking} live={live} />
+    return <ThinkingBlock key={key} text={block.thinking} live={live && active} />
   return null
 }
 

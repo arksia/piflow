@@ -48,13 +48,12 @@ function appendTail(parent: ParentNode): boolean {
     if (!child || !isElementNode(child))
       continue
     if (SKIP_TAGS.has(child.tagName) || hasClass(child, 'katex'))
-      continue
+      return false
     if (TAIL_PARENT_TAGS.has(child.tagName)) {
       child.children.push(tailNode())
       return true
     }
-    if (appendTail(child))
-      return true
+    return appendTail(child)
   }
   return false
 }
