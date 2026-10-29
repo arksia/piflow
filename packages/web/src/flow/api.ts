@@ -1,5 +1,5 @@
 import type { AcceptConductorRequest, ConductorDraft, FlowDocument, FlowDocumentResponse, FlowTopology, ReplaceFlowRequest } from '@piflow/protocol'
-import { API_FLOW_ACCEPT_PATH, buildFlowPath } from '@piflow/protocol'
+import { API_FLOW_ACCEPT_PATH, API_FLOW_PATH, buildFlowPath } from '@piflow/protocol'
 import { api } from '../session/api'
 
 export async function loadFlow(projectPath: string): Promise<FlowDocumentResponse> {
@@ -20,4 +20,8 @@ export async function acceptConductor(projectPath: string, draft: ConductorDraft
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ projectPath, draft } satisfies AcceptConductorRequest),
   })).document
+}
+
+export async function cancelRun(projectPath: string, runId: string): Promise<void> {
+  await api(`${API_FLOW_PATH}/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectPath }) })
 }

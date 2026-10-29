@@ -1,4 +1,4 @@
-import type { FlowMessageRecord } from '@piflow/protocol'
+import type { FlowMessageRecord, SubagentRun } from '@piflow/protocol'
 
 export interface FlowEdgeActivity {
   messageId: string
@@ -6,6 +6,44 @@ export interface FlowEdgeActivity {
   source: string
   target: string
   kind: 'request' | 'response' | 'error'
+}
+
+export function subagentEdgeId(run: Pick<SubagentRun, 'orchestratorId' | 'roleId'>): string {
+  return `subagent:${JSON.stringify([run.orchestratorId, run.roleId])}`
+}
+
+export function changedRunActivities(previous: SubagentRun[], current: SubagentRun[]): FlowEdgeActivity[] {
+  const before = new Map(previous.map(run => [run.id, run.status]))
+  return current.flatMap((run) => {
+    if (before.get(run.id) === run.status)
+      return []
+    return [{
+      messageId: run.id,
+      edgeId: subagentEdgeId(run),
+      source: run.orchestratorId,
+      target: run.roleId,
+      kind: run.status === 'running' ? 'request' as const : run.status === 'succeeded' ? 'response' as const : 'error' as const,
+    }]
+  })
+}
+
+/** Display-only calls; shared roles resolve to the reference beside the calling main Agent. */
+export function subagentCallEdges(
+  runs: SubagentRun[],
+  activities: FlowEdgeActivity[],
+  nodes: { id: string, data: { agentId?: string, displayOwnerId?: string } }[],
+): { id: string, source: string, target: string }[] {
+  const edges = new Map<string, { id: string, source: string, target: string }>()
+  for (const run of runs) {
+    const id = subagentEdgeId(run)
+    if (run.status !== 'running' && !activities.some(activity => activity.edgeId === id))
+      continue
+    const target = nodes.find(node => (node.data.agentId ?? node.id) === run.roleId && node.data.displayOwnerId === run.orchestratorId)
+      ?? nodes.find(node => node.id === run.roleId)
+    if (target && nodes.some(node => node.id === run.orchestratorId))
+      edges.set(id, { id, source: run.orchestratorId, target: target.id })
+  }
+  return [...edges.values()]
 }
 
 export function changedDeliveryActivities(previous: FlowMessageRecord[], current: FlowMessageRecord[]): FlowEdgeActivity[] {

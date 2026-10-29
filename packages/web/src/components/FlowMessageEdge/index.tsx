@@ -10,6 +10,7 @@ export interface FlowMessageEdgeData extends Record<string, unknown> {
   reducedMotion: boolean
   dimmed: boolean
   route?: FlowRoutePoint[]
+  transient?: boolean
 }
 
 export type FlowMessageEdgeType = Edge<FlowMessageEdgeData, 'message'>
@@ -50,6 +51,7 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
           strokeWidth: 1.5,
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
+          strokeDasharray: data?.transient ? '3 5' : undefined,
           opacity: data?.dimmed ? 0.14 : 1,
           transition: 'stroke 140ms ease-out, opacity 140ms ease-out',
         }}

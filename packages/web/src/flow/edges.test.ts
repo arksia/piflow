@@ -1,7 +1,7 @@
-import type { FlowMessageRecord } from '@piflow/protocol'
+import type { FlowMessageRecord, SubagentRun } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { changedDeliveryActivities, sameDeliveryState } from './edges'
+import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from './edges'
 
 function record(id: string, edgeId: string, status: FlowMessageRecord['status']): FlowMessageRecord {
   return {
@@ -45,4 +45,18 @@ describe('flow delivery edges', () => {
       ['2', 'error'],
     ])
   })
+})
+
+it('keeps concurrent calls separate and routes shared roles to the caller reference without persistent edges', () => {
+  const first = { id: 'run-1', orchestratorId: 'main', roleId: 'role', status: 'running' } as SubagentRun
+  const second = { ...first, id: 'run-2' }
+  const activities = changedRunActivities([], [first, second])
+  assert.deepEqual(activities.map(item => item.messageId), ['run-1', 'run-2'])
+  const nodes = [{ id: 'main', data: {} }, { id: 'role', data: { displayOwnerId: 'other' } }, { id: 'shared-ref', data: { agentId: 'role', displayOwnerId: 'main' } }]
+  const calls = subagentCallEdges([first, second], activities, nodes)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0]?.target, 'shared-ref')
+  const done = [{ ...first, status: 'succeeded' as const }, { ...second, status: 'failed' as const }]
+  assert.deepEqual(changedRunActivities([first, second], done).map(item => item.kind), ['response', 'error'])
+  assert.deepEqual(subagentCallEdges(done, [], nodes), [])
 })

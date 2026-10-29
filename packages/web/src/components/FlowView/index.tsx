@@ -25,14 +25,14 @@ import {
 } from '@xyflow/react'
 import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { acceptConductor, loadFlow, saveFlow } from '../../flow/api'
+import { acceptConductor, cancelRun, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
-import { changedDeliveryActivities, sameDeliveryState } from '../../flow/edges'
+import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from '../../flow/edges'
 import { memberPlacements } from '../../flow/members'
 import { routeGraphEdges } from '../../flow/routes'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
-import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust } from '../../session/actions'
+import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust, sendPrompt } from '../../session/actions'
 import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
 import ChatView from '../ChatView'
@@ -50,6 +50,8 @@ const ROLE_TEMPLATES = [
   { label: '产品经理', prompt: '你负责澄清用户目标、边界和验收标准。将需求拆成可执行工作，明确依赖与优先级；有不确定性时先提出关键问题。' },
   { label: '测试', prompt: '你负责验证功能与质量。根据验收标准覆盖关键路径、失败路径和边界条件，提供可复现的问题步骤与验证结论。' },
 ]
+
+const RUN_STATUS_LABELS = { running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '已中断' }
 
 const NODE_WIDTH = 172
 const NODE_HEIGHT = 128
@@ -101,6 +103,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
   const [activities, setActivities] = useState<FlowEdgeActivity[]>([])
   const previousMessagesRef = useRef<FlowDocument['messages'] | null>(null)
+  const previousRunsRef = useRef<NonNullable<FlowDocument['runs']>>([])
   const messageProjectRef = useRef<string | null>(null)
   const activityTimersRef = useRef(new Map<string, number>())
   const saveRevRef = useRef(0)
@@ -118,6 +121,11 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('')
   const [draftBrief, setDraftBrief] = useState('')
+  const [draftKind, setDraftKind] = useState<'persistent' | 'subagent-role'>('subagent-role')
+  const [draftRolePrompt, setDraftRolePrompt] = useState('')
+  const [configurationKind, setConfigurationKind] = useState<'persistent' | 'subagent-role'>('persistent')
+  const [roleModel, setRoleModel] = useState('')
+  const [roleTools, setRoleTools] = useState<string[]>(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'])
   const [sessionPath, setSessionPath] = useState('')
   const [briefOpen, setBriefOpen] = useState(false)
   const [brief, setBrief] = useState('')
@@ -125,6 +133,11 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const [rolePrompt, setRolePrompt] = useState('')
   const [orchestrationEnabled, setOrchestrationEnabled] = useState(false)
   const [memberIds, setMemberIds] = useState<string[]>([])
+  const [runOwnerFilter, setRunOwnerFilter] = useState('')
+  const [delegationRole, setDelegationRole] = useState('')
+  const [delegationTask, setDelegationTask] = useState('')
+  const [delegating, setDelegating] = useState(false)
+  const [delegationOpen, setDelegationOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
@@ -133,7 +146,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const ensureNodeSession = useCallback(async (id: string): Promise<string | null> => {
     const current = documentRef.current
     const node = current?.nodes.find(item => item.id === id)
-    if (!current || !node)
+    if (!current || !node || node.kind === 'subagent-role')
       return null
     let path = node.sessionPath
     if (!path) {
@@ -265,9 +278,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           setDocument((current) => {
             if (!current || current.projectPath !== loaded.document.projectPath)
               return current
-            if (sameDeliveryState(current.messages, loaded.document.messages))
+            if (sameDeliveryState(current.messages, loaded.document.messages) && JSON.stringify(current.runs) === JSON.stringify(loaded.document.runs))
               return current
-            return { ...current, messages: loaded.document.messages }
+            return { ...current, messages: loaded.document.messages, runs: loaded.document.runs }
           })
         })
         .catch(() => {
@@ -319,13 +332,19 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     if (messageProjectRef.current !== document.projectPath) {
       messageProjectRef.current = document.projectPath
       previousMessagesRef.current = document.messages
+      previousRunsRef.current = document.runs ?? []
+      for (const timer of activityTimersRef.current.values())
+        window.clearTimeout(timer)
+      activityTimersRef.current.clear()
+      setActivities([])
       return
     }
     const previous = previousMessagesRef.current
     previousMessagesRef.current = document.messages
     if (!previous)
       return
-    const next = changedDeliveryActivities(previous, document.messages)
+    const next = [...changedDeliveryActivities(previous, document.messages), ...changedRunActivities(previousRunsRef.current, document.runs ?? [])]
+    previousRunsRef.current = document.runs ?? []
     for (const [index, activity] of next.entries()) {
       const key = `${activity.messageId}:${activity.kind}:${Date.now()}:${index}`
       // eslint-disable-next-line react/set-state-in-effect -- this projects a transient event observed from a completed poll.
@@ -417,6 +436,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   persistRef.current = persist
 
   function connectNodes(sourceId: string, targetId: string) {
+    if (document?.nodes.some(node => node.kind === 'subagent-role' && (node.id === sourceId || node.id === targetId))) {
+      setError('通信边只能连接长期 Agent；角色通过 subagent 调用')
+      return
+    }
     if (!document || sourceId === targetId)
       return
     const exists = document.edges.some(edge =>
@@ -444,6 +467,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
   const onNodeClick: NodeMouseHandler<FlowCanvasNode> = (_event, node) => {
     if (!connectMode) {
+      setRunOwnerFilter(node.data.kind === 'subagent-role' ? node.data.displayOwnerId ?? '' : '')
       if (node.data.agentId) {
         const id = node.data.agentId
         setNodes(current => current.map(item => ({ ...item, selected: item.id === id })))
@@ -583,6 +607,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       return
     setBrief(node.brief ?? '')
     setRoleLabel(node.roleLabel ?? '')
+    setConfigurationKind(node.kind ?? 'persistent')
+    setRoleModel(node.model ?? '')
+    setRoleTools(node.tools ?? ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'])
     setRolePrompt(node.rolePrompt ?? '')
     setOrchestrationEnabled(Boolean(node.orchestrationEnabled))
     setMemberIds((document?.memberships ?? []).filter(item => item.orchestratorId === id).map(item => item.memberId))
@@ -595,8 +622,17 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     const id = selection.nodes[0]
     if (!document || !id)
       return
-    if (orchestrationEnabled && document.memberships?.some(item => item.memberId === id)) {
+    if (configurationKind === 'persistent' && document.memberships?.some(item => item.memberId === id)) {
       setError('该 Agent 仍属于其他编排者，请先移除归属关系，再启用编排能力。')
+      return
+    }
+    if (configurationKind === 'subagent-role' && document.edges.some(edge => edge.source === id || edge.target === id)) {
+      setError('请先移除该节点的通信边，再将它改为 Subagent 角色。')
+      return
+    }
+    const existing = document.nodes.find(node => node.id === id)
+    if (configurationKind !== (existing?.kind ?? 'persistent') && document.runs?.some(run => run.roleId === id || run.orchestratorId === id)) {
+      setError('该节点已有运行记录，请新建另一种执行类型的节点；原运行记录将保留。')
       return
     }
     const now = new Date().toISOString()
@@ -604,9 +640,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       ...document,
       memberships: [
         ...(document.memberships ?? []).filter(item => item.orchestratorId !== id),
-        ...(orchestrationEnabled ? memberIds.map(memberId => ({ orchestratorId: id, memberId })) : []),
+        ...(configurationKind === 'persistent' && orchestrationEnabled ? memberIds.map(memberId => ({ orchestratorId: id, memberId })) : []),
       ],
-      nodes: document.nodes.map(node => node.id === id ? { ...node, brief: brief.trim(), roleLabel: roleLabel.trim(), rolePrompt: rolePrompt.trim(), orchestrationEnabled, updatedAt: now } : node),
+      nodes: document.nodes.map(node => node.id === id ? { ...node, kind: configurationKind, sessionPath: configurationKind === 'subagent-role' ? '' : node.sessionPath, brief: brief.trim(), roleLabel: roleLabel.trim(), rolePrompt: rolePrompt.trim(), model: roleModel.trim(), tools: roleTools, orchestrationEnabled: configurationKind === 'persistent' && orchestrationEnabled, updatedAt: now } : node),
     }, true)
     setBriefOpen(false)
   }
@@ -618,8 +654,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     setSaving(true)
     setError(null)
     try {
-      let path = sessionPath
-      if (!path) {
+      let path = draftKind === 'subagent-role' ? '' : sessionPath
+      if (draftKind === 'persistent' && !path) {
         const state = await createBackgroundSession(document.projectPath)
         if (!state.sessionFile)
           throw new Error('新会话尚未生成可持久化路径')
@@ -633,6 +669,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         nodes: [...document.nodes, {
           id: crypto.randomUUID(),
           sessionPath: path,
+          kind: draftKind,
+          orchestrationEnabled: draftKind === 'persistent',
+          rolePrompt: draftRolePrompt.trim(),
           name: name.trim(),
           goal: goal.trim(),
           brief: draftBrief.trim(),
@@ -645,6 +684,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       setName('')
       setGoal('')
       setDraftBrief('')
+      setDraftRolePrompt('')
       setSessionPath('')
       setPanelOpen(false)
     }
@@ -669,15 +709,26 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   }
 
   const startConnect = useCallback(() => {
+    if (documentRef.current?.nodes.find(node => node.id === selection.nodes[0])?.kind === 'subagent-role')
+      return
     if (selection.nodes.length === 1)
       setConnectMode({ sourceId: selection.nodes[0]! })
   }, [selection])
 
   const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
   const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
+  const selectedRuns = (document?.runs ?? []).filter(run => selectedNode?.kind === 'subagent-role'
+    ? run.roleId === selectedNodeId && (!runOwnerFilter || run.orchestratorId === runOwnerFilter)
+    : run.orchestratorId === selectedNodeId).slice().reverse()
+  const rolePanelState = selectedRuns.some(run => run.status === 'running') ? 'running' : selectedRuns[0]?.status
+  const rolePanelKind = rolePanelState === 'running' ? 'Running' : rolePanelState === 'failed' || rolePanelState === 'interrupted' ? 'Failed' : 'Idle'
   const selectedNodeView = selectedNode ? (viewForSession(store.views, selectedNode.sessionPath) ?? null) : null
   const selectedNeighbors = selectedNodeId
-    ? new Set(document?.edges.flatMap(edge => edge.source === selectedNodeId ? [edge.target] : edge.target === selectedNodeId ? [edge.source] : []) ?? [])
+    ? new Set([
+        ...(document?.edges.flatMap(edge => edge.source === selectedNodeId ? [edge.target] : edge.target === selectedNodeId ? [edge.source] : []) ?? []),
+        ...(document?.memberships?.flatMap(item => item.orchestratorId === selectedNodeId ? [item.memberId] : item.memberId === selectedNodeId ? [item.orchestratorId] : []) ?? []),
+        ...(document?.runs?.filter(run => run.status === 'running').flatMap(run => run.orchestratorId === selectedNodeId ? [run.roleId] : run.roleId === selectedNodeId ? [run.orchestratorId] : []) ?? []),
+      ])
     : null
   const recentMessages = selectedNodeId
     ? (document?.messages.filter(message => message.source === selectedNodeId || message.target === selectedNodeId).slice(-5).reverse() ?? [])
@@ -738,8 +789,35 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     if (!document)
       return
     // eslint-disable-next-line react/set-state-in-effect -- derived user edges and live message activity
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion, selection.nodes[0], projectedNodes, instance))
-  }, [document, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance])
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, instance, subagentCallEdges(document.runs ?? [], activities, projectedNodes)))
+  }, [document, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active])
+
+  async function delegateTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedNode?.orchestrationEnabled || !delegationTask.trim() || !delegationRole || delegating)
+      return
+    const nodeId = selectedNode.id
+    const role = document?.nodes.find(node => node.id === delegationRole && node.kind === 'subagent-role')
+    if (!role)
+      return
+    setDelegating(true)
+    setError(null)
+    try {
+      const path = await ensureNodeSession(nodeId)
+      if (!path)
+        throw new Error('主 Agent 会话尚未就绪')
+      const opened = await openBackgroundSession(path)
+      await sendPrompt(`请调用 subagent 工具，将下面的任务委派给角色 ${JSON.stringify({ id: role.id, name: role.name })}。请提供必要上下文，收到结果后检查并汇总，继续完成任务。\n\n${delegationTask.trim()}`, undefined, 'followUp', opened.key)
+      setDelegationTask('')
+      setDelegationOpen(false)
+    }
+    catch (reason) {
+      setError(String(reason))
+    }
+    finally {
+      setDelegating(false)
+    }
+  }
 
   function toggleMembers(id: string) {
     setExpandedAgents((current) => {
@@ -760,14 +838,14 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       memberSummary: node.data.orchestrationEnabled
         ? (() => {
             const members = (document?.memberships ?? []).filter(item => item.orchestratorId === node.id)
-            const paths = members.map(item => document?.nodes.find(agent => agent.id === item.memberId)?.sessionPath ?? '')
-            return { total: members.length, running: paths.filter(path => sessionStatusFor(path, store.statuses) === 'running').length, failed: paths.filter(path => sessionStatusFor(path, store.statuses) === 'failed').length }
+            const runs = (document?.runs ?? []).filter(run => run.orchestratorId === node.id)
+            return { total: members.length, running: runs.filter(run => run.status === 'running').length, failed: runs.filter(run => run.status === 'failed' || run.status === 'interrupted').length }
           })()
         : undefined,
       membersExpanded: expandedAgents.has(node.id),
       onToggleMembers: () => toggleMembers(node.id),
-      modelName: viewForSession(store.views, node.data.sessionPath)?.model?.id,
-      status: sessionStatusFor(node.data.sessionPath, store.statuses),
+      modelName: node.data.kind === 'subagent-role' ? node.data.roleModel || '继承调用者模型' : viewForSession(store.views, node.data.sessionPath)?.model?.id,
+      status: node.data.kind === 'subagent-role' ? roleStatus(document?.runs ?? [], node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
       needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
       unread: store.unreadSessions.has(node.data.sessionPath),
       isCurrent: node.data.sessionPath === activeSessionPath,
@@ -843,6 +921,13 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         ? (
             <form className={styles.panel} onSubmit={event => void addNode(event)}>
               <label>
+                执行类型
+                <select value={draftKind} onChange={event => setDraftKind(event.target.value as 'persistent' | 'subagent-role')}>
+                  <option value="subagent-role">Subagent 角色（独立任务上下文）</option>
+                  <option value="persistent">主 Agent（长期会话）</option>
+                </select>
+              </label>
+              <label>
                 名称
                 <input required maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="认证模块" autoFocus />
               </label>
@@ -855,12 +940,20 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 <textarea maxLength={8000} rows={5} value={draftBrief} onChange={event => setDraftBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
               </label>
               <label>
-                会话
-                <select value={sessionPath} onChange={event => setSessionPath(event.target.value)}>
-                  <option value="">新建干净会话</option>
-                  {availableSessions.map(session => <option key={session.path} value={session.path}>{sessionLabel(session)}</option>)}
-                </select>
+                角色提示词
+                <textarea maxLength={8000} rows={4} value={draftRolePrompt} onChange={event => setDraftRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求" />
               </label>
+              {draftKind === 'persistent'
+                ? (
+                    <label>
+                      会话
+                      <select value={sessionPath} onChange={event => setSessionPath(event.target.value)}>
+                        <option value="">新建干净会话</option>
+                        {availableSessions.map(session => <option key={session.path} value={session.path}>{sessionLabel(session)}</option>)}
+                      </select>
+                    </label>
+                  )
+                : null}
               <div className={styles.panelActions}>
                 <button type="button" onClick={() => setPanelOpen(false)}>取消</button>
                 <button type="submit" className={styles.confirm} disabled={saving || !name.trim()}>添加</button>
@@ -873,6 +966,33 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         ? (
             <form className={styles.panel} onSubmit={saveBrief} aria-label="Agent 配置">
               <strong>Agent 配置</strong>
+              <label>
+                执行类型
+                <select value={configurationKind} onChange={event => setConfigurationKind(event.target.value as 'persistent' | 'subagent-role')}>
+                  <option value="persistent">长期 Agent</option>
+                  <option value="subagent-role">Subagent 角色（每次调用独立执行）</option>
+                </select>
+              </label>
+              {configurationKind === 'subagent-role'
+                ? (
+                    <>
+                      <label>
+                        模型
+                        <input value={roleModel} maxLength={200} onChange={event => setRoleModel(event.target.value)} placeholder="留空继承主 Agent；或 provider/model-id" />
+                      </label>
+                      <fieldset className={styles.members}>
+                        <legend>角色工具范围</legend>
+                        <p>实际执行取角色配置与主 Agent 已启用工具的交集。</p>
+                        {['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'].map(tool => (
+                          <label className={styles.toggleField} key={tool}>
+                            <input type="checkbox" checked={roleTools.includes(tool)} onChange={event => setRoleTools(current => event.target.checked ? [...current, tool] : current.filter(item => item !== tool))} />
+                            {tool}
+                          </label>
+                        ))}
+                      </fieldset>
+                    </>
+                  )
+                : null}
               <label>
                 从角色模板开始
                 <select
@@ -898,21 +1018,21 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 <textarea maxLength={8000} rows={5} value={rolePrompt} onChange={event => setRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求；从下次运行开始生效。" />
               </label>
               <label className={styles.toggleField}>
-                <input type="checkbox" checked={orchestrationEnabled} disabled={Boolean(document?.memberships?.some(item => item.memberId === selection.nodes[0]))} onChange={event => setOrchestrationEnabled(event.target.checked)} />
+                <input type="checkbox" checked={orchestrationEnabled} disabled={configurationKind === 'subagent-role' || Boolean(document?.memberships?.some(item => item.memberId === selection.nodes[0]))} onChange={event => setOrchestrationEnabled(event.target.checked)} />
                 启用编排能力
               </label>
               {document?.memberships?.some(item => item.memberId === selection.nodes[0]) ? <p className={styles.configHint}>启用前请先从所属编排者的成员列表中移除该 Agent。</p> : null}
-              {orchestrationEnabled
+              {configurationKind === 'persistent' && orchestrationEnabled
                 ? (
                     <fieldset className={styles.members}>
                       <legend>成员（不创建通信连接）</legend>
-                      {document?.nodes.filter(node => node.id !== selection.nodes[0] && !node.orchestrationEnabled).map(node => (
+                      {document?.nodes.filter(node => node.id !== selection.nodes[0] && node.kind === 'subagent-role').map(node => (
                         <label key={node.id} className={styles.toggleField}>
                           <input type="checkbox" checked={memberIds.includes(node.id)} onChange={event => setMemberIds(current => event.target.checked ? [...current, node.id] : current.filter(id => id !== node.id))} />
                           {node.name}
                         </label>
                       ))}
-                      {!document?.nodes.some(node => node.id !== selection.nodes[0] && !node.orchestrationEnabled) ? <p>先在画布上添加普通 Agent。</p> : null}
+                      {!document?.nodes.some(node => node.id !== selection.nodes[0] && node.kind === 'subagent-role') ? <p>先在画布上添加 Subagent 角色。</p> : null}
                     </fieldset>
                   )
                 : null}
@@ -989,18 +1109,18 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
               </ReactFlow>
             )}
 
-        {selectedNode && !connectMode && !briefOpen
+        {selectedNode && !connectMode && !briefOpen && !panelOpen
           ? (
               <aside className={styles.runtimePanel} aria-label={`会话运行面板：${selectedNode.name}`}>
                 <header className={styles.runtimeHeader}>
                   <div className={styles.runtimeIdentity}>
                     <strong title={selectedNode.name}>{selectedNode.name}</strong>
-                    <span className={`${styles.runtimeStatus} ${styles[`runtime${panelStatusKind(selectedNodeView, selectedNode.sessionPath, store.statuses)}`]}`}>
-                      {panelStatusLabel(selectedNodeView, selectedNode.sessionPath, store.statuses)}
+                    <span className={`${styles.runtimeStatus} ${styles[`runtime${selectedNode.kind === 'subagent-role' ? rolePanelKind : panelStatusKind(selectedNodeView, selectedNode.sessionPath, store.statuses)}`]}`}>
+                      {selectedNode.kind === 'subagent-role' ? rolePanelState ? RUN_STATUS_LABELS[rolePanelState] : '尚无运行' : panelStatusLabel(selectedNodeView, selectedNode.sessionPath, store.statuses)}
                     </span>
                   </div>
                   <div className={styles.runtimeActions}>
-                    <button type="button" title="在完整聊天视图中打开" onClick={() => void focusSession(selectedNode.id)}>
+                    <button type="button" disabled={selectedNode.kind === 'subagent-role'} title={selectedNode.kind === 'subagent-role' ? '角色没有唯一长期会话' : '在完整聊天视图中打开'} onClick={() => void focusSession(selectedNode.id)}>
                       <ExternalLink size={14} aria-hidden="true" />
                       <span>打开聊天</span>
                     </button>
@@ -1022,7 +1142,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                         </button>
                       )
                     : null}
-                  <button type="button" className={styles.runtimeTool} onClick={startConnect}>
+                  <button type="button" className={styles.runtimeTool} disabled={selectedNode.kind === 'subagent-role'} onClick={startConnect}>
                     <Link2 size={14} aria-hidden="true" />
                     连接
                   </button>
@@ -1035,6 +1155,78 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                     移出画布
                   </button>
                 </div>
+                {selectedNode.kind === 'subagent-role'
+                  ? (
+                      <label className={styles.runFilter}>
+                        调用者
+                        <select aria-label="调用者" value={runOwnerFilter} onChange={event => setRunOwnerFilter(event.target.value)}>
+                          <option value="">全部主 Agent</option>
+                          {(document?.nodes ?? []).filter(node => node.orchestrationEnabled && node.kind !== 'subagent-role').map(node => <option key={node.id} value={node.id}>{node.name}</option>)}
+                        </select>
+                      </label>
+                    )
+                  : null}
+                {selectedNode.orchestrationEnabled && selectedNode.kind !== 'subagent-role'
+                  ? (
+                      <details className={styles.delegationEntry} open={delegationOpen} onToggle={event => setDelegationOpen(event.currentTarget.open)}>
+                        <summary>委派任务</summary>
+                        <form className={styles.delegation} onSubmit={delegateTask}>
+                          <label htmlFor="delegation-role">委派给角色</label>
+                          <select id="delegation-role" required value={delegationRole} onChange={event => setDelegationRole(event.target.value)}>
+                            <option value="">选择 Subagent 角色</option>
+                            {(document?.nodes ?? []).filter(node => node.kind === 'subagent-role').map(role => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                                {document?.memberships?.some(item => item.orchestratorId === selectedNode.id && item.memberId === role.id) ? ' · 默认成员' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <label htmlFor="delegation-task">任务与验收要求</label>
+                          <textarea id="delegation-task" required maxLength={10_000} rows={3} value={delegationTask} onChange={event => setDelegationTask(event.target.value)} placeholder="交给主 Agent 补充上下文并发起委派…" />
+                          <button type="submit" disabled={delegating || !delegationRole || !delegationTask.trim()}>{delegating ? '提交中…' : '交给主 Agent 委派'}</button>
+                          <small>主 Agent 接收请求、调用角色并整合结果；忙碌时排入后续消息。</small>
+                        </form>
+                      </details>
+                    )
+                  : null}
+                {selectedRuns.length
+                  ? (
+                      <section className={styles.runList} aria-label="Subagent 运行记录">
+                        <h3>Subagent 运行</h3>
+                        {selectedRuns.map(run => (
+                          <details key={run.id} className={styles.run}>
+                            <summary>
+                              {RUN_STATUS_LABELS[run.status]}
+                              {' '}
+                              ·
+                              {' '}
+                              {run.configurationSnapshot.roleName}
+                              {' '}
+                              ·
+                              {' '}
+                              {document?.nodes.find(node => node.id === run.orchestratorId)?.name ?? run.orchestratorId}
+                            </summary>
+                            <p>{run.task}</p>
+                            <small>
+                              {run.id}
+                              {' '}
+                              ·
+                              {' '}
+                              {run.configurationSnapshot.model}
+                            </small>
+                            <pre>{run.output || '等待执行输出…'}</pre>
+                            {run.status === 'running' && run.progress ? <p role="status">{run.progress.phase === 'tool' ? `正在执行工具：${run.progress.toolName ?? '工具'}` : run.progress.phase === 'thinking' ? '思考中…' : '正在输出…'}</p> : null}
+                            {run.error ? <p role="status">{run.error}</p> : null}
+                            {run.status === 'running' ? <button type="button" onClick={() => void cancelRun(document!.projectPath, run.id).catch(reason => setError(String(reason)))}>取消运行</button> : null}
+                            <details>
+                              <summary>启动配置快照</summary>
+                              <pre>{JSON.stringify(run.configurationSnapshot, null, 2)}</pre>
+                            </details>
+                          </details>
+                        ))}
+                      </section>
+                    )
+                  : selectedNode.kind === 'subagent-role' ? <p className={styles.runtimeEmpty}>尚无调用记录</p> : null}
                 {recentMessages.length
                   ? (
                       <section className={styles.deliveryList} aria-label="最近的跨会话消息">
@@ -1050,9 +1242,11 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                     )
                   : null}
                 <div className={styles.runtimeChat}>
-                  {selectedNodeView
-                    ? <ChatView sessionKey={selectedNodeView.key} />
-                    : <p className={styles.runtimeEmpty}>正在打开会话运行状态…</p>}
+                  {selectedNode.kind === 'subagent-role'
+                    ? <p className={styles.runtimeEmpty}>角色不绑定长期会话。主 Agent 通过 subagent 工具调用它，每次运行使用独立上下文。</p>
+                    : selectedNodeView
+                      ? <ChatView sessionKey={selectedNodeView.key} />
+                      : <p className={styles.runtimeEmpty}>正在打开会话运行状态…</p>}
                 </div>
               </aside>
             )
@@ -1072,6 +1266,14 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   )
 }
 
+function roleStatus(runs: NonNullable<FlowDocument['runs']>, roleId: string): 'running' | 'failed' | 'idle' {
+  const relevant = runs.filter(run => run.roleId === roleId)
+  if (relevant.some(run => run.status === 'running'))
+    return 'running'
+  const latest = relevant.at(-1)
+  return latest?.status === 'failed' || latest?.status === 'interrupted' ? 'failed' : 'idle'
+}
+
 function reconcileCanvasNodes(previous: FlowCanvasNode[], next: FlowNode[], onOpen: (id: string) => void): FlowCanvasNode[] {
   const byId = new Map(previous.map(node => [node.id, node]))
   return next.map(node => ({ ...byId.get(node.id), ...toCanvasNode(node, () => onOpen(node.id)), selected: byId.get(node.id)?.selected ?? false }))
@@ -1082,7 +1284,7 @@ function toCanvasNode(node: FlowNode, onOpen: () => void): FlowCanvasNode {
     id: node.id,
     type: 'session',
     position: node.position,
-    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, brief: node.brief, orchestrationEnabled: node.orchestrationEnabled, status: 'idle', needsInput: false, onOpen },
+    data: { sessionPath: node.sessionPath, name: node.name, goal: node.goal, brief: node.brief, kind: node.kind, roleModel: node.model, orchestrationEnabled: node.orchestrationEnabled, status: 'idle', needsInput: false, onOpen },
   }
 }
 
@@ -1094,8 +1296,10 @@ function toCanvasEdges(
   selectedNodeId?: string,
   nodes: FlowCanvasNode[] = [],
   instance: ReactFlowInstance<FlowCanvasNode, Edge> | null = null,
+  calls: { id: string, source: string, target: string }[] = [],
 ): Edge[] {
-  const routes = routeGraphEdges(edges, nodes.map((node) => {
+  const allEdges = [...edges, ...calls]
+  const routes = routeGraphEdges(allEdges, nodes.map((node) => {
     const internal = instance?.getInternalNode(node.id)
     const handle = internal?.internals.handleBounds?.source?.[0]
     const position = node.position
@@ -1106,19 +1310,24 @@ function toCanvasEdges(
       size: 51,
     }
   }))
-  return edges.map((edge) => {
+  return allEdges.map((edge) => {
+    const transient = calls.some(call => call.id === edge.id)
     const selected = selectedEdgeIds.has(edge.id)
-    const adjacent = !selectedNodeId || edge.source === selectedNodeId || edge.target === selectedNodeId
+    const targetId = nodes.find(node => node.id === edge.target)?.data.agentId ?? edge.target
+    const adjacent = !selectedNodeId || edge.source === selectedNodeId || targetId === selectedNodeId
     return {
       id: edge.id,
       source: edge.source,
       target: edge.target,
       type: 'message',
+      selectable: !transient,
+      deletable: !transient,
       data: {
         activities: activities.filter(activity => activity.edgeId === edge.id),
         reducedMotion,
         dimmed: !adjacent,
         route: routes.get(edge.id),
+        transient,
       },
       selected,
     }

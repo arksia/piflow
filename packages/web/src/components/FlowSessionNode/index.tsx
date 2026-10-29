@@ -10,6 +10,8 @@ export type FlowSessionNodeData = Record<string, unknown> & {
   memberSummary?: { total: number, running: number, failed: number }
   membersExpanded?: boolean
   onToggleMembers?: () => void
+  kind?: 'persistent' | 'subagent-role'
+  roleModel?: string
   sessionPath: string
   name: string
   modelName?: string
