@@ -23,7 +23,7 @@ import {
   MiniMap,
   ReactFlow,
 } from '@xyflow/react'
-import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, PanelLeft, Trash2, X } from 'lucide-react'
+import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptConductor, cancelRun, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
@@ -39,6 +39,7 @@ import ChatView from '../ChatView'
 import FlowMessageEdge from '../FlowMessageEdge'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
+import SidebarToggle from '../SidebarToggle'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
@@ -872,13 +873,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   return (
     <div className={styles.workspace}>
       <header className={styles.bar}>
-        {sidebarCollapsed
-          ? (
-              <IconButton label="展开会话列表" onClick={onToggleSidebar}>
-                <PanelLeft />
-              </IconButton>
-            )
-          : null}
+        <SidebarToggle collapsed={sidebarCollapsed} onToggle={onToggleSidebar} />
         <div className={styles.heading}>
           <strong>Flow</strong>
           <span title={projectPath}>{shortenPath(projectPath)}</span>

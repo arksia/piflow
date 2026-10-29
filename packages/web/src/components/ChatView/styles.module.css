@@ -1,10 +1,14 @@
 .chat {
-  --chat-w: 900px;
+  --chat-w: 820px;
 
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
   height: 100%;
+}
+
+.chat[data-welcome] {
+  --chat-w: 672px;
 }
 
 .bar {
@@ -13,12 +17,9 @@
   height: var(--chrome-h);
   min-height: var(--chrome-h);
   gap: var(--space-2);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--c-line);
   background: var(--c-canvas);
-}
-
-.menu {
-  display: contents;
 }
 
 .mobile-menu {
@@ -30,13 +31,16 @@
   min-width: 0;
   flex: 1;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px;
+  color: var(--c-muted);
 }
 
 .title {
   min-width: 0;
-  color: var(--c-body);
-  font-size: 0.8rem;
+  max-width: 40em;
+  color: var(--c-ink);
+  font-size: var(--text-ui);
+  line-height: var(--line-ui);
   font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -85,14 +89,15 @@
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--text-body);
+  line-height: var(--line-body);
 }
 
 .scroll.centered {
   display: flex;
   align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: safe center;
   padding-bottom: var(--composer-h, 0);
 }
 
@@ -154,46 +159,17 @@
   color: var(--c-ink);
 }
 
-.hero {
-  text-align: center;
-  padding: 40px 20px;
+.project {
+  max-width: 180px;
+  overflow: hidden;
+  font-size: var(--text-small);
+  line-height: var(--line-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.hero h1 {
-  margin: 0 0 24px;
-  color: var(--c-mid);
-  font-size: 1.75rem;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
-
-.presets {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-.pill {
-  padding: 6px 14px;
-  border: 1px solid var(--c-line);
-  border-radius: 999px;
-  color: var(--c-muted);
-  font-size: 0.85rem;
-  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
-}
-
-.pill:hover {
-  border-color: var(--c-faint);
-  color: var(--c-ink);
-}
-
-.dim {
-  margin-top: 24px;
-  color: var(--c-faint);
+.identity > svg {
+  flex-shrink: 0;
 }
 
 .pending {
@@ -215,7 +191,11 @@
 }
 
 @media (width <= 768px) {
-  .menu { display: none; }
+  .bar { padding: 0 8px; }
+
+  .project { max-width: 100px; }
+
+  .column { width: calc(100% - 24px); }
 
   .mobile-menu { display: contents; }
 

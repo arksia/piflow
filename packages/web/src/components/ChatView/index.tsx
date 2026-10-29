@@ -1,9 +1,10 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { ReactNode, UIEvent, WheelEvent } from 'react'
-import { PanelLeft } from 'lucide-react'
+import { ChevronRight, Folder, PanelLeft } from 'lucide-react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { sessionAttention } from '../../flow/attention'
 import { ThinkLine } from '../../motion'
+import { shortenPath } from '../../path'
 import { trustProject } from '../../session/actions'
 import { readDraft, saveDraftText } from '../../session/persistence'
 import { setSidebarOpen } from '../../session/store'
@@ -12,10 +13,11 @@ import IconButton from '../IconButton'
 import InputBar from '../InputBar'
 import MessageItem from '../MessageItem'
 import { turnToolCount } from '../MessageItem/facts'
+import SidebarToggle from '../SidebarToggle'
+import WorkspaceWelcome from '../WorkspaceWelcome'
 import styles from './styles.module.css'
 
 const SCROLL_KEY = 'piflow.scroll'
-const PRESETS = ['探索这个代码库', '回顾我的改动', '修一个 bug', '做个功能规划']
 const messageIds = new WeakMap<AgentMessage, number>()
 let nextMessageId = 1
 
@@ -55,6 +57,8 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
   const [trustError, setTrustError] = useState<string | null>(null)
   const session = store.sessions.find(item => item.path === sessionKey)
   const title = sessionKey ? session?.name || session?.firstMessage || '新会话' : ''
+  const cwd = view?.cwd || store.cwd
+  const project = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '工作区'
   const trust = view?.cwd ? store.projectTrust[view.cwd] : undefined
   const statuses = view?.extensionRequests.filter(request => request.method === 'setStatus' && request.statusText) ?? []
   const widgets = view?.extensionRequests.filter(request => request.method === 'setWidget' && request.widgetLines) ?? []
@@ -232,27 +236,22 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
   const embedded = pinnedKey !== undefined
 
   return (
-    <div className={styles.chat}>
+    <div className={styles.chat} data-welcome={!embedded && isEmpty ? '' : undefined}>
       {embedded
         ? null
         : (
             <header className={styles.bar}>
-              {sidebarCollapsed
-                ? (
-                    <span className={styles.menu}>
-                      <IconButton label="展开会话列表" onClick={() => onToggleSidebar?.()}>
-                        <PanelLeft />
-                      </IconButton>
-                    </span>
-                  )
-                : null}
+              <SidebarToggle collapsed={sidebarCollapsed} onToggle={() => onToggleSidebar?.()} />
               <span className={styles.mobileMenu}>
                 <IconButton label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>
                   <PanelLeft />
                 </IconButton>
               </span>
               <div className={styles.identity}>
-                {title ? <div className={styles.title} title={title}>{title}</div> : null}
+                <Folder size={14} aria-hidden="true" />
+                <span className={styles.project} title={cwd ? shortenPath(cwd) : undefined}>{project}</span>
+                <ChevronRight size={12} aria-hidden="true" />
+                <div className={styles.title} title={title}>{title || '新会话'}</div>
               </div>
               <div className={styles.actions}>
                 <ThinkLine
@@ -276,15 +275,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
           : null}
         {!view || (isEmpty && !embedded)
           ? (
-              <div className={styles.hero}>
-                <h1>今天做点什么？</h1>
-                <div className={styles.presets}>
-                  {PRESETS.map(preset => (
-                    <button key={preset} className={styles.pill} onClick={() => applyPreset(preset)}>{preset}</button>
-                  ))}
-                </div>
-                {!view ? <p className={styles.dim}>也可以从左侧选择一个历史会话继续</p> : null}
-              </div>
+              <WorkspaceWelcome cwd={cwd} onChoose={applyPreset} />
             )
           : (
               <div ref={setColumn} className={styles.column}>

@@ -1,14 +1,40 @@
-.trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: var(--row-pad, 8px);
-  color: var(--c-ink);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
+.views {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--c-press);
 }
 
-.trigger svg {
-  flex-shrink: 0;
+.view {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 5px;
+  color: var(--c-muted);
+  font-size: var(--text-ui);
+  line-height: var(--line-ui);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.view:hover {
+  background: var(--c-surface);
+  color: var(--c-ink);
+}
+
+.view[aria-current] {
+  background: var(--c-canvas);
+  color: var(--c-ink);
+  box-shadow: var(--shadow-control);
+}
+
+@media (width <= 768px) {
+  .views {
+    display: none;
+  }
 }

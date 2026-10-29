@@ -1,6 +1,6 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Search, Settings, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Search, Settings, Workflow, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { sessionAttention, sessionRailStatus } from '../../flow/attention'
 import { AccChevron, usePresence } from '../../motion'
@@ -172,6 +172,7 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
         return
       }
       await openSession(session.path)
+      onShowChat()
       setSidebarOpen(false)
     }
     catch (error) {
@@ -186,122 +187,141 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
     <>
       <div className={styles.list}>
         <div className={styles.top}>
-          <ViewSwitch active={view} onChange={next => next === 'flow' ? onShowFlow() : onShowChat()} />
-          <IconButton tip label="收起会话列表" onClick={onToggleSidebar}>
+          <div className={styles.brand}>
+            <Workflow size={18} aria-hidden="true" />
+            <span>piflow</span>
+          </div>
+          <IconButton
+            tip
+            label="收起会话列表"
+            onClick={() => {
+              if (window.matchMedia('(width <= 768px)').matches)
+                setSidebarOpen(false)
+              else
+                onToggleSidebar()
+            }}
+          >
             <PanelLeftClose />
           </IconButton>
         </div>
+        <ViewSwitch active={view} onChange={next => next === 'flow' ? onShowFlow() : onShowChat()} />
         {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
-        {view === 'chat'
-          ? (
-              <>
-                <button type="button" className={styles.newSession} disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
-                  <span className={styles.slot}><MessageSquarePlus size={16} aria-hidden="true" /></span>
-                  新建会话
+        <button type="button" className={styles.newSession} disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
+          <span className={styles.slot}><MessageSquarePlus size={16} aria-hidden="true" /></span>
+          新建会话
+        </button>
+        <div className={styles.workspaceRow}>
+          <div className={`${styles.workspaceLabel} ${searchOpen ? styles.workspaceLabelHidden : ''}`} aria-hidden={searchOpen}>
+            项目与会话
+          </div>
+          <button
+            type="button"
+            className={`${styles.searchToggle} ${searchOpen ? styles.searchToggleHidden : ''}`}
+            ref={searchToggleRef}
+            aria-label="搜索会话"
+            aria-expanded={searchOpen}
+            aria-hidden={searchOpen}
+            tabIndex={searchOpen ? -1 : 0}
+            onClick={() => setSearchOpen(true)}
+          >
+            <Search size={15} />
+          </button>
+          <div className={`${styles.searchField} ${searchOpen ? styles.searchFieldOpen : ''}`} aria-hidden={!searchOpen}>
+            <span className={styles.slot}><Search size={16} aria-hidden="true" /></span>
+            <input
+              ref={searchRef}
+              value={query}
+              tabIndex={searchOpen ? 0 : -1}
+              onChange={event => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape')
+                  closeSearch()
+              }}
+              placeholder="搜索会话"
+              aria-label="搜索会话"
+            />
+            <button type="button" className={styles.searchClose} aria-label="关闭搜索" tabIndex={searchOpen ? 0 : -1} onClick={closeSearch}>
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+        <div className={styles.sessions} aria-label="项目与会话">
+          {[...byCwd.entries()].map(([cwd]) => {
+            const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
+            return (
+              <div key={cwd} className={`${styles.group} t-acc t-acc-fold`} data-open={String(shown)}>
+                <button
+                  type="button"
+                  className={`${styles.cwdRow} t-folder`}
+                  aria-expanded={shown}
+                  aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
+                  onClick={() => {
+                    if (!query.trim())
+                      toggleProject(cwd)
+                  }}
+                >
+                  <span className={`t-icon-swap ${styles.folder}`} data-state="a">
+                    <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
+                    <span className="t-icon" data-icon="b"><AccChevron /></span>
+                  </span>
+                  <div className={styles.projectName} title={shortenPath(cwd)}>
+                    <span className={styles.projectLabel}>{projectName(cwd)}</span>
+                  </div>
                 </button>
-                <div className={styles.workspaceRow}>
-                  <div className={`${styles.workspaceLabel} ${searchOpen ? styles.workspaceLabelHidden : ''}`} aria-hidden={searchOpen}>
-                    Workspaces
-                  </div>
-                  <button
-                    type="button"
-                    className={`${styles.searchToggle} ${searchOpen ? styles.searchToggleHidden : ''}`}
-                    ref={searchToggleRef}
-                    aria-label="搜索会话"
-                    aria-expanded={searchOpen}
-                    aria-hidden={searchOpen}
-                    tabIndex={searchOpen ? -1 : 0}
-                    onClick={() => setSearchOpen(true)}
-                  >
-                    <Search size={15} />
-                  </button>
-                  <div className={`${styles.searchField} ${searchOpen ? styles.searchFieldOpen : ''}`} aria-hidden={!searchOpen}>
-                    <span className={styles.slot}><Search size={16} aria-hidden="true" /></span>
-                    <input
-                      ref={searchRef}
-                      value={query}
-                      tabIndex={searchOpen ? 0 : -1}
-                      onChange={event => setQuery(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Escape')
-                          closeSearch()
-                      }}
-                      placeholder="搜索会话"
-                      aria-label="搜索会话"
-                    />
-                    <button type="button" className={styles.searchClose} aria-label="关闭搜索" tabIndex={searchOpen ? 0 : -1} onClick={closeSearch}>
-                      <X size={15} />
-                    </button>
+                <div className="t-acc-panel" inert={!shown} aria-hidden={!shown}>
+                  <div className="t-acc-panel-inner">
+                    <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
+                      {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
+                        const session = node.session
+                        return (
+                          <SessionRow
+                            key={session.path}
+                            session={session}
+                            active={store.activeKey === session.path}
+                            streaming={store.statuses[session.path]?.status === 'running'}
+                            attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                            rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
+                            connected={store.connected}
+                            opening={openingPath === session.path}
+                            editing={editingPath === session.path}
+                            indent={indent}
+                            hasChildren={hasChildren}
+                            isCollapsed={collapsed.has(session.path)}
+                            lineage={sessionLineage(store.sessions, session.path)}
+                            onPick={() => void pick(session)}
+                            onRenameStart={() => setEditingPath(session.path)}
+                            onRenameEnd={() => setEditingPath(null)}
+                            onToggle={() => toggleCollapsed(session.path)}
+                          />
+                        )
+                      })}
+                    </Glide>
                   </div>
                 </div>
-                <div className={styles.sessions}>
-                  {[...byCwd.entries()].map(([cwd]) => {
-                    const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
-                    return (
-                      <div key={cwd} className={`${styles.group} t-acc t-acc-fold`} data-open={String(shown)}>
-                        <button
-                          type="button"
-                          className={`${styles.cwdRow} t-folder`}
-                          aria-expanded={shown}
-                          aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
-                          onClick={() => {
-                            if (!query.trim())
-                              toggleProject(cwd)
-                          }}
-                        >
-                          <span className={`t-icon-swap ${styles.folder}`} data-state="a">
-                            <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
-                            <span className="t-icon" data-icon="b"><AccChevron /></span>
-                          </span>
-                          <div className={styles.projectName} title={shortenPath(cwd)}>
-                            <span className={styles.projectLabel}>{projectName(cwd)}</span>
-                          </div>
-                        </button>
-                        <div className="t-acc-panel" inert={!shown} aria-hidden={!shown}>
-                          <div className="t-acc-panel-inner">
-                            <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
-                              {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
-                                const session = node.session
-                                return (
-                                  <SessionRow
-                                    key={session.path}
-                                    session={session}
-                                    active={store.activeKey === session.path}
-                                    streaming={store.statuses[session.path]?.status === 'running'}
-                                    attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
-                                    rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
-                                    connected={store.connected}
-                                    opening={openingPath === session.path}
-                                    editing={editingPath === session.path}
-                                    indent={indent}
-                                    hasChildren={hasChildren}
-                                    isCollapsed={collapsed.has(session.path)}
-                                    lineage={sessionLineage(store.sessions, session.path)}
-                                    onPick={() => void pick(session)}
-                                    onRenameStart={() => setEditingPath(session.path)}
-                                    onRenameEnd={() => setEditingPath(null)}
-                                    onToggle={() => toggleCollapsed(session.path)}
-                                  />
-                                )
-                              })}
-                            </Glide>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
-
-                  {!store.connected ? <div className={styles.offline}><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
-                </div>
-              </>
+              </div>
             )
-          : null}
+          })}
+
+          {store.connected && store.sessions.length === 0
+            ? (
+                <div className={styles.empty}>
+                  还没有会话
+                  <br />
+                  新建会话，选择项目开始工作。
+                </div>
+              )
+            : null}
+
+          {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
+
+          {!store.connected ? <div className={styles.offline}><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
+        </div>
         <div className={styles.footer}>
-          <IconButton tip size="compact" label="设置" onClick={() => setSettingsOpen(true)}>
-            <Settings />
-          </IconButton>
+          <button type="button" className={styles.settings} onClick={() => setSettingsOpen(true)}>
+            <Settings size={16} aria-hidden="true" />
+            设置
+          </button>
+          <span className={styles.connection} data-connected={store.connected} role="status">{store.connected ? '本地已连接' : store.connectionState === 'reconnecting' ? '重新连接中' : '连接中'}</span>
         </div>
       </div>
       {newSessionOpen

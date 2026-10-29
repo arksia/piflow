@@ -4,21 +4,24 @@
 :root {
   color-scheme: dark;
 
-  /* motion-panels neutral scale. */
-  --c-bg: #0a0a0a;
-  --c-canvas: #050505;
-  --c-surface: #171717;
-  --c-ink: #fafafa;
+  /* Shared surfaces: shell → page → raised controls. */
+  --c-bg: #0e0e0f;
+  --c-canvas: #141415;
+  --c-surface: #1c1c1f;
+  --c-ink: #ededf0;
   --c-mid: #e5e5e5;
-  --c-body: #a1a1a1;
-  --c-muted: #a1a1a1;
-  --c-faint: #737373;
+  --c-body: #c4c4c8;
+  --c-muted: #a3a3aa;
+  --c-faint: #96969e;
   --c-code-bg: #101010;
   --c-inline-code: #ffffff14;
-  --c-line: #ffffff1a;
+  --c-line: #ffffff12;
+  --c-panel-line: #ffffff0f;
+  --c-input-line: #ffffff21;
   --c-line-strong: #ffffff26;
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 3%);
   --c-raise: var(--c-surface);
-  --c-press: #262626;
+  --c-press: #252528;
   --c-accent: #a160fc;
   --c-accent-hover: #b887fd;
   --c-accent-tint: #262626;
@@ -47,32 +50,44 @@
   --tabs-pill-bg: var(--c-accent-tint);
   --tt-bg: var(--c-raise);
   --tt-fg: var(--c-body);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", -apple-system, blinkmacsystemfont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "DM Mono", ui-monospace, sfmono-regular, menlo, monospace;
+  --text-caption: 11px;
+  --text-small: 12px;
+  --text-ui: 13px;
+  --text-body: 14px;
+  --line-caption: 16px;
+  --line-small: 18px;
+  --line-ui: 20px;
+  --line-body: 24px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --chrome-h: 36px;
+  --chrome-h: 48px;
   --control: 28px;
   --icon: 15px;
-  --radius-control: 6px;
+  --radius-control: 8px;
+  --radius-panel: 14px;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --c-bg: #fff;
-  --c-canvas: #f6f6f6;
+  --c-bg: #f3f3f5;
+  --c-canvas: #fff;
   --c-surface: #fff;
   --c-ink: #0a0a0a;
   --c-mid: #171717;
-  --c-body: #737373;
-  --c-muted: #737373;
-  --c-faint: #a1a1a1;
+  --c-body: #52525b;
+  --c-muted: #64646e;
+  --c-faint: #6c6c76;
   --c-code-bg: #fafafa;
   --c-inline-code: #f5f5f5;
-  --c-line: #e5e5e5;
+  --c-line: #e5e5e8;
+  --c-panel-line: #e4e4e7;
+  --c-input-line: #d5d5db;
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 4%), inset 0 1px 0 rgb(255 255 255 / 80%);
   --c-line-strong: #a1a1a1;
   --c-raise: var(--c-surface);
   --c-press: #f5f5f5;
@@ -122,22 +137,29 @@ body {
   background: var(--c-bg);
   color: var(--c-body);
   font-family: var(--font-sans);
-  font-size: 1rem;
-  line-height: 1.75;
+  font-size: var(--text-ui);
+  line-height: var(--line-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: var(--c-accent-tint);
+  background: var(--c-accent);
+  color: var(--c-accent-contrast);
 }
 
 button {
+  font-size: inherit;
+  line-height: inherit;
   font-family: inherit;
   color: inherit;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
+}
+
+.lucide {
+  stroke-width: 1.5;
 }
 
 /* explicit, per-component hover styles — no blanket fading */
@@ -156,6 +178,7 @@ button:disabled {
 /* ---------- markdown ---------- */
 
 .md {
+  line-height: 1.75;
   overflow-wrap: break-word;
 }
 

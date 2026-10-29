@@ -1,59 +1,13 @@
 .shell {
+  --sidebar-duration: var(--duration-slow);
+
   display: flex;
   height: 100%;
   background: var(--c-bg);
 }
 
-.sidebar {
-  width: var(--sidebar-width);
-  flex-shrink: 0;
-  background: var(--c-bg);
-  border-right: 1px solid var(--c-line);
-  overflow: hidden;
-  transition: width 0.2s var(--ease), border-color 0.2s var(--ease);
-}
-
-.sidebar.resizing {
-  transition: none;
-  will-change: width;
-}
-
-.resizer {
-  position: relative;
-  z-index: 2;
-  width: 6px;
-  flex: 0 0 6px;
-  margin-right: -3px;
-  margin-left: -3px;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.resizer.resizing::after {
-  transition: none;
-}
-
-.resizer-hidden {
-  display: none;
-}
-
-.resizer::after {
-  position: absolute;
-  inset: 0 3px 0 2px;
-  background: transparent;
-  content: '';
-  transition: background 0.15s var(--ease);
-}
-
-.resizer:hover::after,
-.resizer:active::after {
-  background: var(--c-faint);
-}
-
-.sidebar.collapsed {
-  width: 0;
-  border-right-color: transparent;
-  overflow: hidden;
+.shell[data-sidebar-collapsed] {
+  --sidebar-duration: var(--duration-medium);
 }
 
 .main {
@@ -61,6 +15,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--c-canvas);
 }
 
@@ -76,10 +31,6 @@
   display: none;
 }
 
-.scrim {
-  display: none;
-}
-
 .loading {
   display: grid;
   flex: 1;
@@ -88,36 +39,20 @@
   font-size: 0.85rem;
 }
 
-@media (width <= 768px) {
-  .sidebar {
-    position: fixed;
-    z-index: 20;
-    inset: 0 auto 0 0;
-    background: var(--c-bg);
-    transform: translateX(-100%);
-    transition: transform 0.25s var(--ease);
-  }
+.skip-link {
+  position: fixed;
+  z-index: 30;
+  top: 8px;
+  left: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-control);
+  background: var(--c-ink);
+  color: var(--c-bg);
+  font-size: 13px;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
 
-  .resizer {
-    display: none;
-  }
-
-  .sidebar.collapsed {
-    width: var(--sidebar-width);
-    border-right-color: var(--c-line);
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
-  }
-
-  .scrim {
-    display: block;
-    position: fixed;
-    z-index: 10;
-    inset: 0;
-    background: rgb(0 0 0 / 40%);
-    backdrop-filter: blur(5px);
-    cursor: default;
-  }
+.skip-link:focus {
+  transform: translateY(0);
 }

@@ -1,5 +1,4 @@
-import { ChevronDown } from 'lucide-react'
-import Dropdown from '../Dropdown'
+import { GitFork, MessagesSquare } from 'lucide-react'
 import styles from './styles.module.css'
 
 interface ViewSwitchProps {
@@ -8,29 +7,25 @@ interface ViewSwitchProps {
 }
 
 const VIEWS = [
-  { key: 'chat' as const, label: '会话' },
-  { key: 'flow' as const, label: '画布' },
+  { key: 'chat' as const, label: '会话', icon: MessagesSquare },
+  { key: 'flow' as const, label: 'Flow 画布', icon: GitFork },
 ]
 
 export default function ViewSwitch({ active, onChange }: ViewSwitchProps) {
-  const label = VIEWS.find(view => view.key === active)?.label ?? '会话'
   return (
-    <Dropdown
-      placement="bottomLeft"
-      minWidth={0}
-      menu={{
-        items: VIEWS.map(view => ({
-          key: view.key,
-          label: view.label,
-          selected: view.key === active,
-          onClick: () => onChange(view.key),
-        })),
-      }}
-    >
-      <button type="button" className={styles.trigger} aria-label={`会话和画布，当前${label}`}>
-        {label}
-        <ChevronDown size={12} aria-hidden="true" />
-      </button>
-    </Dropdown>
+    <nav className={styles.views} aria-label="工作区视图">
+      {VIEWS.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          type="button"
+          className={styles.view}
+          aria-current={active === key ? 'page' : undefined}
+          onClick={() => onChange(key)}
+        >
+          <Icon size={15} aria-hidden="true" />
+          {label}
+        </button>
+      ))}
+    </nav>
   )
 }
