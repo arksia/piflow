@@ -26,8 +26,7 @@ interface RoutePlan {
 }
 
 /**
- * Agent Graph's short-elbow routing and shared-side lanes, adapted to free-layout peers.
- * Evidence: docs/agent-graph-routing-analysis.md. No ring layout or topology edits.
+ * Route free-layout nodes with short elbows and shared-side lanes.
  */
 export function routeGraphEdges(edges: RouteEdge[], nodes: FlowRouteNode[], laneGap = 8): Map<string, FlowRoutePoint[]> {
   const byId = new Map(nodes.map(node => [node.id, node]))
