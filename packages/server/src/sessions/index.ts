@@ -489,7 +489,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   }
 
   async function listSessions(): Promise<SessionInfoLite[]> {
-    const all = await SessionManager.listAll()
+    const all = (await SessionManager.listAll()).filter(session => existsSync(session.cwd))
     const conductors = new Map<string, Promise<string | undefined>>()
     const conductorOf = (cwd: string) => {
       const pending = conductors.get(cwd)

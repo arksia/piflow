@@ -12,12 +12,11 @@ import { createSessionStore } from '../../sessions/index'
 it('deduplicates activation and only evicts safe idle runtimes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-runtime-'))
   const agentDir = join(root, 'agent')
-  const previousAgentDir = process.env.PI_CODING_AGENT_DIR
-  process.env.PI_CODING_AGENT_DIR = agentDir
 
   try {
     const first = createSessionStore({
       rootCwd: root,
+      agentDir,
       flow: createFlowStore(join(root, 'data')),
       poolSize: 16,
       publish: () => {},
@@ -29,6 +28,7 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
 
     const concurrent = createSessionStore({
       rootCwd: root,
+      agentDir,
       flow: createFlowStore(join(root, 'data')),
       poolSize: 16,
       publish: () => {},
@@ -42,6 +42,7 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
 
     const limited = createSessionStore({
       rootCwd: root,
+      agentDir,
       flow: createFlowStore(join(root, 'data')),
       poolSize: 1,
       publish: () => {},
@@ -65,6 +66,7 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
     await writeFile(join(root, '.pi', 'SYSTEM.md'), 'project instructions')
     const trust = createSessionStore({
       rootCwd: root,
+      agentDir,
       flow: createFlowStore(join(root, 'data')),
       poolSize: 1,
       publish: () => {},
@@ -74,6 +76,34 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
     await trust.disposeAll()
   }
   finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('omits saved sessions whose project directory has been removed', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-runtime-'))
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR
+  process.env.PI_CODING_AGENT_DIR = join(root, 'agent')
+  const store = createSessionStore({
+    rootCwd: root,
+    agentDir: join(root, 'agent'),
+    flow: createFlowStore(join(root, 'data')),
+    poolSize: 16,
+    publish: () => {},
+  })
+  try {
+    const session = await store.createFreshSession(root, true)
+    const path = session.runtime.session.sessionFile
+    assert.ok(path)
+    assert.deepEqual((await store.listSessions()).map(item => item.path), [path])
+
+    await store.disposeAll()
+    await rm(root, { recursive: true, force: true })
+
+    assert.equal((await store.listSessions()).some(item => item.path === path), false)
+  }
+  finally {
+    await store.disposeAll()
     if (previousAgentDir === undefined)
       delete process.env.PI_CODING_AGENT_DIR
     else
