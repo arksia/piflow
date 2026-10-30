@@ -198,6 +198,12 @@
   margin-top: 6px;
 }
 
+.project-heading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .cwd-row,
 .session-row {
   display: grid;
@@ -215,13 +221,25 @@
 }
 
 .cwd-row {
-  width: 100%;
+  min-width: 0;
+  flex: 1;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
   text-align: left;
+}
+
+.project-add {
+  margin-right: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.project-heading:hover .project-add,
+.project-heading:focus-within .project-add {
+  opacity: 1;
 }
 
 .session-row:has(.active) {

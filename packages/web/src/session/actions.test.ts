@@ -1,8 +1,46 @@
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { sendPrompt } from './actions'
+import { selectProjectForNewChat, sendPrompt } from './actions'
 import { readDraft, saveDraftImages, saveDraftText } from './persistence'
 import { ensureView, store } from './store'
+
+it('selects a project for a new chat without creating a session', () => {
+  const previousDocument = globalThis.document
+  const previousFrame = globalThis.requestAnimationFrame
+  const previousStorage = globalThis.localStorage
+  const previousFetch = globalThis.fetch
+  let fetched = false
+  globalThis.document = { hidden: false } as Document
+  globalThis.requestAnimationFrame = (callback) => {
+    callback(0)
+    return 0
+  }
+  globalThis.localStorage = { removeItem: () => {} } as unknown as Storage
+  globalThis.fetch = async () => {
+    fetched = true
+    throw new Error('unexpected session creation')
+  }
+  store.activeKey = 'previous-session'
+  store.cwd = '/previous/project'
+  store.workspaceView = 'flow'
+
+  try {
+    selectProjectForNewChat('/next/project')
+    assert.equal(fetched, false)
+    assert.equal(store.activeKey, null)
+    assert.equal(store.cwd, '/next/project')
+    assert.equal(store.workspaceView, 'chat')
+  }
+  finally {
+    globalThis.document = previousDocument
+    globalThis.requestAnimationFrame = previousFrame
+    globalThis.localStorage = previousStorage
+    globalThis.fetch = previousFetch
+    store.activeKey = null
+    store.cwd = ''
+    store.workspaceView = 'chat'
+  }
+})
 
 it('keeps the draft when a prompt request is rejected', async () => {
   const previousFetch = globalThis.fetch

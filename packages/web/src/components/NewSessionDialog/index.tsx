@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Folder, FolderUp, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { ModalFrame } from '../../motion'
-import { newSessionIn, requestDirectories } from '../../session/actions'
+import { requestDirectories, selectProjectForNewChat } from '../../session/actions'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
@@ -17,7 +17,6 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
   const [path, setPath] = useState(initialPath)
   const [listing, setListing] = useState<DirectoryListing | null>(null)
   const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -42,19 +41,11 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
     }
   }
 
-  async function create() {
-    if (!listing || creating)
+  function create() {
+    if (!listing)
       return
-    setCreating(true)
-    setError(null)
-    try {
-      await newSessionIn(listing.path)
-      onCreated()
-    }
-    catch (reason) {
-      setError(reason instanceof Error ? reason.message : '无法创建会话')
-      setCreating(false)
-    }
+    selectProjectForNewChat(listing.path)
+    onCreated()
   }
 
   function submitPath(event: FormEvent<HTMLFormElement>) {
@@ -118,9 +109,9 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
           </div>
 
           <footer className={styles.footer}>
-            <span className={styles.hint}>会话将在选中的文件夹中创建</span>
-            <button className={styles.create} disabled={!listing || loading || creating} onClick={() => void create()}>
-              {creating ? '创建中…' : '在此创建'}
+            <span className={styles.hint}>发送第一条消息后创建会话</span>
+            <button className={styles.create} disabled={!listing || loading} onClick={create}>
+              在此开始
             </button>
           </footer>
         </>

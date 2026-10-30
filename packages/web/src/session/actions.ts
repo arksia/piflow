@@ -107,8 +107,12 @@ export function newSession(): Promise<SessionState> {
   return requestSession(newSessionPath, store.cwd ? { cwd: store.cwd } : {})
 }
 
-export function newSessionIn(cwd: string): Promise<SessionState> {
-  return requestSession(newSessionPath, { cwd })
+export function selectProjectForNewChat(cwd: string): void {
+  store.activeKey = null
+  store.cwd = cwd
+  store.workspaceView = 'chat'
+  clearActiveSessionFile()
+  notify()
 }
 
 export async function requestDirectories(path: string): Promise<DirectoryListing> {

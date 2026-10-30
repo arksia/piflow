@@ -1,11 +1,11 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Search, Settings, Workflow, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings, Workflow, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { sessionAttention, sessionRailStatus } from '../../flow/attention'
 import { AccChevron, usePresence } from '../../motion'
 import { shortenPath } from '../../path'
-import { openBackgroundSession, openSession, renameSession } from '../../session/actions'
+import { openBackgroundSession, openSession, renameSession, selectProjectForNewChat } from '../../session/actions'
 import { readCollapsedProjects, readCollapsedSessions, saveCollapsedProjects, saveCollapsedSessions } from '../../session/persistence'
 import { requestConductorPanel, setSidebarOpen } from '../../session/store'
 
@@ -206,7 +206,12 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
         </div>
         <ViewSwitch active={view} onChange={next => next === 'flow' ? onShowFlow() : onShowChat()} />
         {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
-        <button type="button" className={styles.newSession} disabled={!store.connected} onClick={() => setNewSessionOpen(true)}>
+        <button
+          type="button"
+          className={styles.newSession}
+          disabled={!store.connected}
+          onClick={() => setNewSessionOpen(true)}
+        >
           <span className={styles.slot}><MessageSquarePlus size={16} aria-hidden="true" /></span>
           新建会话
         </button>
@@ -250,24 +255,39 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
             const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
             return (
               <div key={cwd} className={`${styles.group} t-acc t-acc-fold`} data-open={String(shown)}>
-                <button
-                  type="button"
-                  className={`${styles.cwdRow} t-folder`}
-                  aria-expanded={shown}
-                  aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
-                  onClick={() => {
-                    if (!query.trim())
-                      toggleProject(cwd)
-                  }}
-                >
-                  <span className={`t-icon-swap ${styles.folder}`} data-state="a">
-                    <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
-                    <span className="t-icon" data-icon="b"><AccChevron /></span>
-                  </span>
-                  <div className={styles.projectName} title={shortenPath(cwd)}>
-                    <span className={styles.projectLabel}>{projectName(cwd)}</span>
-                  </div>
-                </button>
+                <div className={styles.projectHeading}>
+                  <button
+                    type="button"
+                    className={`${styles.cwdRow} t-folder`}
+                    aria-expanded={shown}
+                    aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
+                    onClick={() => {
+                      if (!query.trim())
+                        toggleProject(cwd)
+                    }}
+                  >
+                    <span className={`t-icon-swap ${styles.folder}`} data-state="a">
+                      <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
+                      <span className="t-icon" data-icon="b"><AccChevron /></span>
+                    </span>
+                    <div className={styles.projectName} title={shortenPath(cwd)}>
+                      <span className={styles.projectLabel}>{projectName(cwd)}</span>
+                    </div>
+                  </button>
+                  <IconButton
+                    className={styles.projectAdd}
+                    size="compact"
+                    label={`在 ${projectName(cwd)} 中新建会话`}
+                    disabled={!store.connected}
+                    onClick={() => {
+                      selectProjectForNewChat(cwd)
+                      onShowChat()
+                      setSidebarOpen(false)
+                    }}
+                  >
+                    <Plus />
+                  </IconButton>
+                </div>
                 <div className="t-acc-panel" inert={!shown} aria-hidden={!shown}>
                   <div className="t-acc-panel-inner">
                     <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
