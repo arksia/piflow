@@ -1,0 +1,30 @@
+.panel {
+  top: calc(var(--chrome-h) + 12px);
+  width: min(380px, calc(100% - 32px));
+  max-height: calc(100% - var(--chrome-h) - 24px);
+  padding: 16px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  background: var(--c-surface);
+}
+
+.panel label {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.panel .toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel .toggle-field input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--c-signal);
+}

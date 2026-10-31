@@ -11,6 +11,7 @@ import type {
   Viewport,
 } from '@xyflow/react'
 import type { FlowEdgeActivity } from '../../flow/edges'
+import type { NewNodeDraft, NodeConfigurationDraft } from '../../flow/node-forms'
 import type { SessionView } from '../../session/state'
 import type { FlowCanvasNode } from '../FlowSessionNode'
 import { conductorDraftReady, parseConductorDraft } from '@piflow/protocol'
@@ -29,6 +30,7 @@ import { acceptConductor, cancelRun, loadFlow, saveFlow } from '../../flow/api'
 import { flowAttentionItems, sessionNeedsInputFor, sessionStatusFor } from '../../flow/attention'
 import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from '../../flow/edges'
 import { memberPlacements } from '../../flow/members'
+import { addDraftNode, configureNode } from '../../flow/node-forms'
 import { routeGraphEdges } from '../../flow/routes'
 import { shouldSeedFlow } from '../../flow/seed'
 import { shortenPath } from '../../path'
@@ -37,24 +39,19 @@ import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
 import Button from '../Button'
 import ChatView from '../ChatView'
+import FlowAgentForm from '../FlowAgentForm'
 import FlowMessageEdge from '../FlowMessageEdge'
+import FlowNodeForm from '../FlowNodeForm'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
 import Select from '../Select'
 import SidebarToggle from '../SidebarToggle'
 import Textarea from '../Textarea'
-import TextInput from '../TextInput'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
 const nodeTypes = { session: FlowSessionNode }
 const edgeTypes = { message: FlowMessageEdge }
-
-const ROLE_TEMPLATES = [
-  { label: '程序员', prompt: '你负责实现代码。先理解需求和现有实现，再完成范围明确的改动，验证行为，并汇报结果、测试与剩余风险。' },
-  { label: '产品经理', prompt: '你负责澄清用户目标、边界和验收标准。将需求拆成可执行工作，明确依赖与优先级；有不确定性时先提出关键问题。' },
-  { label: '测试', prompt: '你负责验证功能与质量。根据验收标准覆盖关键路径、失败路径和边界条件，提供可复现的问题步骤与验证结论。' },
-]
 
 const RUN_STATUS_LABELS = { running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '已中断' }
 
@@ -119,25 +116,11 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const acceptingRef = useRef(false)
   const seenConductorRef = useRef(0)
   const openingRef = useRef(new Set<string>())
-  const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<void>>(async () => {})
+  const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<boolean>>(async () => false)
   const [conductorOpen, setConductorOpen] = useState(false)
   const openingNodeRef = useRef(new Set<string>())
   const [panelOpen, setPanelOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [goal, setGoal] = useState('')
-  const [draftBrief, setDraftBrief] = useState('')
-  const [draftKind, setDraftKind] = useState<'persistent' | 'subagent-role'>('subagent-role')
-  const [draftRolePrompt, setDraftRolePrompt] = useState('')
-  const [configurationKind, setConfigurationKind] = useState<'persistent' | 'subagent-role'>('persistent')
-  const [roleModel, setRoleModel] = useState('')
-  const [roleTools, setRoleTools] = useState<string[]>(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'])
-  const [sessionPath, setSessionPath] = useState('')
-  const [briefOpen, setBriefOpen] = useState(false)
-  const [brief, setBrief] = useState('')
-  const [roleLabel, setRoleLabel] = useState('')
-  const [rolePrompt, setRolePrompt] = useState('')
-  const [orchestrationEnabled, setOrchestrationEnabled] = useState(false)
-  const [memberIds, setMemberIds] = useState<string[]>([])
+  const [configurationId, setConfigurationId] = useState<string | null>(null)
   const [runOwnerFilter, setRunOwnerFilter] = useState('')
   const [delegationRole, setDelegationRole] = useState('')
   const [delegationTask, setDelegationTask] = useState('')
@@ -395,7 +378,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     if (graphChanged)
       setNodes(current => reconcileCanvasNodes(current, next.nodes, focusSession))
     if (saveRunningRef.current)
-      return
+      return false
     saveRunningRef.current = true
     setSaving(true)
     setError(null)
@@ -430,6 +413,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     }
     catch (reason) {
       setError(String(reason))
+      return false
     }
     finally {
       saveRunningRef.current = false
@@ -437,6 +421,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       if (pendingSaveRef.current && !acceptingRef.current)
         void persist(pendingSaveRef.current)
     }
+    return true
   }
   persistRef.current = persist
 
@@ -535,7 +520,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     const next = { nodes: [...new Set(selectedNodes.map(node => node.data.agentId ?? node.id))], edges: selectedEdges.map(edge => edge.id) }
     setSelection(current => sameSelection(current, next) ? current : next)
     if (next.nodes.length !== 1)
-      setBriefOpen(false)
+      setConfigurationId(null)
     if (connectMode && !selectedNodes.some(node => node.id === connectMode.sourceId))
       setConnectMode(null)
     const selectedPath = selectedNodes[0]?.data.sessionPath
@@ -607,96 +592,41 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
   function openBrief() {
     const id = selection.nodes[0]
-    const node = id ? document?.nodes.find(item => item.id === id) : undefined
-    if (!node)
+    if (!id || !documentRef.current?.nodes.some(node => node.id === id))
       return
-    setBrief(node.brief ?? '')
-    setRoleLabel(node.roleLabel ?? '')
-    setConfigurationKind(node.kind ?? 'persistent')
-    setRoleModel(node.model ?? '')
-    setRoleTools(node.tools ?? ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'])
-    setRolePrompt(node.rolePrompt ?? '')
-    setOrchestrationEnabled(Boolean(node.orchestrationEnabled))
-    setMemberIds((document?.memberships ?? []).filter(item => item.orchestratorId === id).map(item => item.memberId))
-    setBriefOpen(true)
+    setConfigurationId(id)
     setPanelOpen(false)
   }
 
-  function saveBrief(event: React.FormEvent) {
-    event.preventDefault()
-    const id = selection.nodes[0]
-    if (!document || !id)
-      return
-    if (configurationKind === 'persistent' && document.memberships?.some(item => item.memberId === id)) {
-      setError('该 Agent 仍属于其他编排者，请先移除归属关系，再启用编排能力。')
-      return
-    }
-    if (configurationKind === 'subagent-role' && document.edges.some(edge => edge.source === id || edge.target === id)) {
-      setError('请先移除该节点的通信边，再将它改为 Subagent 角色。')
-      return
-    }
-    const existing = document.nodes.find(node => node.id === id)
-    if (configurationKind !== (existing?.kind ?? 'persistent') && document.runs?.some(run => run.roleId === id || run.orchestratorId === id)) {
-      setError('该节点已有运行记录，请新建另一种执行类型的节点；原运行记录将保留。')
-      return
-    }
-    const now = new Date().toISOString()
-    void persist({
-      ...document,
-      memberships: [
-        ...(document.memberships ?? []).filter(item => item.orchestratorId !== id),
-        ...(configurationKind === 'persistent' && orchestrationEnabled ? memberIds.map(memberId => ({ orchestratorId: id, memberId })) : []),
-      ],
-      nodes: document.nodes.map(node => node.id === id ? { ...node, kind: configurationKind, sessionPath: configurationKind === 'subagent-role' ? '' : node.sessionPath, brief: brief.trim(), roleLabel: roleLabel.trim(), rolePrompt: rolePrompt.trim(), model: roleModel.trim(), tools: roleTools, orchestrationEnabled: configurationKind === 'persistent' && orchestrationEnabled, updatedAt: now } : node),
-    }, true)
-    setBriefOpen(false)
+  function editableDocument() {
+    const current = documentRef.current
+    if (!current || current.projectPath !== projectPath)
+      throw new Error('项目已切换，请重新打开表单')
+    if (saveRunningRef.current || acceptingRef.current)
+      throw new Error('画布正在保存，请稍后重试')
+    return current
   }
 
-  async function addNode(event: React.FormEvent) {
-    event.preventDefault()
-    if (!document || !name.trim())
-      return
-    setSaving(true)
-    setError(null)
-    try {
-      let path = draftKind === 'subagent-role' ? '' : sessionPath
-      if (draftKind === 'persistent' && !path) {
-        const state = await createBackgroundSession(document.projectPath)
-        if (!state.sessionFile)
-          throw new Error('新会话尚未生成可持久化路径')
-        path = state.sessionFile
-      }
-      const center = instance?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? { x: 120, y: 120 }
-      const point = findFreeNodePosition(document.nodes, center)
-      const now = new Date().toISOString()
-      const next: FlowDocument = {
-        ...document,
-        nodes: [...document.nodes, {
-          id: crypto.randomUUID(),
-          sessionPath: path,
-          kind: draftKind,
-          orchestrationEnabled: draftKind === 'persistent',
-          rolePrompt: draftRolePrompt.trim(),
-          name: name.trim(),
-          goal: goal.trim(),
-          brief: draftBrief.trim(),
-          position: point,
-          createdAt: now,
-          updatedAt: now,
-        }],
-      }
-      await persist(next, true)
-      setName('')
-      setGoal('')
-      setDraftBrief('')
-      setDraftRolePrompt('')
-      setSessionPath('')
-      setPanelOpen(false)
+  async function saveConfiguration(id: string, draft: NodeConfigurationDraft) {
+    const next = configureNode(editableDocument(), id, draft)
+    if (!await persist(next, true))
+      throw new Error('保存失败，请重试；草稿已保留。')
+  }
+
+  async function addNode(draft: NewNodeDraft) {
+    const current = editableDocument()
+    let path = draft.kind === 'subagent-role' ? '' : draft.sessionPath
+    if (draft.kind === 'persistent' && !path) {
+      const state = await createBackgroundSession(current.projectPath)
+      if (!state.sessionFile)
+        throw new Error('新会话尚未生成可持久化路径')
+      path = state.sessionFile
     }
-    catch (reason) {
-      setError(String(reason))
-      setSaving(false)
-    }
+    const latest = editableDocument()
+    const center = instance?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? { x: 120, y: 120 }
+    const point = findFreeNodePosition(latest.nodes, center)
+    if (!await persist(addDraftNode(latest, draft, path, point), true))
+      throw new Error('保存失败，请重试；草稿已保留。')
   }
 
   function deleteSelection() {
@@ -720,6 +650,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       setConnectMode({ sourceId: selection.nodes[0]! })
   }, [selection])
 
+  const configurationNode = document?.nodes.find(node => node.id === configurationId)
   const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
   const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
   const selectedRuns = (document?.runs ?? []).filter(run => selectedNode?.kind === 'subagent-role'
@@ -889,7 +820,17 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         {connectMode
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
           : null}
-        <button className={`${styles.add} pf-font-semibold`} disabled={!document} aria-expanded={panelOpen} onClick={() => setPanelOpen(open => !open)}>添加节点</button>
+        <button
+          className={`${styles.add} pf-font-semibold`}
+          disabled={!document}
+          aria-expanded={panelOpen}
+          onClick={() => {
+            setConfigurationId(null)
+            setPanelOpen(open => !open)
+          }}
+        >
+          添加节点
+        </button>
       </header>
 
       {attentionItems.length
@@ -918,133 +859,13 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
       {panelOpen
         ? (
-            <form className={`${styles.panel} pf-absolute pf-z-5 pf-right-[16px] pf-overflow-y-auto`} onSubmit={event => void addNode(event)}>
-              <label>
-                执行类型
-                <Select appearance="panel" value={draftKind} onChange={event => setDraftKind(event.target.value as 'persistent' | 'subagent-role')}>
-                  <option value="subagent-role">Subagent 角色（独立任务上下文）</option>
-                  <option value="persistent">主 Agent（长期会话）</option>
-                </Select>
-              </label>
-              <label>
-                名称
-                <TextInput appearance="panel" required maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="认证模块" autoFocus />
-              </label>
-              <label>
-                当前目标
-                <Textarea appearance="panel" maxLength={500} rows={3} value={goal} onChange={event => setGoal(event.target.value)} placeholder="可选" />
-              </label>
-              <label>
-                Brief
-                <Textarea appearance="panel" maxLength={8000} rows={5} value={draftBrief} onChange={event => setDraftBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
-              </label>
-              <label>
-                角色提示词
-                <Textarea appearance="panel" maxLength={8000} rows={4} value={draftRolePrompt} onChange={event => setDraftRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求" />
-              </label>
-              {draftKind === 'persistent'
-                ? (
-                    <label>
-                      会话
-                      <Select appearance="panel" value={sessionPath} onChange={event => setSessionPath(event.target.value)}>
-                        <option value="">新建干净会话</option>
-                        {availableSessions.map(session => <option key={session.path} value={session.path}>{sessionLabel(session)}</option>)}
-                      </Select>
-                    </label>
-                  )
-                : null}
-              <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
-                <Button variant="ghost" size="panel" onClick={() => setPanelOpen(false)}>取消</Button>
-                <Button type="submit" variant="accent" size="panel" disabled={saving || !name.trim()}>添加</Button>
-              </div>
-            </form>
+            <FlowNodeForm key={projectPath} sessions={availableSessions} busy={saving} onCreate={addNode} onClose={() => setPanelOpen(false)} />
           )
         : null}
 
-      {briefOpen
+      {configurationNode && document
         ? (
-            <form className={`${styles.panel} pf-absolute pf-z-5 pf-right-[16px] pf-overflow-y-auto`} onSubmit={saveBrief} aria-label="Agent 配置">
-              <strong>Agent 配置</strong>
-              <label>
-                执行类型
-                <Select appearance="panel" value={configurationKind} onChange={event => setConfigurationKind(event.target.value as 'persistent' | 'subagent-role')}>
-                  <option value="persistent">长期 Agent</option>
-                  <option value="subagent-role">Subagent 角色（每次调用独立执行）</option>
-                </Select>
-              </label>
-              {configurationKind === 'subagent-role'
-                ? (
-                    <>
-                      <label>
-                        模型
-                        <TextInput appearance="panel" value={roleModel} maxLength={200} onChange={event => setRoleModel(event.target.value)} placeholder="留空继承主 Agent；或 provider/model-id" />
-                      </label>
-                      <fieldset className="pf-min-w-0 pf-m-[0_0_12px] pf-p-[10px] pf-border pf-border-solid pf-border-line pf-rounded-[6px] pf-text-muted pf-text-[0.75rem]">
-                        <legend>角色工具范围</legend>
-                        <p>实际执行取角色配置与主 Agent 已启用工具的交集。</p>
-                        {['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'].map(tool => (
-                          <label className={styles.toggleField} key={tool}>
-                            <input type="checkbox" checked={roleTools.includes(tool)} onChange={event => setRoleTools(current => event.target.checked ? [...current, tool] : current.filter(item => item !== tool))} />
-                            {tool}
-                          </label>
-                        ))}
-                      </fieldset>
-                    </>
-                  )
-                : null}
-              <label>
-                从角色模板开始
-                <Select
-                  appearance="panel"
-                  defaultValue=""
-                  onChange={(event) => {
-                    const template = ROLE_TEMPLATES.find(item => item.label === event.target.value)
-                    if (template) {
-                      setRoleLabel(template.label)
-                      setRolePrompt(template.prompt)
-                    }
-                  }}
-                >
-                  <option value="">自定义（选择模板将替换当前角色提示词）</option>
-                  {ROLE_TEMPLATES.map(item => <option key={item.label} value={item.label}>{item.label}</option>)}
-                </Select>
-              </label>
-              <label>
-                角色名称
-                <TextInput appearance="panel" autoFocus maxLength={80} value={roleLabel} onChange={event => setRoleLabel(event.target.value)} placeholder="例如：程序员、产品经理、测试" />
-              </label>
-              <label>
-                角色提示词
-                <Textarea appearance="panel" maxLength={8000} rows={5} value={rolePrompt} onChange={event => setRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求；从下次运行开始生效。" />
-              </label>
-              <label className={styles.toggleField}>
-                <input type="checkbox" checked={orchestrationEnabled} disabled={configurationKind === 'subagent-role' || Boolean(document?.memberships?.some(item => item.memberId === selection.nodes[0]))} onChange={event => setOrchestrationEnabled(event.target.checked)} />
-                启用编排能力
-              </label>
-              {document?.memberships?.some(item => item.memberId === selection.nodes[0]) ? <p className="pf-text-muted pf-text-[0.75rem]">启用前请先从所属编排者的成员列表中移除该 Agent。</p> : null}
-              {configurationKind === 'persistent' && orchestrationEnabled
-                ? (
-                    <fieldset className="pf-min-w-0 pf-m-[0_0_12px] pf-p-[10px] pf-border pf-border-solid pf-border-line pf-rounded-[6px] pf-text-muted pf-text-[0.75rem]">
-                      <legend>成员（不创建通信连接）</legend>
-                      {document?.nodes.filter(node => node.id !== selection.nodes[0] && node.kind === 'subagent-role').map(node => (
-                        <label key={node.id} className={styles.toggleField}>
-                          <input type="checkbox" checked={memberIds.includes(node.id)} onChange={event => setMemberIds(current => event.target.checked ? [...current, node.id] : current.filter(id => id !== node.id))} />
-                          {node.name}
-                        </label>
-                      ))}
-                      {!document?.nodes.some(node => node.id !== selection.nodes[0] && node.kind === 'subagent-role') ? <p>先在画布上添加 Subagent 角色。</p> : null}
-                    </fieldset>
-                  )
-                : null}
-              <label>
-                Brief
-                <Textarea appearance="panel" maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
-              </label>
-              <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
-                <Button variant="ghost" size="panel" onClick={() => setBriefOpen(false)}>取消</Button>
-                <Button type="submit" variant="accent" size="panel" disabled={saving}>保存</Button>
-              </div>
-            </form>
+            <FlowAgentForm key={configurationNode.id} document={document} node={configurationNode} busy={saving} onSave={draft => saveConfiguration(configurationNode.id, draft)} onClose={() => setConfigurationId(null)} />
           )
         : null}
 
@@ -1109,7 +930,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
               </ReactFlow>
             )}
 
-        {selectedNode && !connectMode && !briefOpen && !panelOpen
+        {selectedNode && !connectMode && !configurationNode && !panelOpen
           ? (
               <aside className={`${styles.runtimePanel} pf-top-0 pf-right-0 pf-bottom-0 pf-absolute pf-z-6 pf-flex pf-flex-col`} aria-label={`会话运行面板：${selectedNode.name}`}>
                 <header className={`${styles.runtimeHeader} pf-p-[4px_8px_4px_12px] pf-flex pf-items-center pf-gap-2`}>
