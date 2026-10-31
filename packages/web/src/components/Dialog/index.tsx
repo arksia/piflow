@@ -89,11 +89,11 @@ export default function Dialog({ title, eyebrow, width = 560, maxHeight = 680, c
     >
       <section className={`${styles.surface} pf-flex pf-flex-col pf-overflow-hidden pf-border pf-border-solid pf-border-line pf-rounded-[8px] pf-bg-raise pf-[box-shadow:0_24px_80px_rgb(0_0_0_/_55%)] t-modal ${phase}`} style={{ width: `min(${width}px, 100%)`, maxHeight: `min(${maxHeight}px, 90vh)` }}>
         <header className={`${styles.header} ${compact ? styles.compact : ''} pf-flex pf-items-center pf-justify-between pf-gap-[16px]`}>
-          <div>
+          <div className="pf-min-w-0">
             {eyebrow ? <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">{eyebrow}</p> : null}
             <h2 id={id}>{title}</h2>
           </div>
-          <div className="pf-flex pf-items-center pf-gap-[4px]">
+          <div className="pf-flex pf-flex-none pf-items-center pf-gap-[4px]">
             {actions}
             <IconButton label="关闭" onClick={close}><X /></IconButton>
           </div>

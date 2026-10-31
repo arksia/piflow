@@ -37,6 +37,7 @@
   margin: 0;
   color: var(--c-ink);
   font-size: 1.05rem;
+  overflow-wrap: anywhere;
 }
 
 .compact {

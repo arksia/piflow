@@ -93,7 +93,7 @@ export default function ExtensionDialog() {
     <>
       {pending && store.activeKey
         ? (
-            <Dialog key={pending.id} title={pending.title ?? '扩展请求'} width={440} maxHeight={560} onClose={() => answer(store.activeKey!, pending, { cancelled: true })}>
+            <Dialog key={`${store.activeKey}:${pending.id}`} title={pending.title ?? '扩展请求'} width={440} maxHeight={560} onClose={() => answer(store.activeKey!, pending, { cancelled: true })}>
               <div className="pf-flex pf-flex-col pf-overflow-y-auto pf-p-[18px_20px] pf-gap-[12px]">
                 {pending.method === 'select' ? <SelectDialog session={store.activeKey} request={pending} /> : null}
                 {pending.method === 'confirm' ? <ConfirmDialog session={store.activeKey} request={pending} /> : null}

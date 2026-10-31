@@ -1,6 +1,6 @@
 import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage } from '@piflow/protocol'
 import { ExternalLink, RefreshCw } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { cancelProviderAuth, checkProvider, fetchProviders, logoutProvider, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
 import Button from '../Button'
 import Dialog from '../Dialog'
@@ -208,7 +208,7 @@ export default function ProviderDialog({ onClose }: Props) {
         {error ? <p className={`${styles.error} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`} role="alert">{error}</p> : null}
       </div>
       {operation?.prompt
-        ? <AuthPromptDialog prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
+        ? <AuthPromptDialog key={operation.prompt.id} prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
         : operation?.event
           ? <AuthEventPanel event={operation.event} onCancel={cancel} />
           : null}
@@ -247,18 +247,31 @@ function AuthEventPanel({ event, onCancel }: { event: AuthDisplayEvent, onCancel
 
 function AuthPromptDialog({ prompt, busy, onSubmit, onCancel }: { prompt: ProviderAuthPrompt, busy: boolean, onSubmit: (value: string) => void, onCancel: () => void }) {
   const [value, setValue] = useState('')
+  const labelId = useId()
   const authPrompt = prompt.prompt
   const isSelect = authPrompt.type === 'select'
   return (
-    <div className={styles.prompt}>
-      <p>{authPrompt.message}</p>
+    <form
+      className={styles.prompt}
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!busy && value)
+          onSubmit(value)
+      }}
+    >
+      <p id={labelId}>{authPrompt.message}</p>
       {isSelect
-        ? <Select appearance="prompt" className="pf-w-full" value={value} onChange={event => setValue(event.target.value)}>{(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</Select>
-        : <TextInput appearance="prompt" className="pf-w-full" autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
+        ? (
+            <Select appearance="prompt" className="pf-w-full" aria-labelledby={labelId} autoFocus required value={value} onChange={event => setValue(event.target.value)}>
+              <option value="" disabled>选择一项</option>
+              {(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </Select>
+          )
+        : <TextInput appearance="prompt" className="pf-w-full" aria-labelledby={labelId} required autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
       <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
         <Button variant="outline" size="compact" onClick={onCancel}>取消</Button>
-        <Button variant="outline" size="compact" disabled={busy || !value} onClick={() => onSubmit(value)}>继续</Button>
+        <Button variant="outline" size="compact" type="submit" disabled={busy || !value}>继续</Button>
       </div>
-    </div>
+    </form>
   )
 }
