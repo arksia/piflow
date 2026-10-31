@@ -10,22 +10,6 @@
   color: var(--c-ink);
 }
 
-.input-form input {
-  width: 100%;
-  border: 1px solid var(--c-line);
-  border-radius: 5px;
-  outline: none;
-  padding: 9px 10px;
-  background: var(--c-bg);
-  color: var(--c-body);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-}
-
-.input-form input:focus {
-  border-color: var(--c-signal);
-}
-
 .notices {
   max-width: min(360px, calc(100vw - 32px));
 }

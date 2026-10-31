@@ -2,6 +2,9 @@ import { defineConfig, presetWind3 } from 'unocss'
 
 export default defineConfig({
   presets: [presetWind3({ prefix: 'pf-', preflight: false })],
+  content: {
+    pipeline: { include: [/\.[jt]sx?(?:$|\?)/, /\.html(?:$|\?)/] },
+  },
   theme: {
     colors: {
       'bg': 'var(--c-bg)',

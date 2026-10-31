@@ -5,6 +5,8 @@ import { cancelProviderAuth, checkProvider, fetchProviders, logoutProvider, refr
 import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
+import Select from '../Select'
+import TextInput from '../TextInput'
 import styles from './styles.module.css'
 
 interface Props {
@@ -171,7 +173,6 @@ export default function ProviderDialog({ onClose }: Props) {
 
   return (
     <Dialog title="模型服务与凭证" eyebrow="Provider" actions={<IconButton label="刷新 Provider" onClick={() => void refresh()}><RefreshCw /></IconButton>} onClose={onClose}>
-
       <div className="pf-min-h-[120px] pf-overflow-y-auto pf-p-[8px]">
         {providers === null
           ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>读取 Provider 中…</p>
@@ -252,8 +253,8 @@ function AuthPromptDialog({ prompt, busy, onSubmit, onCancel }: { prompt: Provid
     <div className={styles.prompt}>
       <p>{authPrompt.message}</p>
       {isSelect
-        ? <select value={value} onChange={event => setValue(event.target.value)}>{(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
-        : <input autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
+        ? <Select appearance="prompt" className="pf-w-full" value={value} onChange={event => setValue(event.target.value)}>{(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</Select>
+        : <TextInput appearance="prompt" className="pf-w-full" autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
       <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
         <Button variant="outline" size="compact" onClick={onCancel}>取消</Button>
         <Button variant="outline" size="compact" disabled={busy || !value} onClick={() => onSubmit(value)}>继续</Button>

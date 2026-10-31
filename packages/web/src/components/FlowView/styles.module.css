@@ -12,8 +12,6 @@
   font-size: 0.75rem;
 }
 
-.delegation select,
-.delegation textarea,
 .delegation button {
   min-width: 0;
   padding: 8px;
@@ -22,13 +20,6 @@
   background: var(--c-surface);
   color: var(--c-ink);
   font: inherit;
-}
-
-.delegation textarea {
-  resize: vertical;
-}
-
-.delegation button {
   cursor: pointer;
 }
 
@@ -204,43 +195,6 @@
   color: var(--c-muted);
   font-size: 0.75rem;
   line-height: 1.5;
-}
-
-.panel input,
-.panel textarea,
-.panel select {
-  display: block;
-  width: 100%;
-  margin-top: 5px;
-  border: 1px solid var(--c-line-strong);
-  border-radius: 5px;
-  outline: none;
-  background: var(--c-canvas);
-  color: var(--c-ink);
-  font: inherit;
-  font-size: 0.82rem;
-}
-
-.panel input,
-.panel select {
-  height: 36px;
-  padding: 0 10px;
-}
-
-.panel textarea {
-  resize: vertical;
-  padding: 8px 10px;
-}
-
-.panel input:focus,
-.panel textarea:focus,
-.panel select:focus {
-  border-color: var(--c-signal);
-}
-
-.panel input::placeholder,
-.panel textarea::placeholder {
-  color: var(--c-faint);
 }
 
 .conductor-button {

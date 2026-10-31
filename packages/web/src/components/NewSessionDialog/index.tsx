@@ -6,6 +6,7 @@ import { requestDirectories, selectProjectForNewChat } from '../../session/actio
 import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
+import TextInput from '../TextInput'
 import styles from './styles.module.css'
 
 interface Props {
@@ -57,9 +58,9 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
 
   return (
     <Dialog initialFocus={inputRef} title="选择项目文件夹" eyebrow="新会话" responsive onClose={onClose}>
-
       <form className={`${styles.pathForm} pf-flex pf-gap-[8px]`} onSubmit={submitPath}>
-        <input
+        <TextInput
+          className="pf-flex-1"
           ref={inputRef}
           value={path}
           aria-label="项目文件夹路径"

@@ -40,7 +40,10 @@ import ChatView from '../ChatView'
 import FlowMessageEdge from '../FlowMessageEdge'
 import FlowSessionNode from '../FlowSessionNode'
 import IconButton from '../IconButton'
+import Select from '../Select'
 import SidebarToggle from '../SidebarToggle'
+import Textarea from '../Textarea'
+import TextInput from '../TextInput'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
@@ -918,35 +921,35 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
             <form className={`${styles.panel} pf-absolute pf-z-5 pf-right-[16px] pf-overflow-y-auto`} onSubmit={event => void addNode(event)}>
               <label>
                 执行类型
-                <select value={draftKind} onChange={event => setDraftKind(event.target.value as 'persistent' | 'subagent-role')}>
+                <Select appearance="panel" value={draftKind} onChange={event => setDraftKind(event.target.value as 'persistent' | 'subagent-role')}>
                   <option value="subagent-role">Subagent 角色（独立任务上下文）</option>
                   <option value="persistent">主 Agent（长期会话）</option>
-                </select>
+                </Select>
               </label>
               <label>
                 名称
-                <input required maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="认证模块" autoFocus />
+                <TextInput appearance="panel" required maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="认证模块" autoFocus />
               </label>
               <label>
                 当前目标
-                <textarea maxLength={500} rows={3} value={goal} onChange={event => setGoal(event.target.value)} placeholder="可选" />
+                <Textarea appearance="panel" maxLength={500} rows={3} value={goal} onChange={event => setGoal(event.target.value)} placeholder="可选" />
               </label>
               <label>
                 Brief
-                <textarea maxLength={8000} rows={5} value={draftBrief} onChange={event => setDraftBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
+                <Textarea appearance="panel" maxLength={8000} rows={5} value={draftBrief} onChange={event => setDraftBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
               </label>
               <label>
                 角色提示词
-                <textarea maxLength={8000} rows={4} value={draftRolePrompt} onChange={event => setDraftRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求" />
+                <Textarea appearance="panel" maxLength={8000} rows={4} value={draftRolePrompt} onChange={event => setDraftRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求" />
               </label>
               {draftKind === 'persistent'
                 ? (
                     <label>
                       会话
-                      <select value={sessionPath} onChange={event => setSessionPath(event.target.value)}>
+                      <Select appearance="panel" value={sessionPath} onChange={event => setSessionPath(event.target.value)}>
                         <option value="">新建干净会话</option>
                         {availableSessions.map(session => <option key={session.path} value={session.path}>{sessionLabel(session)}</option>)}
-                      </select>
+                      </Select>
                     </label>
                   )
                 : null}
@@ -964,17 +967,17 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
               <strong>Agent 配置</strong>
               <label>
                 执行类型
-                <select value={configurationKind} onChange={event => setConfigurationKind(event.target.value as 'persistent' | 'subagent-role')}>
+                <Select appearance="panel" value={configurationKind} onChange={event => setConfigurationKind(event.target.value as 'persistent' | 'subagent-role')}>
                   <option value="persistent">长期 Agent</option>
                   <option value="subagent-role">Subagent 角色（每次调用独立执行）</option>
-                </select>
+                </Select>
               </label>
               {configurationKind === 'subagent-role'
                 ? (
                     <>
                       <label>
                         模型
-                        <input value={roleModel} maxLength={200} onChange={event => setRoleModel(event.target.value)} placeholder="留空继承主 Agent；或 provider/model-id" />
+                        <TextInput appearance="panel" value={roleModel} maxLength={200} onChange={event => setRoleModel(event.target.value)} placeholder="留空继承主 Agent；或 provider/model-id" />
                       </label>
                       <fieldset className="pf-min-w-0 pf-m-[0_0_12px] pf-p-[10px] pf-border pf-border-solid pf-border-line pf-rounded-[6px] pf-text-muted pf-text-[0.75rem]">
                         <legend>角色工具范围</legend>
@@ -991,7 +994,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 : null}
               <label>
                 从角色模板开始
-                <select
+                <Select
+                  appearance="panel"
                   defaultValue=""
                   onChange={(event) => {
                     const template = ROLE_TEMPLATES.find(item => item.label === event.target.value)
@@ -1003,15 +1007,15 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 >
                   <option value="">自定义（选择模板将替换当前角色提示词）</option>
                   {ROLE_TEMPLATES.map(item => <option key={item.label} value={item.label}>{item.label}</option>)}
-                </select>
+                </Select>
               </label>
               <label>
                 角色名称
-                <input autoFocus maxLength={80} value={roleLabel} onChange={event => setRoleLabel(event.target.value)} placeholder="例如：程序员、产品经理、测试" />
+                <TextInput appearance="panel" autoFocus maxLength={80} value={roleLabel} onChange={event => setRoleLabel(event.target.value)} placeholder="例如：程序员、产品经理、测试" />
               </label>
               <label>
                 角色提示词
-                <textarea maxLength={8000} rows={5} value={rolePrompt} onChange={event => setRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求；从下次运行开始生效。" />
+                <Textarea appearance="panel" maxLength={8000} rows={5} value={rolePrompt} onChange={event => setRolePrompt(event.target.value)} placeholder="定义职责、工作方式和交付要求；从下次运行开始生效。" />
               </label>
               <label className={styles.toggleField}>
                 <input type="checkbox" checked={orchestrationEnabled} disabled={configurationKind === 'subagent-role' || Boolean(document?.memberships?.some(item => item.memberId === selection.nodes[0]))} onChange={event => setOrchestrationEnabled(event.target.checked)} />
@@ -1034,7 +1038,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 : null}
               <label>
                 Brief
-                <textarea maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
+                <Textarea appearance="panel" maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
               </label>
               <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
                 <Button variant="ghost" size="panel" onClick={() => setBriefOpen(false)}>取消</Button>
@@ -1168,7 +1172,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                         <summary>委派任务</summary>
                         <form className={`${styles.delegation} pf-grid pf-gap-[8px]`} onSubmit={delegateTask}>
                           <label htmlFor="delegation-role">委派给角色</label>
-                          <select id="delegation-role" required value={delegationRole} onChange={event => setDelegationRole(event.target.value)}>
+                          <Select appearance="surface" id="delegation-role" required value={delegationRole} onChange={event => setDelegationRole(event.target.value)}>
                             <option value="">选择 Subagent 角色</option>
                             {(document?.nodes ?? []).filter(node => node.kind === 'subagent-role').map(role => (
                               <option key={role.id} value={role.id}>
@@ -1176,9 +1180,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                                 {document?.memberships?.some(item => item.orchestratorId === selectedNode.id && item.memberId === role.id) ? ' · 默认成员' : ''}
                               </option>
                             ))}
-                          </select>
+                          </Select>
                           <label htmlFor="delegation-task">任务与验收要求</label>
-                          <textarea id="delegation-task" required maxLength={10_000} rows={3} value={delegationTask} onChange={event => setDelegationTask(event.target.value)} placeholder="交给主 Agent 补充上下文并发起委派…" />
+                          <Textarea appearance="surface" id="delegation-task" required maxLength={10_000} rows={3} value={delegationTask} onChange={event => setDelegationTask(event.target.value)} placeholder="交给主 Agent 补充上下文并发起委派…" />
                           <button type="submit" disabled={delegating || !delegationRole || !delegationTask.trim()}>{delegating ? '提交中…' : '交给主 Agent 委派'}</button>
                           <small>主 Agent 接收请求、调用角色并整合结果；忙碌时排入后续消息。</small>
                         </form>

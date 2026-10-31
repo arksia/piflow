@@ -6,6 +6,8 @@ import { fetchExtensions, installExtension, removeExtension } from '../../sessio
 import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
+import Select from '../Select'
+import TextInput from '../TextInput'
 import styles from './styles.module.css'
 
 interface Props {
@@ -69,13 +71,13 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
 
   return (
     <Dialog initialFocus={inputRef} title="管理 pi 扩展" eyebrow="扩展" onClose={onClose}>
-
       <form className={`${styles.installForm} pf-flex pf-gap-[8px]`} onSubmit={submitInstall}>
-        <select value={scope} aria-label="扩展范围" onChange={event => setScope(event.target.value as 'global' | 'project')}>
+        <Select className="pf-flex-none" value={scope} aria-label="扩展范围" onChange={event => setScope(event.target.value as 'global' | 'project')}>
           <option value="global">全局</option>
           <option value="project">项目</option>
-        </select>
-        <input
+        </Select>
+        <TextInput
+          className="pf-flex-1"
           ref={inputRef}
           value={source}
           aria-label="扩展来源"

@@ -8,6 +8,7 @@ import { useStore } from '../../session/use-store'
 import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
+import TextInput from '../TextInput'
 import styles from './styles.module.css'
 
 type DialogRequest = Extract<RpcExtensionUIRequest, { method: 'select' | 'confirm' | 'input' | 'editor' }>
@@ -64,8 +65,9 @@ function InputDialog({ session, request }: { session: string, request: TextDialo
 
   return (
     <>
-      <form className={styles.inputForm} onSubmit={submit}>
-        <input
+      <form onSubmit={submit}>
+        <TextInput
+          className="pf-w-full"
           ref={inputRef}
           value={value}
           aria-label={request.title ?? '输入'}

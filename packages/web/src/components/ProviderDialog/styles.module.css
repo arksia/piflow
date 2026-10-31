@@ -15,16 +15,6 @@
   font-size: 0.78rem;
 }
 
-.prompt input,
-.prompt select {
-  width: 100%;
-  border: 1px solid var(--c-line);
-  border-radius: 4px;
-  padding: 8px;
-  background: var(--c-bg);
-  color: var(--c-body);
-}
-
 .device-code {
   letter-spacing: 0.08em;
 }
