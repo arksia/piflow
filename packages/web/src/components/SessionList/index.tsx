@@ -1,14 +1,15 @@
-import type { SessionInfoLite } from '@piflow/protocol'
+import type { FlowDocument, SessionInfoLite } from '@piflow/protocol'
 import type { SessionTreeRow } from '../../session/tree'
-import { ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings, Workflow, X } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings, Workflow, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { loadFlow } from '../../features/flow/api'
 import { AccChevron, usePresence } from '../../motion'
 import { shortenPath } from '../../path'
 import { openBackgroundSession, openSession, renameSession, selectProjectForNewChat } from '../../session/actions'
 import { sessionAttention, sessionRailStatus } from '../../session/attention'
 import { readCollapsedProjects, readCollapsedSessions, saveCollapsedProjects, saveCollapsedSessions } from '../../session/persistence'
-import { requestConductorPanel, setSidebarOpen } from '../../session/store'
 
+import { requestConductorPanel, setSidebarOpen } from '../../session/store'
 import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
@@ -72,9 +73,12 @@ interface SessionListProps {
   onShowFlow: () => void
   onToggleTheme: () => void
   onToggleSidebar: () => void
+  flowProject: string
+  onFlowProjectChange: (path: string) => void
+  onSelectFlowNode: (id: string) => void
 }
 
-function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onToggleSidebar }: SessionListProps) {
+function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onToggleSidebar, flowProject, onFlowProjectChange, onSelectFlowNode }: SessionListProps) {
   const store = useStore()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -206,146 +210,152 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
         </div>
         <ViewSwitch active={view} onChange={next => next === 'flow' ? onShowFlow() : onShowChat()} />
         {actionError ? <div className="pf-m-[10px_6px_0] pf-p-[7px_8px] pf-border pf-border-solid pf-border-danger pf-rounded-[4px] pf-text-danger pf-text-[0.76rem]" role="alert">{actionError}</div> : null}
-        <button
-          type="button"
-          className={`${styles.newSession} pf-flex pf-items-center pf-h-[32px] pf-mt-[8px] pf-rounded-[8px] pf-text-[length:var(--text-ui)] pf-font-medium pf-text-left`}
-          disabled={!store.connected}
-          onClick={() => setNewSessionOpen(true)}
-        >
-          <span className={`${styles.slot} pf-grid pf-flex-none pf-place-items-center`}><MessageSquarePlus size={16} aria-hidden="true" /></span>
-          新建会话
-        </button>
-        <div className="pf-relative pf-h-[36px] pf-mt-[6px]">
-          <div
-            className={[
-              `${styles.workspaceLabel} pf-flex pf-items-center pf-h-[32px] pf-text-faint pf-text-[length:var(--text-small)]`,
-              `pf-font-medium ${searchOpen ? `${styles.workspaceLabelHidden} pf-pointer-events-none` : ''}`,
-            ].join(' ')}
-            aria-hidden={searchOpen}
-          >
-            项目与会话
-          </div>
-          <button
-            type="button"
-            className={[
-              `${styles.searchToggle} pf-grid pf-place-items-center pf-cursor-pointer pf-absolute pf-top-0 pf-right-0`,
-              'pf-w-[32px] pf-h-[32px] pf-rounded-[8px]',
-              searchOpen ? `${styles.searchToggleHidden} pf-pointer-events-none` : '',
-            ].join(' ')}
-            ref={searchToggleRef}
-            aria-label="搜索会话"
-            aria-expanded={searchOpen}
-            aria-hidden={searchOpen}
-            tabIndex={searchOpen ? -1 : 0}
-            onClick={() => setSearchOpen(true)}
-          >
-            <Search size={15} />
-          </button>
-          <div className={`${styles.searchField} pf-absolute pf-top-0 pf-right-0 pf-flex pf-h-[32px] pf-items-center pf-overflow-hidden ${searchOpen ? styles.searchFieldOpen : ''}`} aria-hidden={!searchOpen}>
-            <span className={`${styles.slot} pf-grid pf-flex-none pf-place-items-center`}><Search size={16} aria-hidden="true" /></span>
-            <input
-              ref={searchRef}
-              value={query}
-              tabIndex={searchOpen ? 0 : -1}
-              onChange={event => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape')
-                  closeSearch()
-              }}
-              placeholder="搜索会话"
-              aria-label="搜索会话"
-            />
-            <button type="button" className={`${styles.searchClose} pf-grid pf-place-items-center pf-cursor-pointer pf-w-[32px] pf-h-[32px] pf-flex-none pf-rounded-[8px]`} aria-label="关闭搜索" tabIndex={searchOpen ? 0 : -1} onClick={closeSearch}>
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-        <div className="pf-flex-1 pf-min-h-0 pf-overflow-auto" aria-label="项目与会话">
-          {[...byCwd.entries()].map(([cwd]) => {
-            const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
-            return (
-              <div key={cwd} className="pf-mt-[6px] t-acc t-acc-fold" data-open={String(shown)}>
-                <div className={`${styles.projectHeading} pf-flex pf-items-center pf-gap-[2px]`}>
+        {view === 'chat'
+          ? (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.newSession} pf-flex pf-items-center pf-h-[32px] pf-mt-[8px] pf-rounded-[8px] pf-text-[length:var(--text-ui)] pf-font-medium pf-text-left`}
+                  disabled={!store.connected}
+                  onClick={() => setNewSessionOpen(true)}
+                >
+                  <span className={`${styles.slot} pf-grid pf-flex-none pf-place-items-center`}><MessageSquarePlus size={16} aria-hidden="true" /></span>
+                  新建会话
+                </button>
+                <div className="pf-relative pf-h-[36px] pf-mt-[6px]">
+                  <div
+                    className={[
+                      `${styles.workspaceLabel} pf-flex pf-items-center pf-h-[32px] pf-text-faint pf-text-[length:var(--text-small)]`,
+                      `pf-font-medium ${searchOpen ? `${styles.workspaceLabelHidden} pf-pointer-events-none` : ''}`,
+                    ].join(' ')}
+                    aria-hidden={searchOpen}
+                  >
+                    项目与会话
+                  </div>
                   <button
                     type="button"
-                    className={`${styles.cwdRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-min-w-0 pf-flex-1 pf-bg-transparent pf-cursor-pointer pf-text-left t-folder`}
-                    aria-expanded={shown}
-                    aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
-                    onClick={() => {
-                      if (!query.trim())
-                        toggleProject(cwd)
-                    }}
+                    className={[
+                      `${styles.searchToggle} pf-grid pf-place-items-center pf-cursor-pointer pf-absolute pf-top-0 pf-right-0`,
+                      'pf-w-[32px] pf-h-[32px] pf-rounded-[8px]',
+                      searchOpen ? `${styles.searchToggleHidden} pf-pointer-events-none` : '',
+                    ].join(' ')}
+                    ref={searchToggleRef}
+                    aria-label="搜索会话"
+                    aria-expanded={searchOpen}
+                    aria-hidden={searchOpen}
+                    tabIndex={searchOpen ? -1 : 0}
+                    onClick={() => setSearchOpen(true)}
                   >
-                    <span className={`t-icon-swap ${styles.folder} pf-place-items-center pf-text-muted pf-leading-0`} data-state="a">
-                      <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
-                      <span className="t-icon" data-icon="b"><AccChevron /></span>
-                    </span>
-                    <div className="pf-min-w-0 pf-text-mid pf-text-[length:var(--text-small)]" title={shortenPath(cwd)}>
-                      <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">{projectName(cwd)}</span>
-                    </div>
+                    <Search size={15} />
                   </button>
-                  <IconButton
-                    className={`${styles.projectAdd} pf-mr-[2px]`}
-                    size="compact"
-                    label={`在 ${projectName(cwd)} 中新建会话`}
-                    disabled={!store.connected}
-                    onClick={() => {
-                      selectProjectForNewChat(cwd)
-                      onShowChat()
-                      setSidebarOpen(false)
-                    }}
-                  >
-                    <Plus />
-                  </IconButton>
-                </div>
-                <div className="t-acc-panel" inert={!shown} aria-hidden={!shown}>
-                  <div className="t-acc-panel-inner">
-                    <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
-                      {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
-                        const session = node.session
-                        return (
-                          <SessionRow
-                            key={session.path}
-                            session={session}
-                            active={store.activeKey === session.path}
-                            streaming={store.statuses[session.path]?.status === 'running'}
-                            attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
-                            rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
-                            connected={store.connected}
-                            opening={openingPath === session.path}
-                            editing={editingPath === session.path}
-                            indent={indent}
-                            hasChildren={hasChildren}
-                            isCollapsed={collapsed.has(session.path)}
-                            lineage={sessionLineage(store.sessions, session.path)}
-                            onPick={() => void pick(session)}
-                            onRenameStart={() => setEditingPath(session.path)}
-                            onRenameEnd={() => setEditingPath(null)}
-                            onToggle={() => toggleCollapsed(session.path)}
-                          />
-                        )
-                      })}
-                    </Glide>
+                  <div className={`${styles.searchField} pf-absolute pf-top-0 pf-right-0 pf-flex pf-h-[32px] pf-items-center pf-overflow-hidden ${searchOpen ? styles.searchFieldOpen : ''}`} aria-hidden={!searchOpen}>
+                    <span className={`${styles.slot} pf-grid pf-flex-none pf-place-items-center`}><Search size={16} aria-hidden="true" /></span>
+                    <input
+                      ref={searchRef}
+                      value={query}
+                      tabIndex={searchOpen ? 0 : -1}
+                      onChange={event => setQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape')
+                          closeSearch()
+                      }}
+                      placeholder="搜索会话"
+                      aria-label="搜索会话"
+                    />
+                    <button type="button" className={`${styles.searchClose} pf-grid pf-place-items-center pf-cursor-pointer pf-w-[32px] pf-h-[32px] pf-flex-none pf-rounded-[8px]`} aria-label="关闭搜索" tabIndex={searchOpen ? 0 : -1} onClick={closeSearch}>
+                      <X size={15} />
+                    </button>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+                <div className="pf-flex-1 pf-min-h-0 pf-overflow-auto" aria-label="项目与会话">
+                  {[...byCwd.entries()].map(([cwd]) => {
+                    const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
+                    return (
+                      <div key={cwd} className="pf-mt-[6px] t-acc t-acc-fold" data-open={String(shown)}>
+                        <div className={`${styles.projectHeading} pf-flex pf-items-center pf-gap-[2px]`}>
+                          <button
+                            type="button"
+                            className={`${styles.cwdRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-min-w-0 pf-flex-1 pf-bg-transparent pf-cursor-pointer pf-text-left t-folder`}
+                            aria-expanded={shown}
+                            aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
+                            onClick={() => {
+                              if (!query.trim())
+                                toggleProject(cwd)
+                            }}
+                          >
+                            <span className={`t-icon-swap ${styles.folder} pf-place-items-center pf-text-muted pf-leading-0`} data-state="a">
+                              <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
+                              <span className="t-icon" data-icon="b"><AccChevron /></span>
+                            </span>
+                            <div className="pf-min-w-0 pf-text-mid pf-text-[length:var(--text-small)]" title={shortenPath(cwd)}>
+                              <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">{projectName(cwd)}</span>
+                            </div>
+                          </button>
+                          <IconButton
+                            className={`${styles.projectAdd} pf-mr-[2px]`}
+                            size="compact"
+                            label={`在 ${projectName(cwd)} 中新建会话`}
+                            disabled={!store.connected}
+                            onClick={() => {
+                              selectProjectForNewChat(cwd)
+                              onShowChat()
+                              setSidebarOpen(false)
+                            }}
+                          >
+                            <Plus />
+                          </IconButton>
+                        </div>
+                        <div className="t-acc-panel" inert={!shown} aria-hidden={!shown}>
+                          <div className="t-acc-panel-inner">
+                            <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
+                              {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
+                                const session = node.session
+                                return (
+                                  <SessionRow
+                                    key={session.path}
+                                    session={session}
+                                    active={store.activeKey === session.path}
+                                    streaming={store.statuses[session.path]?.status === 'running'}
+                                    attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                                    rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
+                                    connected={store.connected}
+                                    opening={openingPath === session.path}
+                                    editing={editingPath === session.path}
+                                    indent={indent}
+                                    hasChildren={hasChildren}
+                                    isCollapsed={collapsed.has(session.path)}
+                                    lineage={sessionLineage(store.sessions, session.path)}
+                                    onPick={() => void pick(session)}
+                                    onRenameStart={() => setEditingPath(session.path)}
+                                    onRenameEnd={() => setEditingPath(null)}
+                                    onToggle={() => toggleCollapsed(session.path)}
+                                  />
+                                )
+                              })}
+                            </Glide>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
 
-          {store.connected && store.sessions.length === 0
-            ? (
-                <div className="pf-p-[18px_8px] pf-text-faint pf-text-center pf-text-[length:var(--text-small)]">
-                  还没有会话
-                  <br />
-                  新建会话，选择项目开始工作。
+                  {store.connected && store.sessions.length === 0
+                    ? (
+                        <div className="pf-p-[18px_8px] pf-text-faint pf-text-center pf-text-[length:var(--text-small)]">
+                          还没有会话
+                          <br />
+                          新建会话，选择项目开始工作。
+                        </div>
+                      )
+                    : null}
+
+                  {query.trim() && filteredSessions.length === 0 ? <div className="pf-p-[18px_8px] pf-text-faint pf-text-center pf-text-[length:var(--text-small)]">没有匹配的会话</div> : null}
+
+                  {!store.connected ? <div className="pf-mt-[16px] pf-p-[8px] pf-text-faint pf-text-[0.8rem]"><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
                 </div>
-              )
-            : null}
-
-          {query.trim() && filteredSessions.length === 0 ? <div className="pf-p-[18px_8px] pf-text-faint pf-text-center pf-text-[length:var(--text-small)]">没有匹配的会话</div> : null}
-
-          {!store.connected ? <div className="pf-mt-[16px] pf-p-[8px] pf-text-faint pf-text-[0.8rem]"><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
-        </div>
+              </>
+            )
+          : <FlowSidebar projectPath={flowProject || store.cwd} onProjectChange={onFlowProjectChange} onSelectNode={onSelectFlowNode} />}
         <div className={`${styles.footer} pf-flex pf-shrink-0 pf-items-center pf-min-h-[52px] pf-gap-[8px] pf-mt-auto`}>
           <button type="button" className={`${styles.settings} pf-flex pf-items-center pf-gap-[8px] pf-min-h-[32px] pf-p-[0_6px] pf-rounded-control pf-text-[12px]`} onClick={() => setSettingsOpen(true)}>
             <Settings size={16} aria-hidden="true" />
@@ -386,6 +396,71 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
         : null}
       {extensionsOpen ? <ExtensionManagerDialog onClose={() => setExtensionsOpen(false)} /> : null}
       {providersOpen ? <ProviderDialog onClose={() => setProvidersOpen(false)} /> : null}
+    </>
+  )
+}
+
+function FlowSidebar({ projectPath, onProjectChange, onSelectNode }: { projectPath: string, onProjectChange: (path: string) => void, onSelectNode: (id: string) => void }) {
+  const store = useStore()
+  const [document, setDocument] = useState<FlowDocument | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    if (!projectPath) {
+      // eslint-disable-next-line react/set-state-in-effect -- clear the previous project's node list immediately.
+      setDocument(null)
+      return
+    }
+    const refresh = () => {
+      void loadFlow(projectPath).then((result) => {
+        if (!cancelled)
+          setDocument(result.document)
+      }).catch(() => {
+        if (!cancelled)
+          setDocument(null)
+      })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [projectPath])
+  return (
+    <>
+      <div className="pf-flex pf-min-h-0 pf-flex-1 pf-flex-col pf-overflow-hidden">
+        <div className="pf-flex pf-items-center pf-justify-between pf-gap-2 pf-p-[12px_4px_8px]">
+          <div className="pf-min-w-0">
+            <div className="pf-text-faint pf-text-[0.7rem]">工程</div>
+            <div className="pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.8rem] pf-text-ink" title={projectPath}>{projectPath ? projectName(projectPath) : '未选择'}</div>
+          </div>
+          <IconButton label="选择 Flow 工程" disabled={!store.connected} onClick={() => setPickerOpen(true)}><Folder /></IconButton>
+        </div>
+        <div className="pf-flex pf-items-center pf-h-[32px] pf-text-faint pf-text-[length:var(--text-small)] pf-font-medium">Flow 节点</div>
+        <div className="pf-min-h-0 pf-flex-1 pf-overflow-auto" aria-label="Flow 节点">
+          {document?.nodes.map((node) => {
+            const status = node.kind === 'subagent-role'
+              ? '角色'
+              : !node.sessionPath
+                  ? '未开始'
+                  : store.statuses[node.sessionPath]?.status === 'running'
+                    ? '运行中'
+                    : store.statuses[node.sessionPath]?.status === 'failed' ? '失败' : '已开始'
+            return (
+              <button key={node.id} type="button" className="pf-flex pf-w-full pf-items-center pf-gap-2 pf-rounded-[5px] pf-p-[8px_7px] pf-text-left hover:pf-bg-press" onClick={() => onSelectNode(node.id)}>
+                <Bot size={15} className="pf-flex-none pf-text-muted" aria-hidden="true" />
+                <span className="pf-min-w-0 pf-flex-1 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.78rem]">{node.name}</span>
+                <span className="pf-flex-none pf-text-[0.68rem] pf-text-faint">{status}</span>
+              </button>
+            )
+          })}
+          {document && document.nodes.length === 0 ? <p className="pf-p-[18px_8px] pf-text-center pf-text-[length:var(--text-small)] pf-text-faint">这个工程还没有 Flow 节点</p> : null}
+          {!document && projectPath ? <p className="pf-p-[18px_8px] pf-text-center pf-text-[length:var(--text-small)] pf-text-faint">正在读取 Flow…</p> : null}
+          {!projectPath ? <button type="button" className="pf-mt-2 pf-w-full pf-p-2 pf-text-left pf-text-[0.78rem] pf-text-muted" onClick={() => setPickerOpen(true)}>选择一个工程以打开 Flow</button> : null}
+        </div>
+      </div>
+      {pickerOpen ? <NewSessionDialog initialPath={projectPath || store.cwd} onSelect={onProjectChange} onCreated={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} /> : null}
     </>
   )
 }

@@ -9,6 +9,8 @@ import type { ServerConfig } from '../server/config'
 import type { SessionStore } from '../sessions/index'
 import {
   API_FLOW_ACCEPT_PATH,
+  API_FLOW_CONDUCTOR_PROMPT_PATH,
+  API_FLOW_NODES_PATH,
   API_FLOW_PATH,
   conductorDraftReady,
   InvalidAgentConfiguration,
@@ -25,6 +27,28 @@ interface RegisterFlowRoutesOptions {
 
 export const flowRoutes: FastifyPluginAsync<RegisterFlowRoutesOptions> = async (app, options) => {
   const { config, flow, sessions } = options
+
+  app.post(`${API_FLOW_NODES_PATH}/:id/prompt`, async (request, reply) => {
+    const body = payload<{ projectPath?: unknown, text?: unknown }>(request)
+    if (typeof body.projectPath !== 'string' || typeof body.text !== 'string' || !body.text.trim())
+      return send(reply, 400, { error: 'projectPath and text required' })
+    const nodeId = (request.params as { id: string }).id
+    const document = await flow.read(body.projectPath)
+    const node = document.nodes.find(item => item.id === nodeId)
+    if (!node || node.kind === 'subagent-role')
+      return send(reply, 404, { error: 'persistent Flow node not found' })
+    const managed = await sessions.startFlowNodePrompt(document.projectPath, nodeId, body.text.trim())
+    return send(reply, 202, { state: sessions.getState(managed) })
+  })
+
+  app.post(API_FLOW_CONDUCTOR_PROMPT_PATH, async (request, reply) => {
+    const body = payload<{ projectPath?: unknown, text?: unknown }>(request)
+    if (typeof body.projectPath !== 'string' || typeof body.text !== 'string' || !body.text.trim())
+      return send(reply, 400, { error: 'projectPath and text required' })
+    const document = await flow.read(body.projectPath)
+    const managed = await sessions.startFlowConductorPrompt(document.projectPath, body.text.trim())
+    return send(reply, 202, { state: sessions.getState(managed) })
+  })
 
   app.get(API_FLOW_PATH, async (request, reply) => {
     const projectPath = query(request).projectPath ?? config.rootCwd

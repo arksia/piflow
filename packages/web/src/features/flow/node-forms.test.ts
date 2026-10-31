@@ -49,6 +49,19 @@ test('addDraftNode normalizes text and omits sessions for subagent roles', () =>
   assert.equal(document.nodes.length, 0)
 })
 
+test('adding a persistent node does not bind or create a session', () => {
+  const next = addDraftNode(documentWith(), {
+    id: 'agent',
+    kind: 'persistent',
+    name: 'Agent',
+    goal: '',
+    brief: '',
+    rolePrompt: '',
+    sessionPath: '',
+  }, '', { x: 24, y: 36 })
+  assert.equal(next.nodes[0]?.sessionPath, '')
+})
+
 test('configureNode replaces only the configured orchestrator memberships', () => {
   const orchestrator = node('orchestrator')
   const firstRole = node('first-role', 'subagent-role')

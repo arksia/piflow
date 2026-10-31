@@ -8,6 +8,7 @@ import type {
 import type {
   DirectoryListing,
   ExtensionUIResponseBody,
+  FlowDocument,
   ForkPoint,
   ProjectTrustStatus,
   ServerMessage,
@@ -66,6 +67,8 @@ export class SessionsStreamingError extends Error {
 
 export interface SessionStore {
   createFreshSession: (cwd?: string, persist?: boolean, conductor?: boolean) => Promise<ManagedSession>
+  startFlowNodePrompt: (projectPath: string, nodeId: string, text: string) => Promise<ManagedSession>
+  startFlowConductorPrompt: (projectPath: string, text: string) => Promise<ManagedSession>
   openSavedSession: (path: string, options?: { refresh?: boolean }) => Promise<ManagedSession | null>
   prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
   compact: (managed: ManagedSession, instructions?: string) => Promise<void>
@@ -110,10 +113,15 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   const trustStore = new ProjectTrustStore(agentDir)
   const pool = new Map<string, ManagedSession>()
   const opening = new Map<string, Promise<ManagedSession>>()
+  const creatingFlowSessions = new Map<string, Promise<ManagedSession>>()
+  const creatingConductors = new Map<string, Promise<ManagedSession>>()
+  const flowPromptQueues = new Map<string, Promise<void>>()
   const statuses = new Map<string, SessionStatusRecord>()
   const publish = options.publish
   const deliveries = createDeliveries(flow, async (node, projectPath) => {
-    const managed = await openSavedSession(node.sessionPath)
+    const managed = node.sessionPath
+      ? await openSavedSession(node.sessionPath)
+      : await createFlowNodeSession(projectPath, node.id)
     if (!managed || managed.cwd !== projectPath)
       return null
     const session = managed.runtime.session
@@ -121,7 +129,20 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       get isStreaming() {
         return session.isStreaming
       },
-      prompt: (text, followUp) => prompt(managed, text, undefined, followUp ? 'followUp' : undefined),
+      prompt: async (text, followUp) => {
+        try {
+          await prompt(managed, text, undefined, followUp ? 'followUp' : undefined)
+        }
+        catch (error) {
+          if (managed.runtime.session.messages.length === 0 && managed.runtime.session.sessionFile) {
+            await flow.clearNodeSession(projectPath, node.id, managed.runtime.session.sessionFile).catch(() => {})
+            remove(managed)
+            unbind(managed)
+            await managed.runtime.dispose()
+          }
+          throw error
+        }
+      },
     }
   })
 
@@ -276,7 +297,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return manager.buildSessionContext().messages
   }
 
-  async function openSession(opts: { path?: string, cwd: string, key?: string }): Promise<ManagedSession> {
+  async function openSession(opts: { path?: string, cwd: string, key?: string, conductor?: boolean }): Promise<ManagedSession> {
     const key = opts.key ?? opts.path ?? `new:${crypto.randomUUID()}`
     const existing = pool.get(key)
     if (existing) {
@@ -299,7 +320,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         const projectTrusted = !requiresTrust || trustStore.get(cwd) === true
         const settingsManager = SettingsManager.create(cwd, runtimeAgentDir, { projectTrusted })
         const sessionFile = sessionManager.getSessionFile()
-        const conductor = Boolean(sessionFile && (await flow.read(cwd)).conductorPath === sessionFile)
+        const conductor = Boolean(opts.conductor || (sessionFile && (await flow.read(cwd)).conductorPath === sessionFile))
         const services = await createAgentSessionServices({
           cwd,
           agentDir: runtimeAgentDir,
@@ -491,6 +512,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   async function listSessions(): Promise<SessionInfoLite[]> {
     const all = (await SessionManager.listAll()).filter(session => existsSync(session.cwd))
     const conductors = new Map<string, Promise<string | undefined>>()
+    const flowDocuments = new Map<string, Promise<FlowDocument | null>>()
     const conductorOf = (cwd: string) => {
       const pending = conductors.get(cwd)
       if (pending)
@@ -499,19 +521,32 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       conductors.set(cwd, next)
       return next
     }
-    const sessions = await Promise.all(all.map(async session => ({
-      path: session.path,
-      id: session.id,
-      cwd: session.cwd,
-      name: session.name ?? null,
-      conductor: (await conductorOf(session.cwd)) === session.path,
-      parentSession: session.parentSessionPath ?? null,
-      created: session.created.toISOString(),
-      modified: session.modified.toISOString(),
-      messageCount: session.messageCount,
-      firstMessage: session.firstMessage.slice(0, 120),
-    })))
-    return sessions.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
+    const flowOf = (cwd: string) => {
+      const pending = flowDocuments.get(cwd)
+      if (pending)
+        return pending
+      const next = flow.read(cwd).catch(() => null)
+      flowDocuments.set(cwd, next)
+      return next
+    }
+    const sessions = await Promise.all(all.map(async (session) => {
+      const document = await flowOf(session.cwd)
+      if (document && (document.conductorPath === session.path || document.nodes.some(node => node.sessionPath === session.path)))
+        return null
+      return {
+        path: session.path,
+        id: session.id,
+        cwd: session.cwd,
+        name: session.name ?? null,
+        conductor: (await conductorOf(session.cwd)) === session.path,
+        parentSession: session.parentSessionPath ?? null,
+        created: session.created.toISOString(),
+        modified: session.modified.toISOString(),
+        messageCount: session.messageCount,
+        firstMessage: session.firstMessage.slice(0, 120),
+      }
+    }))
+    return sessions.filter((session): session is NonNullable<typeof session> => session !== null).sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
   }
 
   async function listDirectories(path: string): Promise<DirectoryListing> {
@@ -552,15 +587,134 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     if (persist)
       await persistEmptySession(manager)
     const sessionFile = manager.getSessionFile()
+    const managed = await openSession({ path: persist ? sessionFile ?? undefined : undefined, cwd: resolvedCwd, conductor })
     if (conductor) {
-      if (!sessionFile)
+      const path = managed.runtime.session.sessionFile
+      if (!path)
         throw new Error('conductor session cannot be persisted')
-      await flow.setConductor(resolvedCwd, sessionFile)
+      await flow.setConductor(resolvedCwd, path)
     }
-    const managed = await openSession({ path: persist ? sessionFile ?? undefined : undefined, cwd: resolvedCwd })
-    if (conductor)
-      managed.runtime.session.setSessionName('编排')
     return managed
+  }
+
+  async function createFlowNodeSession(projectPath: string, nodeId: string): Promise<ManagedSession> {
+    const document = await flow.read(projectPath)
+    const node = document.nodes.find(item => item.id === nodeId)
+    if (!node || node.kind === 'subagent-role')
+      throw new Error('persistent Flow node not found')
+    if (node.sessionPath) {
+      const managed = await openSavedSession(node.sessionPath)
+      if (!managed)
+        throw new Error('Flow node session is unavailable')
+      return managed
+    }
+
+    const key = `${document.projectPath}\0${nodeId}`
+    const pending = creatingFlowSessions.get(key)
+    if (pending)
+      return pending
+    const creating = (async () => {
+      const latest = await flow.read(document.projectPath)
+      const current = latest.nodes.find(item => item.id === nodeId)
+      if (!current || current.kind === 'subagent-role')
+        throw new Error('persistent Flow node not found')
+      if (current.sessionPath) {
+        const existing = await openSavedSession(current.sessionPath)
+        if (!existing)
+          throw new Error('Flow node session is unavailable')
+        return existing
+      }
+      const managed = await createFreshSession(latest.projectPath)
+      const path = managed.runtime.session.sessionFile
+      if (!path)
+        throw new Error('Flow session path is unavailable')
+      try {
+        await flow.bindNodeSession(latest.projectPath, nodeId, path)
+      }
+      catch (error) {
+        unbind(managed)
+        await managed.runtime.dispose()
+        remove(managed)
+        throw error
+      }
+      return managed
+    })()
+    creatingFlowSessions.set(key, creating)
+    try {
+      return await creating
+    }
+    finally {
+      if (creatingFlowSessions.get(key) === creating)
+        creatingFlowSessions.delete(key)
+    }
+  }
+
+  async function createFlowConductorSession(projectPath: string): Promise<ManagedSession> {
+    const document = await flow.read(projectPath)
+    if (document.conductorPath) {
+      const managed = await openSavedSession(document.conductorPath)
+      if (!managed)
+        throw new Error('Flow Conductor session is unavailable')
+      return managed
+    }
+    const key = document.projectPath
+    const pending = creatingConductors.get(key)
+    if (pending)
+      return pending
+    const creating = (async () => {
+      const latest = await flow.read(key)
+      if (latest.conductorPath) {
+        const existing = await openSavedSession(latest.conductorPath)
+        if (!existing)
+          throw new Error('Flow Conductor session is unavailable')
+        return existing
+      }
+      return createFreshSession(latest.projectPath, false, true)
+    })()
+    creatingConductors.set(key, creating)
+    try {
+      return await creating
+    }
+    finally {
+      if (creatingConductors.get(key) === creating)
+        creatingConductors.delete(key)
+    }
+  }
+
+  async function startFlowNodePrompt(projectPath: string, nodeId: string, text: string): Promise<ManagedSession> {
+    const managed = await createFlowNodeSession(projectPath, nodeId)
+    enqueueFlowPrompt(managed, text, async (error) => {
+      publishError(managed.key, error instanceof Error ? error.message : String(error))
+      if (managed.runtime.session.messages.length === 0 && managed.runtime.session.sessionFile) {
+        await flow.clearNodeSession(projectPath, nodeId, managed.runtime.session.sessionFile).catch(() => {})
+        remove(managed)
+        unbind(managed)
+        await managed.runtime.dispose()
+      }
+    })
+    return managed
+  }
+
+  async function startFlowConductorPrompt(projectPath: string, text: string): Promise<ManagedSession> {
+    const managed = await createFlowConductorSession(projectPath)
+    enqueueFlowPrompt(managed, text, async (error) => {
+      publishError(managed.key, error instanceof Error ? error.message : String(error))
+      if (managed.runtime.session.messages.length === 0 && managed.runtime.session.sessionFile) {
+        await flow.clearConductor(projectPath, managed.runtime.session.sessionFile).catch(() => {})
+        remove(managed)
+        unbind(managed)
+        await managed.runtime.dispose()
+      }
+    })
+    return managed
+  }
+
+  function enqueueFlowPrompt(managed: ManagedSession, text: string, onError: (error: unknown) => Promise<void>) {
+    const previous = flowPromptQueues.get(managed.key) ?? Promise.resolve()
+    const task = previous.then(() => prompt(managed, text, undefined, managed.runtime.session.isStreaming ? 'followUp' : undefined))
+    const settled = task.then(() => {}, () => {})
+    flowPromptQueues.set(managed.key, settled)
+    void task.catch(error => onError(error))
   }
 
   async function getAvailableModels(managed: ManagedSession): Promise<ModelInfo[]> {
@@ -744,6 +898,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
 
   return {
     createFreshSession,
+    startFlowNodePrompt,
+    startFlowConductorPrompt,
     openSavedSession,
     prompt,
     compact,

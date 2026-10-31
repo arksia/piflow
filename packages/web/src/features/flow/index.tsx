@@ -33,7 +33,7 @@ import Select from '../../components/Select'
 import SidebarToggle from '../../components/SidebarToggle'
 import Textarea from '../../components/Textarea'
 import { shortenPath } from '../../path'
-import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust, sendPrompt } from '../../session/actions'
+import { openBackgroundSession, openSession, requestModels, requestProjectTrust, sendFlowConductorPrompt, sendFlowNodePrompt, sendPrompt } from '../../session/actions'
 import { sessionNeedsInputFor, sessionStatusFor } from '../../session/attention'
 import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
@@ -78,6 +78,7 @@ function findFreeNodePosition(existing: FlowNode[], center: { x: number, y: numb
 interface FlowViewProps {
   projectPath: string
   onProjectChange: (path: string) => void
+  focusRequest: { id: string, request: number } | null
   active?: boolean
   onShowChat: () => void
   onToggleSidebar: () => void
@@ -88,7 +89,7 @@ interface ConnectMode {
   sourceId: string
 }
 
-export default function FlowView({ projectPath, onProjectChange, active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
+export default function FlowView({ projectPath, onProjectChange, focusRequest, active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
   const store = useStore()
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [document, setDocument] = useState<FlowDocument | null>(null)
@@ -125,6 +126,7 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selection, setSelection] = useState<{ nodes: string[], edges: string[] }>({ nodes: [], edges: [] })
+  const focusedRequestRef = useRef(0)
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const pollRef = useRef({ start() {}, stop() {} })
   const ensureNodeSession = useCallback(async (id: string): Promise<string | null> => {
@@ -132,19 +134,7 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
     const node = current?.nodes.find(item => item.id === id)
     if (!current || !node || node.kind === 'subagent-role')
       return null
-    let path = node.sessionPath
-    if (!path) {
-      const state = await createBackgroundSession(current.projectPath)
-      if (!state.sessionFile)
-        throw new Error('新会话尚未生成可持久化路径')
-      path = state.sessionFile
-      const latest = documentRef.current ?? current
-      await persistRef.current({
-        ...latest,
-        nodes: latest.nodes.map(item => item.id === id ? { ...item, sessionPath: path, updatedAt: new Date().toISOString() } : item),
-      })
-    }
-    return path
+    return node.sessionPath || null
   }, [])
   const focusSession = useCallback(async (id: string) => {
     if (openingRef.current.has(id))
@@ -333,6 +323,21 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
     // eslint-disable-next-line react/exhaustive-deps -- reading the latest session here would refit on every edit
   }, [active, instance, nodes.length])
 
+  useEffect(() => {
+    const focusId = focusRequest?.id
+    if (!focusId || !instance || focusRequest?.request === focusedRequestRef.current)
+      return
+    const node = nodes.find(item => item.id === focusId)
+    if (!node)
+      return
+    focusedRequestRef.current = focusRequest!.request
+    // eslint-disable-next-line react/set-state-in-effect -- this projects an explicit sidebar selection onto the canvas.
+    setNodes(current => current.map(item => ({ ...item, selected: item.id === node.id })))
+    // eslint-disable-next-line react/set-state-in-effect -- keeps the selected node panel in sync with sidebar navigation.
+    setSelection({ nodes: [node.id], edges: [] })
+    void instance.fitView({ nodes: [node], padding: 0.55, maxZoom: 1.1, duration: reducedMotion ? 0 : 180 })
+  }, [focusRequest, instance, nodes, reducedMotion])
+
   async function persist(next: FlowDocument, commitGraph = false) {
     const previous = documentRef.current
     // Replacing nodes drops measured size, and React Flow hides a node until it is measured again.
@@ -509,27 +514,41 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
   async function showConductor() {
     setConductorOpen(true)
     const path = documentRef.current?.conductorPath
+    if (!path)
+      return
     try {
-      if (path) {
-        await openBackgroundSession(path)
-        await Promise.all([requestModels(path), requestProjectTrust(projectPath)])
-        return
-      }
-      const state = await createConductorSession(projectPath)
-      const file = state.sessionFile
-      if (!file)
-        throw new Error('编排会话没有保存下来')
-      const current = documentRef.current
-      if (!current)
-        return
-      const next = { ...current, conductorPath: file }
-      documentRef.current = next
-      setDocument(next)
-      await Promise.all([requestModels(file), requestProjectTrust(projectPath)])
+      await openBackgroundSession(path)
+      await Promise.all([requestModels(path), requestProjectTrust(projectPath)])
     }
     catch (reason) {
       setError(String(reason))
     }
+  }
+
+  async function sendFirstNodeMessage(nodeId: string, text: string) {
+    const state = await sendFlowNodePrompt(projectPath, nodeId, text)
+    if (!state.sessionFile)
+      throw new Error('Flow 节点会话尚未绑定')
+    const current = documentRef.current
+    if (!current)
+      return
+    const next = { ...current, nodes: current.nodes.map(node => node.id === nodeId ? { ...node, sessionPath: state.sessionFile! } : node) }
+    documentRef.current = next
+    setDocument(next)
+    setNodes(nodes => reconcileCanvasNodes(nodes, next.nodes, focusSession))
+  }
+
+  async function sendFirstConductorMessage(text: string) {
+    const state = await sendFlowConductorPrompt(projectPath, text)
+    if (!state.sessionFile)
+      throw new Error('Flow Conductor 会话尚未绑定')
+    const current = documentRef.current
+    if (!current)
+      return
+    const next = { ...current, conductorPath: state.sessionFile }
+    documentRef.current = next
+    setDocument(next)
+    await requestModels(state.key)
   }
 
   async function acceptDraft() {
@@ -585,18 +604,11 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
   }
 
   async function addNode(draft: NewNodeDraft) {
-    const current = editableDocument()
-    let path = draft.kind === 'subagent-role' ? '' : draft.sessionPath
-    if (draft.kind === 'persistent' && !path) {
-      const state = await createBackgroundSession(current.projectPath)
-      if (!state.sessionFile)
-        throw new Error('新会话尚未生成可持久化路径')
-      path = state.sessionFile
-    }
+    editableDocument()
     const latest = editableDocument()
     const center = instance?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? { x: 120, y: 120 }
     const point = findFreeNodePosition(latest.nodes, center)
-    if (!await persist(addDraftNode(latest, draft, path, point), true))
+    if (!await persist(addDraftNode(latest, { ...draft, sessionPath: '' }, '', point), true))
       throw new Error('保存失败，请重试；草稿已保留。')
   }
 
@@ -678,7 +690,6 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
   const conductorStreaming = Boolean(conductorView?.isStreaming || (conductorPath && store.statuses[conductorPath]?.status === 'running'))
   const draftMessage = latestDraftMessage(conductorView)
   const conductorReady = conductorDraftReady(parseConductorDraft(draftMessage ? messageText(draftMessage) : '')) && !conductorStreaming
-  const availableSessions = store.sessions.filter(session => session.cwd === document?.projectPath && session.path !== conductorPath && !session.conductor && !document.nodes.some(node => node.sessionPath === session.path))
   const projectedNodes = useMemo(() => {
     const placements = memberPlacements(nodes, document?.memberships ?? [], expandedAgents, movedAgents)
     const primary = new Map(placements.filter(item => !item.reference).map(item => [item.agentId, item]))
@@ -831,7 +842,7 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
 
       {panelOpen
         ? (
-            <FlowNodeForm key={projectPath} sessions={availableSessions} busy={saving} onCreate={addNode} onClose={() => setPanelOpen(false)} />
+            <FlowNodeForm key={projectPath} busy={saving} onCreate={addNode} onClose={() => setPanelOpen(false)} />
           )
         : null}
 
@@ -858,7 +869,7 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
                         messageExtra={message => draftCard(message, draftMessage, conductorReady, saving, () => void acceptDraft())}
                       />
                     )
-                  : <p className={styles.conductorEmpty}>正在打开编排…</p>}
+                  : <FlowFirstPrompt busy={saving} onSend={sendFirstConductorMessage} />}
               </div>
             </aside>
           )
@@ -913,7 +924,7 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
                     </span>
                   </div>
                   <div className={`${styles.runtimeActions} pf-flex pf-flex-none pf-items-center pf-gap-1`}>
-                    <button type="button" disabled={selectedNode.kind === 'subagent-role'} title={selectedNode.kind === 'subagent-role' ? '角色没有唯一长期会话' : '在完整聊天视图中打开'} onClick={() => void focusSession(selectedNode.id)}>
+                    <button type="button" disabled={selectedNode.kind === 'subagent-role' || !selectedNode.sessionPath} title={selectedNode.kind === 'subagent-role' ? '角色没有唯一长期会话' : !selectedNode.sessionPath ? '发送第一条消息后可打开' : '在完整聊天视图中打开'} onClick={() => void focusSession(selectedNode.id)}>
                       <ExternalLink size={14} aria-hidden="true" />
                       <span>打开聊天</span>
                     </button>
@@ -1039,7 +1050,9 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
                     ? <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">角色不绑定长期会话。主 Agent 通过 subagent 工具调用它，每次运行使用独立上下文。</p>
                     : selectedNodeView
                       ? <ChatView sessionKey={selectedNodeView.key} />
-                      : <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">正在打开会话运行状态…</p>}
+                      : selectedNode.sessionPath
+                        ? <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">正在打开会话运行状态…</p>
+                        : <FlowFirstPrompt key={selectedNode.id} busy={saving} onSend={text => sendFirstNodeMessage(selectedNode.id, text)} />}
                 </div>
               </aside>
             )
@@ -1061,6 +1074,38 @@ export default function FlowView({ projectPath, onProjectChange, active = true, 
           : null}
       </div>
     </div>
+  )
+}
+
+function FlowFirstPrompt({ busy, onSend }: { busy: boolean, onSend: (text: string) => Promise<unknown> }) {
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!text.trim() || busy || sending)
+      return
+    setSending(true)
+    setError(null)
+    try {
+      await onSend(text.trim())
+      setText('')
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+    finally {
+      setSending(false)
+    }
+  }
+  return (
+    <form className="pf-flex pf-flex-1 pf-flex-col pf-justify-end pf-gap-2 pf-p-3" onSubmit={submit}>
+      <Textarea rows={3} maxLength={10000} value={text} onChange={event => setText(event.target.value)} placeholder="发送第一条消息以开始这个节点…" aria-label="Flow 节点的第一条消息" />
+      {error ? <p className="pf-m-0 pf-text-danger pf-text-[0.75rem]" role="alert">{error}</p> : null}
+      <div className="pf-flex pf-justify-end">
+        <Button type="submit" variant="accent" size="panel" disabled={!text.trim() || busy || sending}>{sending ? '发送中…' : '发送'}</Button>
+      </div>
+    </form>
   )
 }
 

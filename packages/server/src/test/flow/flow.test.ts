@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
-import { LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, PROJECT_CANVAS_FILE, UnsupportedProjectCanvasVersion } from '@piflow/protocol'
+import { LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, PROJECT_FLOW_FILE, UnsupportedProjectCanvasVersion } from '@piflow/protocol'
 import { canAccessNode, createFlowStore, findConnection, listConnectedNodes } from '../../flow/store'
 import { formatFlowDirectory, moduleContext, searchMessages } from '../../flow/tools'
 
@@ -30,7 +30,7 @@ it('persists topology without allowing topology updates to erase message history
       read: true,
       reminded: false,
     })
-    const canvasFile = join(root, PROJECT_CANVAS_FILE)
+    const canvasFile = join(root, PROJECT_FLOW_FILE)
     const beforeMove = await readFile(canvasFile, 'utf8')
     await store.replaceTopology(root, { ...topology, nodes: [], edges: [], viewport: { x: 12, y: 24, zoom: 1.2 } })
     assert.equal(await readFile(canvasFile, 'utf8'), beforeMove)
@@ -127,7 +127,7 @@ it('writes the module graph into the project and leaves bindings local', async (
       ...topology,
       nodes: topology.nodes.map(node => node.id === 'a' ? { ...node, brief: 'Owns login.' } : node),
     }, { commitGraph: true })
-    const projectFile = join(root, PROJECT_CANVAS_FILE)
+    const projectFile = join(root, PROJECT_FLOW_FILE)
     const first = await readFile(projectFile, 'utf8')
     assert.match(first, /Owns login\./)
     assert.doesNotMatch(first, /sessionPath|viewport|projectPath/)
@@ -209,7 +209,7 @@ it('accepts a conductor draft and drops a session card that is not a module', as
     assert.equal(accepted.nodes[0]?.name, '登录')
     assert.equal(accepted.nodes[0]?.sessionPath, '')
     assert.notEqual(accepted.nodes[0]?.id, 'seed')
-    const written = await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8')
+    const written = await readFile(join(root, PROJECT_FLOW_FILE), 'utf8')
     assert.match(written, /负责登录边界/)
     assert.doesNotMatch(written, /sessionPath/)
   }
@@ -220,7 +220,7 @@ it('accepts a conductor draft and drops a session card that is not a module', as
 
 it('opens a committed module graph with no local binding and will not rewrite a newer version', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
-  const projectFile = join(root, PROJECT_CANVAS_FILE)
+  const projectFile = join(root, PROJECT_FLOW_FILE)
 
   try {
     await mkdir(join(root, '.piflow'))
@@ -284,7 +284,7 @@ it('moves modules.json into flow.json and keeps the local position', async () =>
     assert.equal(opened.nodes[0]?.brief, '会话边界')
     assert.equal(opened.nodes[0]?.goal, '本地目标')
     assert.deepEqual(opened.nodes[0]?.position, { x: 40, y: 50 })
-    assert.match(await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8'), /"customKind": "review"/)
+    assert.match(await readFile(join(root, PROJECT_FLOW_FILE), 'utf8'), /"customKind": "review"/)
     await assert.rejects(readFile(join(root, LEGACY_MODULES_FILE), 'utf8'))
   }
   finally {
@@ -464,7 +464,7 @@ it('migrates canvas.json to flow.json unchanged and prefers flow.json', async ()
     const text = JSON.stringify({ version: 1, nodes: [{ id: 'a', name: 'A', brief: '', position: { x: 0, y: 0 }, custom: true }], links: [], extra: 'preserved' })
     await writeFile(join(root, LEGACY_CANVAS_FILE), text)
     assert.equal((await createFlowStore(join(root, 'data')).read(root)).nodes[0]?.id, 'a')
-    assert.equal(await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8'), text)
+    assert.equal(await readFile(join(root, PROJECT_FLOW_FILE), 'utf8'), text)
     await assert.rejects(readFile(join(root, LEGACY_CANVAS_FILE)), { code: 'ENOENT' })
     await writeFile(join(root, LEGACY_CANVAS_FILE), '{invalid legacy file')
     assert.equal((await createFlowStore(join(root, 'data')).read(root)).nodes[0]?.id, 'a')
@@ -483,7 +483,30 @@ it('does not migrate an unsupported legacy canvas version', async () => {
     await writeFile(join(root, LEGACY_CANVAS_FILE), text)
     await assert.rejects(createFlowStore(join(root, 'data')).read(root), UnsupportedProjectCanvasVersion)
     assert.equal(await readFile(join(root, LEGACY_CANVAS_FILE), 'utf8'), text)
-    await assert.rejects(readFile(join(root, PROJECT_CANVAS_FILE)), { code: 'ENOENT' })
+    await assert.rejects(readFile(join(root, PROJECT_FLOW_FILE)), { code: 'ENOENT' })
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('keeps a Node session binding local and clears only the matching binding', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  const dataDir = join(root, 'data')
+  try {
+    const store = createFlowStore(dataDir)
+    await store.replaceTopology(root, {
+      nodes: [{ id: 'agent', name: 'Agent', brief: '', sessionPath: '', goal: '', position: { x: 0, y: 0 }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    }, { commitGraph: true })
+    await store.bindNodeSession(root, 'agent', '/local/session.jsonl')
+    assert.equal((await createFlowStore(dataDir).read(root)).nodes[0]?.sessionPath, '/local/session.jsonl')
+    assert.doesNotMatch(await readFile(join(root, PROJECT_FLOW_FILE), 'utf8'), /sessionPath|session\.jsonl/)
+    await store.clearNodeSession(root, 'agent', '/other/session.jsonl')
+    assert.equal((await store.read(root)).nodes[0]?.sessionPath, '/local/session.jsonl')
+    await store.clearNodeSession(root, 'agent', '/local/session.jsonl')
+    assert.equal((await store.read(root)).nodes[0]?.sessionPath, '')
   }
   finally {
     await rm(root, { recursive: true, force: true })

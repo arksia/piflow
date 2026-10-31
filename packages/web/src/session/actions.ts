@@ -11,6 +11,8 @@ import type {
   ExtensionSourceInfo,
   ExtensionsResponse,
   ExtensionUIResponseBody,
+  FlowConductorPromptRequest,
+  FlowNodePromptRequest,
   ForkPoint,
   ForkPointsResponse,
   ForkSessionRequest,
@@ -43,6 +45,7 @@ import type {
 import {
   API_EXTENSIONS_PATH,
   API_EXTENSIONS_UI_RESPONSE_PATH,
+  API_FLOW_CONDUCTOR_PROMPT_PATH,
   API_GIT_PATH,
   API_MODELS_PATH,
   API_PROJECT_TRUST_PATH,
@@ -51,6 +54,7 @@ import {
   buildComposerCommandsPath,
   buildComposerPathsPath,
   buildDirectoriesPath,
+  buildFlowNodePromptPath,
   buildGitPath,
   buildUsagePath,
   API_SESSIONS_NEW_PATH as newSessionPath,
@@ -90,6 +94,24 @@ export async function createBackgroundSession(cwd: string): Promise<SessionState
 export async function createConductorSession(cwd: string): Promise<SessionState> {
   const { state } = await post<SessionStateResponse>(newSessionPath, { cwd, persist: true, conductor: true } satisfies NewSessionRequest)
   applyState(state)
+  return state
+}
+
+export async function sendFlowNodePrompt(projectPath: string, nodeId: string, text: string): Promise<SessionState> {
+  const body = { projectPath, text } satisfies FlowNodePromptRequest
+  const { state } = await post<SessionStateResponse>(buildFlowNodePromptPath(projectPath, nodeId), body)
+  applyState(state)
+  void requestModels(state.key).catch(() => {})
+  void requestProjectTrust(state.cwd).catch(() => {})
+  return state
+}
+
+export async function sendFlowConductorPrompt(projectPath: string, text: string): Promise<SessionState> {
+  const body = { projectPath, text } satisfies FlowConductorPromptRequest
+  const { state } = await post<SessionStateResponse>(API_FLOW_CONDUCTOR_PROMPT_PATH, body)
+  applyState(state)
+  void requestModels(state.key).catch(() => {})
+  void requestProjectTrust(state.cwd).catch(() => {})
   return state
 }
 

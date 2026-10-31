@@ -14,6 +14,7 @@ type Theme = 'dark' | 'light'
 export default function App() {
   const store = useStore()
   const [flowProject, setFlowProject] = useState(readFlowProject)
+  const [flowFocusRequest, setFlowFocusRequest] = useState<{ id: string, request: number } | null>(null)
   const [workspaceView, setWorkspaceView] = useState<'chat' | 'flow'>(
     () => localStorage.getItem('piflow.workspaceView') === 'flow' ? 'flow' : 'chat',
   )
@@ -78,6 +79,12 @@ export default function App() {
           onShowFlow={onShowFlow}
           onToggleTheme={toggleTheme}
           onToggleSidebar={toggleWorkspaceSidebar}
+          flowProject={flowProject || store.cwd}
+          onFlowProjectChange={path => setFlowProject(saveFlowProject(path))}
+          onSelectFlowNode={(id) => {
+            setFlowFocusRequest(current => ({ id, request: (current?.request ?? 0) + 1 }))
+            setSidebarOpen(false)
+          }}
         />
       </WorkspaceSidebar>
       <main id="workspace-content" className="pf-flex-1 pf-min-w-0 pf-flex pf-flex-col pf-overflow-hidden pf-bg-canvas" tabIndex={-1} inert={narrow && store.sidebarOpen}>
@@ -92,6 +99,7 @@ export default function App() {
                     key={flowProject || store.cwd}
                     projectPath={flowProject || store.cwd}
                     onProjectChange={path => setFlowProject(saveFlowProject(path))}
+                    focusRequest={flowFocusRequest}
                     active={view === 'flow'}
                     onShowChat={onShowChat}
                     onToggleSidebar={toggleWorkspaceSidebar}

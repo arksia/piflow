@@ -1,7 +1,7 @@
 import type { AgentConfiguration, FlowMembership } from './agents'
 import { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
 
-export const PROJECT_CANVAS_FILE = '.piflow/flow.json'
+export const PROJECT_FLOW_FILE = '.piflow/flow.json'
 export const LEGACY_CANVAS_FILE = '.piflow/canvas.json'
 export const LEGACY_MODULES_FILE = '.piflow/modules.json'
 export const PROJECT_CANVAS_VERSION = 1

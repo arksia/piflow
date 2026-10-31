@@ -13,7 +13,7 @@ import type {
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { InvalidAgentConfiguration, LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
+import { InvalidAgentConfiguration, LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_VERSION, PROJECT_FLOW_FILE, serializeProjectCanvas } from '@piflow/protocol'
 
 const VERSION = 1 as const
 const MAX_MESSAGES = 500
@@ -25,8 +25,11 @@ export interface FlowStore {
   appendMessage: (projectPath: string, message: FlowMessageRecord) => Promise<FlowDocument>
   updateMessage: (projectPath: string, id: string, mutate: (message: FlowMessageRecord, messages: readonly FlowMessageRecord[]) => FlowMessageRecord | null) => Promise<FlowMessageRecord | null>
   saveRun: (projectPath: string, run: SubagentRun) => Promise<void>
+  bindNodeSession: (projectPath: string, nodeId: string, sessionPath: string) => Promise<void>
+  clearNodeSession: (projectPath: string, nodeId: string, sessionPath: string) => Promise<void>
   readModules: (projectPath: string) => Promise<{ nodes: Array<{ id: string, name: string, brief: string }> }>
   setConductor: (projectPath: string, sessionPath: string) => Promise<void>
+  clearConductor: (projectPath: string, sessionPath: string) => Promise<void>
   acceptConductor: (projectPath: string, draft: ConductorDraft) => Promise<FlowDocument>
 }
 
@@ -71,7 +74,7 @@ export function createFlowStore(dataDir: string): FlowStore {
   }
 
   async function readProject(projectPath: string, local: FlowDocument | null): Promise<ProjectCanvasDocument | null> {
-    const canvasPath = join(projectPath, PROJECT_CANVAS_FILE)
+    const canvasPath = join(projectPath, PROJECT_FLOW_FILE)
     try {
       return parseProjectCanvas(JSON.parse(await readFile(canvasPath, 'utf8')))
     }
@@ -149,7 +152,7 @@ export function createFlowStore(dataDir: string): FlowStore {
       await writeAtomic(path, `${JSON.stringify(document, null, 2)}\n`)
       if (!project)
         return
-      const projectFile = join(document.projectPath, PROJECT_CANVAS_FILE)
+      const projectFile = join(document.projectPath, PROJECT_FLOW_FILE)
       const text = `${JSON.stringify(serializeProjectCanvas(project), null, 2)}\n`
       const current = await readFile(projectFile, 'utf8').catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT')
@@ -278,6 +281,42 @@ export function createFlowStore(dataDir: string): FlowStore {
     })
   }
 
+  async function bindNodeSession(projectPath: string, nodeId: string, sessionPath: string): Promise<void> {
+    const normalized = await normalizeProject(projectPath)
+    await update(normalized, async () => {
+      const current = await readState(normalized)
+      const node = current.document.nodes.find(item => item.id === nodeId)
+      if (!node || node.kind === 'subagent-role')
+        throw new Error('persistent Flow node not found')
+      if (node.sessionPath && node.sessionPath !== sessionPath)
+        throw new Error('Flow node already has a session binding')
+      const document = {
+        ...current.document,
+        nodes: current.document.nodes.map(item => item.id === nodeId ? { ...item, sessionPath, updatedAt: new Date().toISOString() } : item),
+        updatedAt: new Date().toISOString(),
+      }
+      remember(document, true, documents.get(normalized)?.project ?? null)
+      await persist(document, null)
+    })
+  }
+
+  async function clearNodeSession(projectPath: string, nodeId: string, sessionPath: string): Promise<void> {
+    const normalized = await normalizeProject(projectPath)
+    await update(normalized, async () => {
+      const current = await readState(normalized)
+      const node = current.document.nodes.find(item => item.id === nodeId)
+      if (!node || node.sessionPath !== sessionPath)
+        return
+      const document = {
+        ...current.document,
+        nodes: current.document.nodes.map(item => item.id === nodeId ? { ...item, sessionPath: '', updatedAt: new Date().toISOString() } : item),
+        updatedAt: new Date().toISOString(),
+      }
+      remember(document, true, documents.get(normalized)?.project ?? null)
+      await persist(document, null)
+    })
+  }
+
   async function readModules(projectPath: string): Promise<{ nodes: Array<{ id: string, name: string, brief: string }> }> {
     const normalized = await normalizeProject(projectPath)
     await readState(normalized)
@@ -294,6 +333,19 @@ export function createFlowStore(dataDir: string): FlowStore {
         conductorPath: sessionPath,
         updatedAt: new Date().toISOString(),
       }
+      remember(document, true, documents.get(normalized)?.project ?? null)
+      await persist(document, null)
+    })
+  }
+
+  async function clearConductor(projectPath: string, sessionPath: string): Promise<void> {
+    const normalized = await normalizeProject(projectPath)
+    await update(normalized, async () => {
+      const current = await readState(normalized)
+      if (current.document.conductorPath !== sessionPath)
+        return
+      const { conductorPath: _removed, ...rest } = current.document
+      const document = { ...rest, updatedAt: new Date().toISOString() }
       remember(document, true, documents.get(normalized)?.project ?? null)
       await persist(document, null)
     })
@@ -322,7 +374,7 @@ export function createFlowStore(dataDir: string): FlowStore {
     })
   }
 
-  return { saveRun, read, readState, replaceTopology, appendMessage, updateMessage, readModules, setConductor, acceptConductor }
+  return { saveRun, bindNodeSession, clearNodeSession, read, readState, replaceTopology, appendMessage, updateMessage, readModules, setConductor, clearConductor, acceptConductor }
 }
 
 function applyCanvas(document: FlowDocument, project: ProjectCanvasDocument): FlowDocument {

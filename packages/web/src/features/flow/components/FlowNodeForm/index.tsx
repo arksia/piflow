@@ -1,4 +1,3 @@
-import type { SessionInfoLite } from '@piflow/protocol'
 import type { NewNodeDraft } from '../../node-forms'
 import { useState } from 'react'
 import Button from '../../../../components/Button'
@@ -9,13 +8,12 @@ import { useFormSubmit } from '../../use-form-submit'
 import styles from '../flow-form.module.css'
 
 interface Props {
-  sessions: SessionInfoLite[]
   busy: boolean
   onCreate: (draft: NewNodeDraft) => Promise<void>
   onClose: () => void
 }
 
-export default function FlowNodeForm({ sessions, busy, onCreate, onClose }: Props) {
+export default function FlowNodeForm({ busy, onCreate, onClose }: Props) {
   const [draft, setDraft] = useState<NewNodeDraft>(() => ({ id: crypto.randomUUID(), kind: 'subagent-role', name: '', goal: '', brief: '', rolePrompt: '', sessionPath: '' }))
   const { submitting, error, submit } = useFormSubmit(onClose)
   return (
@@ -51,17 +49,6 @@ export default function FlowNodeForm({ sessions, busy, onCreate, onClose }: Prop
         角色提示词
         <Textarea appearance="panel" maxLength={8000} rows={4} value={draft.rolePrompt} onChange={event => setDraft(current => ({ ...current, rolePrompt: event.target.value }))} placeholder="定义职责、工作方式和交付要求" />
       </label>
-      {draft.kind === 'persistent'
-        ? (
-            <label>
-              会话
-              <Select appearance="panel" value={draft.sessionPath} onChange={event => setDraft(current => ({ ...current, sessionPath: event.target.value }))}>
-                <option value="">新建干净会话</option>
-                {sessions.map(session => <option key={session.path} value={session.path}>{session.name || session.firstMessage || session.path.split('/').pop() || session.path}</option>)}
-              </Select>
-            </label>
-          )
-        : null}
       {error ? <p className="pf-text-danger pf-text-[0.76rem]" role="alert">{error}</p> : null}
       <div className="pf-flex pf-justify-end pf-gap-2">
         <Button variant="ghost" size="panel" disabled={busy || submitting} onClick={onClose}>取消</Button>

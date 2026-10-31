@@ -15,6 +15,8 @@ export const API_COMPOSER_PATH = '/api/composer'
 export const API_USAGE_PATH = '/api/usage'
 export const API_FLOW_PATH = '/api/flow'
 export const API_FLOW_ACCEPT_PATH = '/api/flow/accept'
+export const API_FLOW_NODES_PATH = '/api/flow/nodes'
+export const API_FLOW_CONDUCTOR_PROMPT_PATH = '/api/flow/conductor/prompt'
 export const API_EXTENSIONS_PATH = '/api/extensions'
 export const API_EXTENSIONS_UI_RESPONSE_PATH = '/api/extensions/ui-response'
 export const API_PROJECT_TRUST_PATH = '/api/project-trust'
@@ -42,6 +44,20 @@ export interface NewSessionRequest {
 export interface AcceptConductorRequest {
   projectPath: string
   draft: ConductorDraft
+}
+
+export interface FlowNodePromptRequest {
+  projectPath: string
+  text: string
+}
+
+export function buildFlowNodePromptPath(projectPath: string, nodeId: string): string {
+  return `${API_FLOW_NODES_PATH}/${encodeURIComponent(nodeId)}/prompt?${new URLSearchParams({ projectPath })}`
+}
+
+export interface FlowConductorPromptRequest {
+  projectPath: string
+  text: string
 }
 
 export interface PromptRequest {
