@@ -21,7 +21,8 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
       poolSize: 16,
       publish: () => {},
     })
-    const seed = await first.createFreshSession(root, true)
+    const seed = await first.createFreshSession(root)
+    seed.runtime.session.sessionManager.appendMessage({ role: 'user', content: 'seed', timestamp: Date.now() })
     const path = seed.runtime.session.sessionFile
     assert.ok(path)
     await first.disposeAll()
@@ -50,7 +51,8 @@ it('deduplicates activation and only evicts safe idle runtimes', async () => {
     const oldest = await limited.openSavedSession(path)
     assert.ok(oldest)
     const pending = oldest.extensionUi.confirm('Confirm', 'Keep this runtime')
-    const newest = await limited.createFreshSession(root, true)
+    const newest = await limited.createFreshSession(root)
+    newest.runtime.session.sessionManager.appendMessage({ role: 'user', content: 'newest', timestamp: Date.now() })
     const newestPath = newest.runtime.session.sessionFile
     assert.ok(newestPath)
     assert.strictEqual(limited.get(path), oldest)
@@ -92,7 +94,8 @@ it('omits saved sessions whose project directory has been removed', async () => 
     publish: () => {},
   })
   try {
-    const session = await store.createFreshSession(root, true)
+    const session = await store.createFreshSession(root)
+    session.runtime.session.sessionManager.appendMessage({ role: 'user', content: 'saved', timestamp: Date.now() })
     const path = session.runtime.session.sessionFile
     assert.ok(path)
     assert.deepEqual((await store.listSessions()).map(item => item.path), [path])
@@ -122,7 +125,8 @@ it('refreshes an idle resident session from disk when explicitly reopened', asyn
     publish: () => {},
   })
   try {
-    const resident = await store.createFreshSession(root, true)
+    const resident = await store.createFreshSession(root)
+    resident.runtime.session.sessionManager.appendMessage({ role: 'user', content: 'resident', timestamp: Date.now() })
     const path = resident.runtime.session.sessionFile
     assert.ok(path)
     SessionManager.open(path).appendMessage({ role: 'user', content: 'external update', timestamp: Date.now() })
@@ -130,7 +134,7 @@ it('refreshes an idle resident session from disk when explicitly reopened', asyn
     assert.equal(store.getState(resident).messages.length, 0)
     const refreshed = await store.openSavedSession(path, { refresh: true })
     assert.ok(refreshed)
-    assert.equal(store.getState(refreshed).messages.length, 1)
+    assert.equal(store.getState(refreshed).messages.length, 2)
   }
   finally {
     await store.disposeAll()
@@ -148,7 +152,8 @@ it('deletes only the target session file without rewriting its child', async () 
     publish: () => {},
   })
   try {
-    const parent = await store.createFreshSession(root, true)
+    const parent = await store.createFreshSession(root)
+    parent.runtime.session.sessionManager.appendMessage({ role: 'user', content: 'parent', timestamp: Date.now() })
     const parentPath = parent.runtime.session.sessionFile
     assert.ok(parentPath)
     const childPath = join(root, 'child.jsonl')

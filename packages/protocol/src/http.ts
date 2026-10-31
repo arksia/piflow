@@ -36,9 +36,6 @@ export interface OpenSessionRequest {
 
 export interface NewSessionRequest {
   cwd?: string
-  persist?: boolean
-  /** Create the project's Conductor session. */
-  conductor?: boolean
 }
 
 export interface AcceptConductorRequest {

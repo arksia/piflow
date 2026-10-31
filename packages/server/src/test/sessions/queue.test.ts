@@ -19,7 +19,7 @@ it('uses native streaming behavior and queue semantics', async () => {
   })
 
   try {
-    const managed = await sessions.createFreshSession(root, true)
+    const managed = await sessions.createFreshSession(root)
     const calls: unknown[] = []
     managed.runtime.session.prompt = async (_text, options) => {
       calls.push(options?.streamingBehavior)

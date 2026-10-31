@@ -129,20 +129,13 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
   const focusedRequestRef = useRef(0)
   const [reducedMotion, setReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const pollRef = useRef({ start() {}, stop() {} })
-  const ensureNodeSession = useCallback(async (id: string): Promise<string | null> => {
-    const current = documentRef.current
-    const node = current?.nodes.find(item => item.id === id)
-    if (!current || !node || node.kind === 'subagent-role')
-      return null
-    return node.sessionPath || null
-  }, [])
   const focusSession = useCallback(async (id: string) => {
     if (openingRef.current.has(id))
       return
     openingRef.current.add(id)
     setError(null)
     try {
-      const path = await ensureNodeSession(id)
+      const path = documentRef.current?.nodes.find(node => node.id === id)?.sessionPath || null
       if (!path)
         return
       await openSession(path)
@@ -154,7 +147,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
     finally {
       openingRef.current.delete(id)
     }
-  }, [ensureNodeSession, onShowChat])
+  }, [onShowChat])
 
   if (store.conductorNonce !== seenConductorRef.current) {
     seenConductorRef.current = store.conductorNonce
@@ -604,7 +597,6 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
   }
 
   async function addNode(draft: NewNodeDraft) {
-    editableDocument()
     const latest = editableDocument()
     const center = instance?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? { x: 120, y: 120 }
     const point = findFreeNodePosition(latest.nodes, center)
@@ -665,7 +657,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
     async function run() {
       openingNodeRef.current.add(id)
       try {
-        const path = await ensureNodeSession(id)
+        const path = documentRef.current?.nodes.find(node => node.id === id)?.sessionPath || null
         if (!path || cancelled)
           return
         const opened = await openBackgroundSession(path)
@@ -683,7 +675,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
     return () => {
       cancelled = true
     }
-  }, [selectedNodeId, ensureNodeSession])
+  }, [selectedNodeId])
 
   const conductorPath = document?.conductorPath
   const conductorView = viewForSession(store.views, conductorPath)
@@ -721,7 +713,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
     setDelegating(true)
     setError(null)
     try {
-      const path = await ensureNodeSession(nodeId)
+      const path = documentRef.current?.nodes.find(node => node.id === nodeId)?.sessionPath || null
       if (!path)
         throw new Error('主 Agent 会话尚未就绪')
       const opened = await openBackgroundSession(path)

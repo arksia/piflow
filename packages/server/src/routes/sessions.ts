@@ -97,9 +97,7 @@ export const sessionRoutes: FastifyPluginAsync<RegisterSessionRoutesOptions> = a
 
   app.post(API_SESSIONS_NEW_PATH, async (request, reply) => {
     const body = payload<NewSessionRequest>(request)
-    const managed = await sessions.createFreshSession(body.cwd, body.persist === true, body.conductor === true)
-    if (body.conductor === true)
-      await publishSessions()
+    const managed = await sessions.createFreshSession(body.cwd)
     return send(reply, 200, { state: sessions.getState(managed) } satisfies SessionStateResponse)
   })
 

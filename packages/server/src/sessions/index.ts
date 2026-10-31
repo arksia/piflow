@@ -19,7 +19,7 @@ import type {
 } from '@piflow/protocol'
 import type { FlowStore } from '../flow/store'
 import { existsSync } from 'node:fs'
-import { readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises'
+import { readdir, realpath, stat, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import {
   createAgentSessionFromServices,
@@ -66,7 +66,7 @@ export class SessionsStreamingError extends Error {
 }
 
 export interface SessionStore {
-  createFreshSession: (cwd?: string, persist?: boolean, conductor?: boolean) => Promise<ManagedSession>
+  createFreshSession: (cwd?: string) => Promise<ManagedSession>
   startFlowNodePrompt: (projectPath: string, nodeId: string, text: string) => Promise<ManagedSession>
   startFlowConductorPrompt: (projectPath: string, text: string) => Promise<ManagedSession>
   openSavedSession: (path: string, options?: { refresh?: boolean }) => Promise<ManagedSession | null>
@@ -511,16 +511,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
 
   async function listSessions(): Promise<SessionInfoLite[]> {
     const all = (await SessionManager.listAll()).filter(session => existsSync(session.cwd))
-    const conductors = new Map<string, Promise<string | undefined>>()
     const flowDocuments = new Map<string, Promise<FlowDocument | null>>()
-    const conductorOf = (cwd: string) => {
-      const pending = conductors.get(cwd)
-      if (pending)
-        return pending
-      const next = flow.read(cwd).then(document => document.conductorPath).catch(() => undefined)
-      conductors.set(cwd, next)
-      return next
-    }
     const flowOf = (cwd: string) => {
       const pending = flowDocuments.get(cwd)
       if (pending)
@@ -538,7 +529,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         id: session.id,
         cwd: session.cwd,
         name: session.name ?? null,
-        conductor: (await conductorOf(session.cwd)) === session.path,
+        conductor: document?.conductorPath === session.path,
         parentSession: session.parentSessionPath ?? null,
         created: session.created.toISOString(),
         modified: session.modified.toISOString(),
@@ -581,20 +572,9 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return known ? openSession({ path: known.path, cwd: known.cwd }) : null
   }
 
-  async function createFreshSession(cwd?: string, persist = false, conductor = false): Promise<ManagedSession> {
+  async function createFreshSession(cwd?: string): Promise<ManagedSession> {
     const resolvedCwd = typeof cwd === 'string' ? (await listDirectories(cwd)).path : rootCwd
-    const manager = SessionManager.create(resolvedCwd)
-    if (persist)
-      await persistEmptySession(manager)
-    const sessionFile = manager.getSessionFile()
-    const managed = await openSession({ path: persist ? sessionFile ?? undefined : undefined, cwd: resolvedCwd, conductor })
-    if (conductor) {
-      const path = managed.runtime.session.sessionFile
-      if (!path)
-        throw new Error('conductor session cannot be persisted')
-      await flow.setConductor(resolvedCwd, path)
-    }
-    return managed
+    return openSession({ cwd: resolvedCwd })
   }
 
   async function createFlowNodeSession(projectPath: string, nodeId: string): Promise<ManagedSession> {
@@ -669,7 +649,20 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
           throw new Error('Flow Conductor session is unavailable')
         return existing
       }
-      return createFreshSession(latest.projectPath, false, true)
+      const managed = await openSession({ cwd: latest.projectPath, conductor: true })
+      const path = managed.runtime.session.sessionFile
+      if (!path)
+        throw new Error('Flow Conductor session path is unavailable')
+      try {
+        await flow.setConductor(latest.projectPath, path)
+      }
+      catch (error) {
+        remove(managed)
+        unbind(managed)
+        await managed.runtime.dispose()
+        throw error
+      }
+      return managed
     })()
     creatingConductors.set(key, creating)
     try {
@@ -712,7 +705,10 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   function enqueueFlowPrompt(managed: ManagedSession, text: string, onError: (error: unknown) => Promise<void>) {
     const previous = flowPromptQueues.get(managed.key) ?? Promise.resolve()
     const task = previous.then(() => prompt(managed, text, undefined, managed.runtime.session.isStreaming ? 'followUp' : undefined))
-    const settled = task.then(() => {}, () => {})
+    const settled = task.then(() => {}, () => {}).finally(() => {
+      if (flowPromptQueues.get(managed.key) === settled)
+        flowPromptQueues.delete(managed.key)
+    })
     flowPromptQueues.set(managed.key, settled)
     void task.catch(error => onError(error))
   }
@@ -953,14 +949,4 @@ export function settledStatusFromMessages(messages: AgentMessage[]): 'idle' | 'f
       return message.stopReason === 'error' ? 'failed' : 'idle'
   }
   return 'idle'
-}
-
-export async function persistEmptySession(sessionManager: SessionManager) {
-  const path = sessionManager.getSessionFile()
-  const header = sessionManager.getHeader()
-  if (!path || !header)
-    throw new Error('session cannot be persisted')
-  const entries = [header, ...sessionManager.getEntries()]
-  await writeFile(path, `${entries.map(entry => JSON.stringify(entry)).join('\n')}\n`, { flag: 'wx' })
-  sessionManager.setSessionFile(path)
 }

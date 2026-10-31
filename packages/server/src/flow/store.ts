@@ -11,8 +11,9 @@ import type {
   SubagentRun,
 } from '@piflow/protocol'
 import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { InvalidAgentConfiguration, LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_VERSION, PROJECT_FLOW_FILE, serializeProjectCanvas } from '@piflow/protocol'
 
 const VERSION = 1 as const
@@ -73,6 +74,35 @@ export function createFlowStore(dataDir: string): FlowStore {
     })
   }
 
+  function clearMissingSessionBindings(document: FlowDocument): FlowDocument | null {
+    let changed = false
+    const nodes = document.nodes.map((node) => {
+      if (!node.sessionPath || existsSync(node.sessionPath) || !isProjectSessionPath(node.sessionPath, document.projectPath))
+        return node
+      changed = true
+      return { ...node, sessionPath: '' }
+    })
+    const repaired: FlowDocument = {
+      ...document,
+      nodes,
+      updatedAt: new Date().toISOString(),
+    }
+    if (document.conductorPath && !existsSync(document.conductorPath) && isProjectSessionPath(document.conductorPath, document.projectPath)) {
+      changed = true
+      delete repaired.conductorPath
+    }
+    if (!changed)
+      return null
+    return repaired
+  }
+
+  function isProjectSessionPath(path: string, projectPath: string) {
+    const safeCwd = `--${resolve(projectPath).replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
+    const parts = resolve(path).split(sep)
+    const sessionsIndex = parts.lastIndexOf('sessions')
+    return sessionsIndex >= 0 && parts[sessionsIndex + 1] === safeCwd && parts.at(-1)?.endsWith('.jsonl') === true
+  }
+
   async function readProject(projectPath: string, local: FlowDocument | null): Promise<ProjectCanvasDocument | null> {
     const canvasPath = join(projectPath, PROJECT_FLOW_FILE)
     try {
@@ -115,8 +145,14 @@ export function createFlowStore(dataDir: string): FlowStore {
   async function readState(projectPath: string) {
     const normalized = await normalizeProject(projectPath)
     const cached = documents.get(normalized)
-    if (cached)
-      return { document: structuredClone(cached.document), stored: cached.stored }
+    if (cached) {
+      const repaired = clearMissingSessionBindings(cached.document)
+      if (!repaired)
+        return { document: structuredClone(cached.document), stored: cached.stored }
+      await persist(repaired, null)
+      remember(repaired, cached.stored, cached.project)
+      return { document: structuredClone(repaired), stored: cached.stored }
+    }
     let local: FlowDocument | null = null
     try {
       local = parseDocument(JSON.parse(await readFile(fileFor(normalized), 'utf8')), normalized)
@@ -128,9 +164,13 @@ export function createFlowStore(dataDir: string): FlowStore {
     const project = await readProject(normalized, local)
     const base = local ?? emptyDocument(normalized)
     const document = project ? applyCanvas(base, project) : base
+    const repaired = clearMissingSessionBindings(document)
+    const resolved = repaired ?? document
     const stored = local !== null || project !== null
-    remember(document, stored, project)
-    return { document: structuredClone(document), stored }
+    if (repaired)
+      await persist(repaired, null)
+    remember(resolved, stored, project)
+    return { document: structuredClone(resolved), stored }
   }
 
   async function read(projectPath: string): Promise<FlowDocument> {

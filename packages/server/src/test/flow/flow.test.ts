@@ -2,7 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import type { FlowTopology } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
@@ -500,12 +500,36 @@ it('keeps a Node session binding local and clears only the matching binding', as
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     }, { commitGraph: true })
-    await store.bindNodeSession(root, 'agent', '/local/session.jsonl')
-    assert.equal((await createFlowStore(dataDir).read(root)).nodes[0]?.sessionPath, '/local/session.jsonl')
+    const sessionPath = join(root, 'session.jsonl')
+    await writeFile(sessionPath, '{}\n')
+    await store.bindNodeSession(root, 'agent', sessionPath)
+    assert.equal((await createFlowStore(dataDir).read(root)).nodes[0]?.sessionPath, sessionPath)
     assert.doesNotMatch(await readFile(join(root, PROJECT_FLOW_FILE), 'utf8'), /sessionPath|session\.jsonl/)
-    await store.clearNodeSession(root, 'agent', '/other/session.jsonl')
-    assert.equal((await store.read(root)).nodes[0]?.sessionPath, '/local/session.jsonl')
-    await store.clearNodeSession(root, 'agent', '/local/session.jsonl')
+    await store.clearNodeSession(root, 'agent', join(root, 'other-session.jsonl'))
+    assert.equal((await store.read(root)).nodes[0]?.sessionPath, sessionPath)
+    await store.clearNodeSession(root, 'agent', sessionPath)
+    assert.equal((await store.read(root)).nodes[0]?.sessionPath, '')
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('clears session bindings whose runtime file was never created', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  const dataDir = join(root, 'data')
+  try {
+    const store = createFlowStore(dataDir)
+    await store.replaceTopology(root, {
+      nodes: [{ id: 'agent', name: 'Agent', brief: '', sessionPath: '', goal: '', position: { x: 0, y: 0 }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    }, { commitGraph: true })
+    const safeCwd = `--${(await realpath(root)).replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`
+    await store.bindNodeSession(root, 'agent', join(root, 'agent', 'sessions', safeCwd, 'interrupted-session.jsonl'))
+
+    const recovered = await createFlowStore(dataDir).read(root)
+    assert.equal(recovered.nodes[0]?.sessionPath, '')
     assert.equal((await store.read(root)).nodes[0]?.sessionPath, '')
   }
   finally {

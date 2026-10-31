@@ -85,18 +85,6 @@ async function requestSession(path: string, body: OpenSessionRequest | NewSessio
   return state
 }
 
-export async function createBackgroundSession(cwd: string): Promise<SessionState> {
-  const { state } = await post<SessionStateResponse>(newSessionPath, { cwd, persist: true } satisfies NewSessionRequest)
-  applyState(state)
-  return state
-}
-
-export async function createConductorSession(cwd: string): Promise<SessionState> {
-  const { state } = await post<SessionStateResponse>(newSessionPath, { cwd, persist: true, conductor: true } satisfies NewSessionRequest)
-  applyState(state)
-  return state
-}
-
 export async function sendFlowNodePrompt(projectPath: string, nodeId: string, text: string): Promise<SessionState> {
   const body = { projectPath, text } satisfies FlowNodePromptRequest
   const { state } = await post<SessionStateResponse>(buildFlowNodePromptPath(projectPath, nodeId), body)
