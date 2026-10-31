@@ -460,20 +460,20 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
     menuItems.push({ key: diagnostic.message, label: diagnostic.message, disabled: true })
 
   return (
-    <div ref={barRef} className={styles.bar} data-floating={floating}>
-      <div className={styles.column} data-composer="">
-        {operationError ? <div className={styles.error} role="alert">{operationError}</div> : null}
+    <div ref={barRef} className={`${styles.bar} pf-relative pf-z-3`} data-floating={floating}>
+      <div className={`${styles.column} pf-relative pf-z-2 pf-pointer-events-auto`} data-composer="">
+        {operationError ? <div className="pf-p-[0_4px_8px] pf-text-danger pf-text-[0.78rem]" role="alert">{operationError}</div> : null}
         {!store.connected
           ? (
-              <div className={styles.notice} role="status">
+              <div className="pf-p-[0_4px_8px] pf-text-muted pf-text-[0.78rem]" role="status">
                 {`${store.connectionState === 'reconnecting' ? '重连中' : '连接中'}，已输入的内容会保留`}
               </div>
             )
           : null}
         {view && (view.queue.steering.length || view.queue.followUp.length)
           ? (
-              <div className={styles.queue}>
-                <div className={styles.queueGroups}>
+              <div className="pf-flex pf-items-start pf-justify-between pf-gap-[8px] pf-text-muted pf-text-[0.78rem] pf-p-[0_4px_8px]">
+                <div className="pf-grid pf-min-w-0 pf-gap-[5px]">
                   {view.queue.steering.length
                     ? <QueueGroup label="立即引导" messages={view.queue.steering} />
                     : null}
@@ -488,22 +488,22 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             )
           : null}
 
-        <div ref={boxRef} className={styles.box}>
+        <div ref={boxRef} className={`${styles.box} pf-flex-col`}>
           {menuOpen
             ? (
                 <div
                   ref={menuRef}
-                  className={styles.menu}
+                  className={`${styles.menu} pf-absolute pf-z-4 pf-right-0 pf-left-0 pf-overflow-auto pf-p-[4px] pf-border pf-border-solid pf-border-line pf-rounded-[10px] pf-bg-raise`}
                   role="listbox"
                   aria-label={token?.kind === 'at' ? '路径' : '命令'}
                 >
                   {loading
-                    ? <div className={styles.menuNote} role="status">正在查找</div>
+                    ? <div className="pf-p-[8px] pf-text-muted pf-text-[12px]" role="status">正在查找</div>
                     : rows.length === 0
-                      ? <div className={styles.menuNote}>{token?.kind === 'at' ? '没有匹配的路径' : '没有匹配的命令'}</div>
+                      ? <div className="pf-p-[8px] pf-text-muted pf-text-[12px]">{token?.kind === 'at' ? '没有匹配的路径' : '没有匹配的命令'}</div>
                       : (
                           <>
-                            <span ref={markRef} aria-hidden="true" className={styles.mark} />
+                            <span ref={markRef} aria-hidden="true" className={`${styles.mark} pf-absolute pf-z-0 pf-top-0 pf-right-[4px] pf-left-[4px] pf-rounded-[6px] pf-bg-press pf-pointer-events-none`} />
                             {rows.map((row, position) => (
                               <button
                                 key={row.key}
@@ -514,13 +514,13 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                                   rowListRef.current[position] = element
                                 }}
                                 title={row.description ? `${row.label} ${row.description}` : row.label}
-                                className={styles.menuRow}
+                                className={`${styles.menuRow} pf-relative pf-z-1 pf-flex pf-gap-[8px] pf-items-center pf-w-full pf-min-h-[32px] pf-p-[4px_8px] pf-rounded-[6px] pf-bg-transparent pf-text-ink pf-text-start pf-cursor-pointer`}
                                 onMouseDown={event => event.preventDefault()}
                                 onMouseEnter={() => setActive(position)}
                                 onClick={() => pick(row)}
                               >
-                                <span className={row.description ? styles.menuCommand : styles.menuPath}>{row.label}</span>
-                                {row.description ? <span className={styles.menuDesc}>{row.description}</span> : null}
+                                <span className={row.description ? `${styles.menuCommand} pf-font-semibold` : styles.menuPath}>{row.label}</span>
+                                {row.description ? <span className="pf-min-w-0 pf-overflow-hidden pf-text-muted pf-text-[12px] pf-text-ellipsis pf-whitespace-nowrap">{row.description}</span> : null}
                               </button>
                             ))}
                           </>
@@ -530,7 +530,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             : null}
           {images.length
             ? (
-                <div className={styles.images}>
+                <div className={`${styles.images} pf-flex pf-gap-[6px]`}>
                   {images.map((image, index) => (
                     <button key={image.id} type="button" title="移除图片" aria-label={`移除图片 ${index + 1}`} onClick={() => removeImage(image.id)}>
                       <img src={image.previewUrl} alt={`待发送图片 ${index + 1}`} />
@@ -540,7 +540,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                 </div>
               )
             : null}
-          <div className={styles.composer}>
+          <div className={`${styles.composer} pf-grid pf-items-center pf-gap-[4px]`}>
             <IconButton className={styles.plus} label="添加图片" onClick={() => fileRef.current?.click()}>
               <Plus size={16} strokeWidth={2} />
             </IconButton>
@@ -571,7 +571,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
             />
             {view && (view.model || view.thinkingLevels.length > 0)
               ? (
-                  <span className={styles.modelSlot}>
+                  <span className={`${styles.modelSlot} pf-flex pf-min-w-0`}>
                     <Dropdown
                       menu={{ items: menuItems }}
                       open={modelOpen}
@@ -581,7 +581,7 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                     >
                       <button
                         type="button"
-                        className={styles.model}
+                        className={`${styles.model} pf-inline-flex pf-max-w-[180px] pf-min-w-0 pf-shrink pf-items-center pf-gap-[2px] pf-p-[0_8px] pf-rounded-[999px] pf-text-[0.8rem] pf-font-semibold pf-whitespace-nowrap`}
                         aria-label={view.model ? `模型和思考，当前 ${view.model.id}，${thinkingLabel(view.thinkingLevel)}` : `思考强度，当前${thinkingLabel(view.thinkingLevel)}`}
                       >
                         <span>{view.model?.id ?? thinkingLabel(view.thinkingLevel)}</span>
@@ -593,13 +593,13 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
               : null}
             <button
               type="button"
-              className={`${styles.button} ${stopping ? styles.stop : `${styles.send} ${canSend ? styles.ready : ''}`}`}
+              className={`${styles.button} pf-grid pf-shrink-0 pf-place-items-center pf-rounded-[50%] pf-bg-press ${stopping ? styles.stop : `${styles.send} ${canSend ? styles.ready : ''}`}`}
               title={sendLabel}
               aria-label={sendAria}
               disabled={stopping ? aborting : !canSend}
               onClick={stopping ? (view?.isCompacting ? stopCompaction : stop) : () => void submit()}
             >
-              <span className={styles.core}>
+              <span className={`${styles.core} pf-place-items-center pf-leading-0`}>
                 <span className="t-icon-swap" data-state={stopping ? 'b' : 'a'}>
                   <span className="t-icon" data-icon="a"><ArrowUp size={14} /></span>
                   <span className="t-icon" data-icon="b"><Square size={10} fill="currentColor" strokeWidth={0} /></span>
@@ -612,12 +612,12 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
         {hideMeta
           ? null
           : (
-              <div className={styles.meta}>
+              <div className="pf-flex pf-items-center pf-gap-[8px] pf-min-h-[28px] pf-p-[8px_10px]">
                 {view?.cwd ? <BranchNavigator cwd={view.cwd} /> : null}
                 {view?.context
                   ? (
-                      <div className={styles.meter}>
-                        <button type="button" className={`${styles.ring} ${contextLevel}`} aria-label={`上下文已用 ${contextPercent}%`} aria-describedby="composer-usage">
+                      <div className={`${styles.meter} pf-relative pf-ml-auto`}>
+                        <button type="button" className={`${styles.ring} pf-grid pf-w-[22px] pf-h-[22px] pf-place-items-center pf-rounded-[50%] ${contextLevel}`} aria-label={`上下文已用 ${contextPercent}%`} aria-describedby="composer-usage">
                           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                             <circle className={styles.track} cx="8" cy="8" r={RING_R} />
                             {contextPercent > 0
@@ -634,7 +634,14 @@ export default function InputBar({ view, text, focusVersion, onTextChange, draft
                               : null}
                           </svg>
                         </button>
-                        <div className={styles.meterTip} id="composer-usage" role="tooltip">
+                        <div
+                          className={[
+                            `${styles.meterTip} pf-z-32 pf-right-0 pf-w-max pf-min-w-[200px] pf-max-w-[280px] pf-p-[8px_10px] pf-border`,
+                            'pf-border-solid pf-border-line pf-rounded-control pf-bg-bg pf-text-faint pf-text-[0.72rem] pf-leading-[1.7]',
+                          ].join(' ')}
+                          id="composer-usage"
+                          role="tooltip"
+                        >
                           {`已用 ${contextPercent}% · ${formatTokens(view.context.tokens ?? 0)} / ${formatTokens(view.context.contextWindow)}`}
                         </div>
                       </div>
@@ -672,9 +679,9 @@ function errorMessage(error: unknown) {
 
 function QueueGroup({ label, messages }: { label: string, messages: readonly string[] }) {
   return (
-    <div className={styles.queueGroup}>
+    <div className={`${styles.queueGroup} pf-grid`}>
       <span>{label}</span>
-      <div className={styles.queueMessages}>
+      <div className={`${styles.queueMessages} pf-grid pf-gap-[3px] pf-min-w-0`}>
         {messages.map((message, index) => (
           // pi exposes queue entries as strings without stable ids.
           // eslint-disable-next-line react/no-array-index-key

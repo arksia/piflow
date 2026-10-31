@@ -21,22 +21,12 @@
 }
 
 .head-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   min-height: var(--control);
 }
 
 .head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-  text-align: left;
   padding: 0 4px;
   font-size: inherit;
-  border-radius: var(--radius-control);
   color: var(--c-muted);
 }
 
@@ -52,81 +42,27 @@ button.head:hover {
 
 .slot {
   display: inline-grid;
-  width: 13px;
-  height: 13px;
   flex: 0 0 13px;
-  color: var(--c-faint);
-}
-
-.kind {
-  flex-shrink: 0;
-  color: var(--c-mid);
-}
-
-.summary {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-}
-
-.took {
-  flex-shrink: 0;
-  color: var(--c-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.live,
-.fail {
-  flex-shrink: 0;
-  margin-left: auto;
 }
 
 .nested {
-  display: grid;
-  gap: 2px;
   padding: var(--space-1) 0 0 18px;
 }
 
-.fail {
-  color: var(--c-danger);
-}
-
 .body {
-  display: grid;
-  gap: var(--space-2);
   padding: var(--space-1) 0 0;
-  font-size: 13px;
 }
 
 .output {
-  margin: 0;
-  max-height: 280px;
-  overflow: auto;
-  padding: 10px 14px;
-  border-radius: var(--radius-control);
   background: var(--c-code-bg);
-  color: var(--c-body);
-  font-family: var(--font-mono);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
 }
 
 .diff {
-  max-height: 280px;
-  overflow: auto;
-  padding: 8px 0;
-  border-radius: var(--radius-control);
   background: var(--c-code-bg);
-  font-family: var(--font-mono);
 }
 
 .diff-line {
-  padding: 0 14px;
   color: var(--c-muted);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
 }
 
 .diff-line.add {
@@ -143,24 +79,7 @@ button.head:hover {
   color: var(--c-faint);
 }
 
-.none {
-  color: var(--c-faint);
-}
-
-.images {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.actions {
-  display: flex;
-  gap: var(--space-3);
-}
-
 .action {
-  flex-shrink: 0;
-  padding: 0 4px;
-  border-radius: var(--radius-control);
   color: var(--c-faint);
 }
 
@@ -168,4 +87,3 @@ button.head:hover {
   color: var(--c-ink);
   background: var(--c-press);
 }
-

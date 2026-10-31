@@ -1,14 +1,11 @@
 .sidebar {
   width: var(--sidebar-width);
-  flex-shrink: 0;
   background: var(--c-bg);
-  overflow: clip;
   transition: width var(--sidebar-duration) var(--ease);
 }
 
 .content {
   width: var(--sidebar-width);
-  height: 100%;
   border-right: 1px solid var(--c-line);
   opacity: 1;
   visibility: visible;
@@ -28,17 +25,9 @@
 
 .resizer {
   position: relative;
-  z-index: 2;
-  width: 6px;
   flex: 0 0 6px;
-  margin-right: -3px;
-  margin-left: -3px;
   cursor: col-resize;
   touch-action: none;
-}
-
-.resizer-hidden {
-  display: none;
 }
 
 .resizer::after {
@@ -67,7 +56,6 @@
     transform var(--sidebar-duration) var(--ease),
     visibility 0s var(--sidebar-duration);
 }
-
 
 .scrim { display: none; }
 

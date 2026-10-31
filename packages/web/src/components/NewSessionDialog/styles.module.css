@@ -1,45 +1,20 @@
 .backdrop {
-  position: fixed;
-  z-index: 40;
-  inset: 0;
-  display: grid;
-  place-items: center;
   padding: 20px;
-  background: rgb(0 0 0 / 68%);
-  backdrop-filter: blur(6px);
 }
 
 .dialog {
-  display: flex;
   width: min(560px, 100%);
   max-height: min(680px, 90vh);
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--c-line);
-  border-radius: 8px;
-  background: var(--c-raise);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
 }
 
 .header,
 .footer {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   padding: 18px 20px;
 }
 
 .header {
   border-bottom: 1px solid var(--c-line);
-}
-
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--c-signal);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  text-transform: uppercase;
 }
 
 h2 {
@@ -49,8 +24,6 @@ h2 {
 }
 
 .path-form {
-  display: flex;
-  gap: 8px;
   padding: 16px 20px 10px;
 }
 
@@ -73,22 +46,12 @@ h2 {
 
 .go,
 .create {
-  border-radius: 5px;
-  padding: 8px 12px;
   color: var(--c-ink);
   background: var(--c-line);
-  font-size: 0.8rem;
 }
 
 .location {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
   padding: 5px 20px 12px;
-  color: var(--c-faint);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
 }
 
 .location span {
@@ -98,42 +61,17 @@ h2 {
 }
 
 .body {
-  min-height: 180px;
-  overflow-y: auto;
   border-top: 1px solid var(--c-line);
   border-bottom: 1px solid var(--c-line);
-  padding: 8px;
-}
-
-.directory {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  border-radius: 5px;
-  padding: 9px 12px;
-  text-align: left;
-  color: var(--c-mid);
 }
 
 .directory:hover {
   background: var(--c-bg);
 }
 
-.folder {
-  display: grid;
-  width: 18px;
-  place-items: center;
-  color: var(--c-signal);
-}
-
 .message,
 .error {
-  margin: 0;
-  padding: 28px 12px;
   color: var(--c-faint);
-  font-size: 0.8rem;
-  text-align: center;
 }
 
 .error {
@@ -144,13 +82,7 @@ h2 {
   align-items: flex-end;
 }
 
-.hint {
-  color: var(--c-faint);
-  font-size: 0.72rem;
-}
-
 .create {
-  flex-shrink: 0;
   background: var(--c-ink);
   color: var(--c-bg);
 }

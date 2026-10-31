@@ -97,13 +97,13 @@ export default function WorkspaceSidebar({ children, collapsed, open, narrow, on
         ref={sidebarRef}
         aria-label="工作区导航"
         inert={narrow ? !open : collapsed}
-        className={`${styles.sidebar} ${open ? styles.open : ''} ${collapsed ? styles.collapsed : ''} ${isResizing ? styles.resizing : ''}`}
+        className={`${styles.sidebar} pf-shrink-0 pf-overflow-clip ${open ? styles.open : ''} ${collapsed ? styles.collapsed : ''} ${isResizing ? styles.resizing : ''}`}
         style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
       >
-        <div className={styles.content}>{children}</div>
+        <div className={`${styles.content} pf-h-full`}>{children}</div>
       </aside>
       <div
-        className={`${styles.resizer} ${collapsed ? styles.resizerHidden : ''}`}
+        className={`${styles.resizer} pf-z-2 pf-w-[6px] pf-mr-[-3px] pf-ml-[-3px] ${collapsed ? 'pf-hidden' : ''}`}
         role="separator"
         aria-label="调整会话列表宽度"
         aria-orientation="vertical"

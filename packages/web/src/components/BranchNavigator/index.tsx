@@ -52,12 +52,12 @@ export default function BranchNavigator({ cwd }: { cwd: string }) {
     >
       <button
         type="button"
-        className={styles.toggle}
+        className={`${styles.toggle} pf-inline-flex pf-items-center pf-gap-[4px] pf-p-[0_4px] pf-rounded-control pf-text-[0.75rem]`}
         title={error ?? '切换 Git 分支'}
         aria-label={`切换 Git 分支，当前 ${info.current}`}
       >
         <GitBranch />
-        <span className={styles.label}>{info.current}</span>
+        <span className="pf-max-w-[180px] pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">{info.current}</span>
         <ChevronDown className={styles.chevron} />
       </button>
     </Dropdown>

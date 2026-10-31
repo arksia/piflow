@@ -1,31 +1,8 @@
-.backdrop {
-  position: fixed;
-  z-index: 40;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgb(0 0 0 / 68%);
-  backdrop-filter: blur(6px);
-}
-
 .dialog {
-  display: flex;
   width: min(420px, 100%);
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--c-line);
-  border-radius: 8px;
-  background: var(--c-raise);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
   border-bottom: 1px solid var(--c-line);
 }
 
@@ -35,25 +12,7 @@
   font-size: 1rem;
 }
 
-.body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 8px 8px 10px;
-  color: var(--c-body);
-  font-size: 0.84rem;
-}
-
 .theme {
-  display: flex;
   padding: 2px;
   border: 1px solid var(--c-line);
   border-radius: var(--radius-control);
@@ -73,12 +32,7 @@
 }
 
 .action {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 4px;
   color: var(--c-body);
-  font-size: 0.84rem;
-  text-align: left;
 }
 
 .action:disabled {

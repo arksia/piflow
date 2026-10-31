@@ -20,30 +20,30 @@ export default function LatticeLoader({ status, phase }: { status: Status, phase
   return (
     <span
       role="status"
-      className={styles.root}
+      className={`${styles.root} pf-relative pf-inline-flex`}
       data-status={status}
       data-phase={phase || undefined}
     >
-      <span className={styles.grid} aria-hidden="true">
+      <span className="pf-grid" aria-hidden="true">
         {/* eslint-disable react/no-array-index-key -- cell index is the grid slot */}
-        <span className={`${styles.layer} ${styles.run}`}>
+        <span className={`${styles.layer} pf-grid pf-gap-[2px] ${styles.run}`}>
           {ORBIT.map((unit, i) => (
             <span
               key={i}
-              className={styles.cell}
+              className={`${styles.cell} pf-w-[4px] pf-h-[4px] pf-rounded-[1px]`}
               data-hole={unit === null ? '' : undefined}
               style={unit === null ? undefined : { animationDelay: `${unit * 108}ms` }}
             />
           ))}
         </span>
-        <span className={`${styles.layer} ${styles.mark}`}>
+        <span className={`${styles.layer} pf-grid pf-gap-[2px] ${styles.mark}`}>
           {ORBIT.map((_, i) => (
-            <span key={i} className={styles.cell} data-on={MARKS[mark].includes(i) ? '' : undefined} />
+            <span key={i} className={`${styles.cell} pf-w-[4px] pf-h-[4px] pf-rounded-[1px]`} data-on={MARKS[mark].includes(i) ? '' : undefined} />
           ))}
         </span>
         {/* eslint-enable react/no-array-index-key */}
       </span>
-      <span className={styles.sr}>{LABEL[status]}</span>
+      <span className={`${styles.sr} pf-absolute pf-w-[1px] pf-h-[1px] pf-m-[-1px] pf-p-0 pf-overflow-hidden pf-whitespace-nowrap`}>{LABEL[status]}</span>
     </span>
   )
 }

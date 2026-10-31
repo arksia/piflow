@@ -14,49 +14,16 @@
 }
 
 .user {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-
-  /* Column padding is 4px. Another 8px clears the radius past the text. */
-  width: calc(100% + 24px);
-  margin-right: -12px;
-  margin-left: -12px;
   content-visibility: visible;
 }
 
 .user-bubble {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  background: var(--c-raise);
-  border: 1px solid var(--c-line);
-  border-radius: 14px;
-}
-
-.user-text {
-  color: var(--c-ink);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-top: 4px;
-  color: var(--c-faint);
+  max-width: min(76%, 720px);
+  border: 1px solid transparent;
 }
 
 .age {
-  padding: 0 6px;
   color: var(--c-faint);
-  font-size: 0.75rem;
-  line-height: 24px;
   opacity: 0;
   transition: opacity var(--tt-out-dur) var(--tt-out-ease);
 }
@@ -77,14 +44,9 @@
 }
 
 .rows {
-  display: grid;
   grid-template-columns: auto auto;
   gap: 4px 16px;
   margin: 0;
-}
-
-.fact {
-  display: contents;
 }
 
 .rows dt {
@@ -98,74 +60,20 @@
   text-align: right;
 }
 
-.thinking {
-  margin: 2px 0 8px;
-  color: var(--c-muted);
-  font-size: 13px;
-}
-
-.thinking-head {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  margin-left: -6px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  color: var(--c-muted);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
 .thinking-head:hover {
   background: var(--c-press);
 }
 
-.tools {
-  margin: 2px 0 8px;
-  font-size: 13px;
-}
-
-.tools-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  margin-left: -6px;
-  padding: 2px 6px;
-  color: var(--c-muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-
 .tools-list {
-  margin: 2px 0 4px 6px;
-  padding-left: 12px;
   border-left: 1px solid var(--c-line);
 }
 
 .thinking-body {
-  margin: 2px 0 4px 6px;
-  padding: 2px 0 2px 12px;
   border-left: 1px solid var(--c-line);
-  color: var(--c-muted);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-.message-note {
-  margin-top: 8px;
-  color: var(--c-muted);
 }
 
 .message-error {
-  margin-top: 8px;
-  padding: 10px 14px;
   border-left: 2px solid var(--c-danger);
   background: var(--c-danger-tint);
   border-radius: 0 6px 6px 0;
-  color: var(--c-danger);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
 }

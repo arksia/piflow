@@ -57,37 +57,37 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
 
   return (
     <article className={`${styles.tool} ${styles[status]} ${plain ? styles.plain : ''} ${expandable ? 't-acc t-acc-fold' : ''}`} data-open={expandable ? String(open) : undefined}>
-      <div className={styles.headRow}>
+      <div className={`${styles.headRow} pf-flex pf-items-center pf-gap-2`}>
         {expandable
           ? (
               <button
                 type="button"
-                className={`${styles.head} t-acc-head t-tool`}
+                className={`${styles.head} pf-flex pf-items-center pf-gap-2 pf-flex-1 pf-min-w-0 pf-text-left pf-rounded-control t-acc-head t-tool`}
                 aria-expanded={open}
                 aria-label={`${open ? '收起' : '展开'} ${kind}${rawSummary ? ` ${rawSummary}` : ''}`}
                 onClick={() => setUserOpen(!(userOpen ?? defaultOpen))}
               >
                 <ToolMark name={call.name} open={open} />
-                <span className={styles.kind}>{kind}</span>
-                {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
-                {took ? <span className={styles.took}>{took}</span> : null}
-                {status === 'running' ? <span className={styles.live}>运行中</span> : null}
-                {status === 'error' ? <span className={styles.fail}>失败</span> : null}
+                <span className="pf-shrink-0 pf-text-mid">{kind}</span>
+                {rawSummary ? <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-font-mono" title={rawSummary}>{rawSummary}</span> : null}
+                {took ? <span className="pf-shrink-0 pf-text-faint pf-[font-variant-numeric:tabular-nums]">{took}</span> : null}
+                {status === 'running' ? <span className="pf-shrink-0 pf-ml-auto">运行中</span> : null}
+                {status === 'error' ? <span className="pf-shrink-0 pf-ml-auto pf-text-danger">失败</span> : null}
               </button>
             )
           : (
-              <div className={`${styles.head} ${styles.static}`}>
+              <div className={`${styles.head} pf-flex pf-items-center pf-gap-2 pf-flex-1 pf-min-w-0 pf-text-left pf-rounded-control ${styles.static}`}>
                 <ToolMark name={call.name} open={null} />
-                <span className={styles.kind}>{kind}</span>
-                {rawSummary ? <span className={styles.summary} title={rawSummary}>{rawSummary}</span> : null}
-                {took ? <span className={styles.took}>{took}</span> : null}
-                {status === 'running' ? <span className={styles.live}>运行中</span> : null}
-                {status === 'error' ? <span className={styles.fail}>失败</span> : null}
+                <span className="pf-shrink-0 pf-text-mid">{kind}</span>
+                {rawSummary ? <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-font-mono" title={rawSummary}>{rawSummary}</span> : null}
+                {took ? <span className="pf-shrink-0 pf-text-faint pf-[font-variant-numeric:tabular-nums]">{took}</span> : null}
+                {status === 'running' ? <span className="pf-shrink-0 pf-ml-auto">运行中</span> : null}
+                {status === 'error' ? <span className="pf-shrink-0 pf-ml-auto pf-text-danger">失败</span> : null}
               </div>
             )}
         {path
           ? (
-              <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(path)}>
+              <button type="button" className={`${styles.action} pf-shrink-0 pf-p-[0_4px] pf-rounded-control`} onClick={() => void navigator.clipboard.writeText(path)}>
                 复制路径
               </button>
             )
@@ -96,7 +96,7 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
 
       {nested.length
         ? (
-            <div className={styles.nested}>
+            <div className={`${styles.nested} pf-grid pf-gap-[2px]`}>
               {nested.map(child => (
                 <ToolCallCard
                   key={child.id}
@@ -112,12 +112,12 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
       {expandable
         ? (
             <div className="t-acc-panel">
-              <div className={`t-acc-panel-inner ${styles.body}`}>
+              <div className={`t-acc-panel-inner ${styles.body} pf-grid pf-gap-2 pf-text-[13px]`}>
                 {diff
                   ? (
-                      <div className={styles.diff}>
+                      <div className={`${styles.diff} pf-max-h-[280px] pf-overflow-auto pf-p-[8px_0] pf-rounded-control pf-font-mono`}>
                         {diff.map(item => (
-                          <div key={item.key} className={`${styles.diffLine} ${item.className}`}>
+                          <div key={item.key} className={`${styles.diffLine} pf-p-[0_14px] pf-whitespace-pre-wrap pf-break-words ${item.className}`}>
                             {item.line}
                           </div>
                         ))}
@@ -125,11 +125,11 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
                     )
                   : null}
                 {output
-                  ? <pre className={styles.output}>{output}</pre>
-                  : !diff && !images.length ? <div className={styles.none}>无输出</div> : null}
+                  ? <pre className={`${styles.output} pf-m-0 pf-max-h-[280px] pf-overflow-auto pf-p-[10px_14px] pf-rounded-control pf-text-body pf-font-mono pf-whitespace-pre-wrap pf-break-words`}>{output}</pre>
+                  : !diff && !images.length ? <div className="pf-text-faint">无输出</div> : null}
                 {images.length
                   ? (
-                      <div className={styles.images}>
+                      <div className="pf-grid pf-gap-2">
                         {images.map((image, index) => (
                           // Tool result content is immutable; its index is stable.
                           // eslint-disable-next-line react/no-array-index-key
@@ -140,15 +140,15 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
                   : null}
                 {rawOutput
                   ? (
-                      <div className={styles.actions}>
+                      <div className="pf-flex pf-gap-3">
                         {lines.length > 60
                           ? (
-                              <button type="button" className={styles.action} onClick={() => setExpanded(value => !value)}>
+                              <button type="button" className={`${styles.action} pf-shrink-0 pf-p-[0_4px] pf-rounded-control`} onClick={() => setExpanded(value => !value)}>
                                 {expanded ? '收起' : `展开全部（共 ${lines.length} 行）`}
                               </button>
                             )
                           : null}
-                        <button type="button" className={styles.action} onClick={() => void navigator.clipboard.writeText(rawOutput)}>
+                        <button type="button" className={`${styles.action} pf-shrink-0 pf-p-[0_4px] pf-rounded-control`} onClick={() => void navigator.clipboard.writeText(rawOutput)}>
                           复制输出
                         </button>
                       </div>
@@ -165,9 +165,9 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
 function ToolMark({ name, open }: { name: string, open: boolean | null }) {
   const glyph = <ToolGlyph name={name} />
   if (open === null)
-    return <span className={styles.slot}>{glyph}</span>
+    return <span className={`${styles.slot} pf-w-[13px] pf-h-[13px] pf-text-faint`}>{glyph}</span>
   return (
-    <span className={`t-icon-swap ${styles.slot}`} data-state={open ? 'b' : 'a'}>
+    <span className={`t-icon-swap ${styles.slot} pf-w-[13px] pf-h-[13px] pf-text-faint`} data-state={open ? 'b' : 'a'}>
       <span className="t-icon" data-icon="a">{glyph}</span>
       <span className="t-icon" data-icon="b"><AccChevron /></span>
     </span>

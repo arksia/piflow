@@ -43,7 +43,7 @@ export default function SessionItemMenu({ session, label, streaming, className, 
   }, [menuOpen])
 
   return (
-    <span ref={rootRef} className={`${styles.root} ${className ?? ''}`} data-open={menuOpen || menu.mounted || undefined}>
+    <span ref={rootRef} className={`pf-relative ${className ?? ''}`} data-open={menuOpen || menu.mounted || undefined}>
       <IconButton
         label={`会话操作：${label}`}
         aria-haspopup="menu"
@@ -54,10 +54,10 @@ export default function SessionItemMenu({ session, label, streaming, className, 
       </IconButton>
       {menu.mounted
         ? (
-            <span className={`${styles.menu} t-dropdown ${menu.className}`} data-origin="top-right" role="menu" aria-label="会话操作">
+            <span className={`${styles.menu} pf-absolute pf-z-30 pf-right-0 pf-min-w-[136px] pf-p-[4px] pf-border pf-border-solid pf-border-line pf-rounded-[6px] pf-bg-raise t-dropdown ${menu.className}`} data-origin="top-right" role="menu" aria-label="会话操作">
               <button
                 role="menuitem"
-                className={styles.menuItem}
+                className={`${styles.menuItem} pf-flex pf-items-center pf-gap-[8px] pf-rounded-[4px] pf-p-[6px_8px] pf-text-[0.78rem] pf-text-left`}
                 onClick={() => {
                   setMenuOpen(false)
                   onRename()
@@ -68,7 +68,7 @@ export default function SessionItemMenu({ session, label, streaming, className, 
               </button>
               <button
                 role="menuitem"
-                className={styles.menuItem}
+                className={`${styles.menuItem} pf-flex pf-items-center pf-gap-[8px] pf-rounded-[4px] pf-p-[6px_8px] pf-text-[0.78rem] pf-text-left`}
                 disabled={session.messageCount === 0}
                 title={session.messageCount === 0 ? '没有可分叉的用户消息' : undefined}
                 onClick={() => {
@@ -79,17 +79,17 @@ export default function SessionItemMenu({ session, label, streaming, className, 
                 <GitFork />
                 从消息分叉…
               </button>
-              <a role="menuitem" className={styles.menuItem} href={`${sessionUrl(session.path, 'export')}?inline=1`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>
+              <a role="menuitem" className={`${styles.menuItem} pf-flex pf-items-center pf-gap-[8px] pf-rounded-[4px] pf-p-[6px_8px] pf-text-[0.78rem] pf-text-left`} href={`${sessionUrl(session.path, 'export')}?inline=1`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>
                 <ExternalLink />
                 在新标签页预览
               </a>
-              <a role="menuitem" className={styles.menuItem} href={sessionUrl(session.path, 'export')} onClick={() => setMenuOpen(false)}>
+              <a role="menuitem" className={`${styles.menuItem} pf-flex pf-items-center pf-gap-[8px] pf-rounded-[4px] pf-p-[6px_8px] pf-text-[0.78rem] pf-text-left`} href={sessionUrl(session.path, 'export')} onClick={() => setMenuOpen(false)}>
                 <Download />
                 下载 HTML
               </a>
               <button
                 role="menuitem"
-                className={`${styles.menuItem} ${styles.danger}`}
+                className={`${styles.menuItem} pf-flex pf-items-center pf-gap-[8px] pf-rounded-[4px] pf-p-[6px_8px] pf-text-[0.78rem] pf-text-left ${styles.danger}`}
                 disabled={streaming}
                 title={streaming ? '流式进行中，稍后再删' : undefined}
                 onClick={() => {
@@ -153,27 +153,27 @@ export function ForkDialog({ session, label, onClose }: { session: SessionInfoLi
   }
 
   return (
-    <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="fork-dialog-title">
+    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="fork-dialog-title">
       {close => (
         <>
-          <header className={styles.header}>
+          <header className={`${styles.header} pf-flex pf-items-center pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
             <div>
-              <p className={styles.eyebrow}>分叉</p>
+              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">分叉</p>
               <h2 id="fork-dialog-title">选择分叉点</h2>
             </div>
             <IconButton label="关闭" onClick={close}><X /></IconButton>
           </header>
-          <p className={styles.hint}>
+          <p className="pf-m-0 pf-p-[14px_20px_4px] pf-text-faint pf-text-[0.76rem] pf-leading-[1.55]">
             从「
             {label}
             」的这条消息创建新会话，新会话只包含它及之前的内容。
           </p>
-          <div className={styles.body}>
-            {error ? <p className={styles.error}>{error}</p> : null}
-            {points === null && !error ? <p className={styles.message}>读取消息中…</p> : null}
-            {points?.length === 0 ? <p className={styles.message}>没有可分叉的用户消息</p> : null}
+          <div className="pf-min-h-[72px] pf-overflow-y-auto pf-p-[10px_8px_12px]">
+            {error ? <p className="pf-m-[8px_12px_0] pf-text-danger pf-text-[0.76rem]">{error}</p> : null}
+            {points === null && !error ? <p className="pf-m-0 pf-p-[22px_12px] pf-text-faint pf-text-[0.8rem] pf-text-center">读取消息中…</p> : null}
+            {points?.length === 0 ? <p className="pf-m-0 pf-p-[22px_12px] pf-text-faint pf-text-[0.8rem] pf-text-center">没有可分叉的用户消息</p> : null}
             {points?.map(point => (
-              <button key={point.entryId} className={styles.point} disabled={busy} onClick={() => void pickForkPoint(point)}>
+              <button key={point.entryId} className={`${styles.point} pf-block pf-w-full pf-overflow-hidden pf-rounded-[5px] pf-p-[8px_12px] pf-text-[0.8rem] pf-text-left pf-text-ellipsis pf-whitespace-nowrap`} disabled={busy} onClick={() => void pickForkPoint(point)}>
                 {point.text}
               </button>
             ))}
@@ -204,25 +204,25 @@ function DeleteDialog({ path, label, onClose }: { path: string, label: string, o
   }
 
   return (
-    <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="delete-dialog-title" describedBy="delete-dialog-desc" role="alertdialog">
+    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="delete-dialog-title" describedBy="delete-dialog-desc" role="alertdialog">
       {close => (
         <>
-          <header className={styles.header}>
+          <header className={`${styles.header} pf-flex pf-items-center pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
             <div>
-              <p className={styles.eyebrow}>删除</p>
+              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">删除</p>
               <h2 id="delete-dialog-title">删除会话？</h2>
             </div>
             <IconButton label="关闭" onClick={close}><X /></IconButton>
           </header>
-          <p className={styles.hint} id="delete-dialog-desc">
+          <p className="pf-m-0 pf-p-[14px_20px_4px] pf-text-faint pf-text-[0.76rem] pf-leading-[1.55]" id="delete-dialog-desc">
             将永久删除「
             {label}
             」，此操作不可恢复。
           </p>
-          {error ? <p className={styles.error}>{error}</p> : null}
-          <footer className={styles.actions}>
-            <button className={styles.cancel} onClick={close}>取消</button>
-            <button className={styles.confirmDanger} disabled={busy} onClick={() => void confirm()}>删除</button>
+          {error ? <p className="pf-m-[8px_12px_0] pf-text-danger pf-text-[0.76rem]">{error}</p> : null}
+          <footer className="pf-flex pf-justify-end pf-gap-[8px] pf-p-[6px_20px_18px]">
+            <button className={`${styles.cancel} pf-p-[7px_12px] pf-text-[0.8rem]`} onClick={close}>取消</button>
+            <button className={`${styles.confirmDanger} pf-p-[7px_12px] pf-text-[0.8rem] pf-border pf-border-solid pf-border-danger pf-text-danger`} disabled={busy} onClick={() => void confirm()}>删除</button>
           </footer>
         </>
       )}

@@ -234,26 +234,29 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
   const embedded = pinnedKey !== undefined
 
   return (
-    <div className={styles.chat} data-welcome={!embedded && isEmpty ? '' : undefined}>
+    <div className={`${styles.chat} pf-grid pf-h-full`} data-welcome={!embedded && isEmpty ? '' : undefined}>
       {embedded
         ? null
         : (
-            <header className={styles.bar}>
+            <header className={`${styles.bar} pf-flex pf-items-center pf-gap-2 pf-bg-canvas`}>
               <SidebarToggle collapsed={sidebarCollapsed} onToggle={() => onToggleSidebar?.()} />
               <span className={styles.mobileMenu}>
                 <IconButton label="切换会话列表" onClick={() => setSidebarOpen(!store.sidebarOpen)}>
                   <PanelLeft />
                 </IconButton>
               </span>
-              <div className={styles.identity}>
+              <div className={`${styles.identity} pf-flex pf-min-w-0 pf-items-center pf-gap-[6px] pf-text-muted`}>
                 <Folder size={14} aria-hidden="true" />
-                <span className={styles.project} title={cwd ? shortenPath(cwd) : undefined}>{project}</span>
+                <span className={`${styles.project} pf-overflow-hidden pf-text-small pf-text-ellipsis pf-whitespace-nowrap`} title={cwd ? shortenPath(cwd) : undefined}>{project}</span>
                 <ChevronRight size={12} aria-hidden="true" />
-                <div className={styles.title} title={title}>{title || '新会话'}</div>
+                <div className="pf-min-w-0 pf-max-w-[40em] pf-text-ink pf-text-ui pf-font-normal pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap" title={title}>{title || '新会话'}</div>
               </div>
-              <div className={styles.actions}>
+              <div className="pf-flex pf-flex-none pf-items-center pf-gap-2">
                 <ThinkLine
-                  className={`${styles.status} ${status.label ? styles.on : ''} ${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`}
+                  className={[
+                    `${styles.status} pf-shrink-0 pf-text-[0.75rem] pf-whitespace-nowrap ${status.label ? styles.on : ''}`,
+                    `${status.kind === 'failed' ? styles.failed : ''} ${status.kind === 'needs_input' ? styles.wait : ''}`,
+                  ].join(' ')}
                   text={status.label}
                   sizer="压缩上下文"
                 />
@@ -261,13 +264,13 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
             </header>
           )}
 
-      <div ref={scrollerRef} className={`${styles.scroll} ${isEmpty && !embedded ? styles.centered : ''}`} onScroll={onScroll} onWheel={onWheel}>
+      <div ref={scrollerRef} className={`${styles.scroll} pf-relative pf-row-start-2 pf-col-start-1 pf-min-h-0 pf-overflow-y-auto pf-text-reading ${isEmpty && !embedded ? styles.centered : ''}`} onScroll={onScroll} onWheel={onWheel}>
         {trust?.requiresTrust && !trust.trusted
           ? (
-              <div className={styles.trust}>
+              <div className={`${styles.trust} pf-flex pf-items-center pf-justify-between pf-gap-[16px] pf-m-[12px_auto_0]`}>
                 <span>项目资源已停用，确认信任后才会加载扩展与技能。</span>
                 <button onClick={trustProjectNow}>信任项目</button>
-                {trustError ? <span className={styles.trustError} role="alert">{trustError}</span> : null}
+                {trustError ? <span className="pf-text-danger" role="alert">{trustError}</span> : null}
               </div>
             )
           : null}
@@ -276,7 +279,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
               <WorkspaceWelcome cwd={cwd} onChoose={applyPreset} />
             )
           : (
-              <div ref={setColumn} className={styles.column}>
+              <div ref={setColumn} className={`${styles.column} pf-m-[0_auto] pf-text-ink`}>
                 {groups.map((indices, groupIndex) => {
                   const head = indices[0]
                   const headMessage = head === undefined ? undefined : shown[head]
@@ -307,7 +310,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
                       })}
                       {groupIndex === groups.length - 1 && isLive && !view.live
                         ? (
-                            <div className={styles.pending}>
+                            <div className="pf-flex pf-items-center pf-gap-[8px] pf-p-[8px_0] pf-text-muted">
                               <ThinkLine text="正在生成…" />
                             </div>
                           )
@@ -315,20 +318,20 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
                     </div>
                   )
                 })}
-                {store.connected && view.isCompacting ? <div className={styles.note}><span className="t-shimmer" data-text="正在压缩上下文…">正在压缩上下文…</span></div> : null}
+                {store.connected && view.isCompacting ? <div className="pf-text-muted pf-p-[8px_0]"><span className="t-shimmer" data-text="正在压缩上下文…">正在压缩上下文…</span></div> : null}
                 {view.compactionNotice && (
-                  <div className={styles.note}>
+                  <div className="pf-text-muted pf-p-[8px_0]">
                     {compactionNoticeLabel(view.compactionNotice)}
                   </div>
                 )}
-                {view.error ? <div className={styles.error}>{view.error}</div> : null}
+                {view.error ? <div className="pf-text-danger pf-p-[8px_0]">{view.error}</div> : null}
               </div>
             )}
       </div>
 
       {statuses.length || widgets.length
         ? (
-            <div className={styles.extensionState}>
+            <div className={`${styles.extensionState} pf-flex pf-row-start-2 pf-col-start-1 pf-self-end pf-z-4 pf-flex-wrap pf-p-[6px_0] pf-text-muted pf-font-mono pf-text-[0.72rem]`}>
               {statuses.map(status => <span key={status.id}>{status.method === 'setStatus' ? status.statusText : ''}</span>)}
               {widgets.map(widget => (
                 <span key={widget.id}>{widget.method === 'setWidget' ? widget.widgetLines?.join('\n') : ''}</span>

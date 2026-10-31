@@ -67,18 +67,18 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
   }
 
   return (
-    <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="extensions-title">
+    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="extensions-title">
       {close => (
         <>
-          <header className={styles.header}>
+          <header className={`${styles.header} pf-flex pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
             <div>
-              <p className={styles.eyebrow}>扩展</p>
+              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">扩展</p>
               <h2 id="extensions-title">管理 pi 扩展</h2>
             </div>
             <IconButton label="关闭" onClick={close}><X /></IconButton>
           </header>
 
-          <form className={styles.installForm} onSubmit={submitInstall}>
+          <form className={`${styles.installForm} pf-flex pf-gap-[8px]`} onSubmit={submitInstall}>
             <select value={scope} aria-label="扩展范围" onChange={event => setScope(event.target.value as 'global' | 'project')}>
               <option value="global">全局</option>
               <option value="project">项目</option>
@@ -90,18 +90,18 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
               placeholder="npm:@scope/pkg 或 git:https://…"
               onChange={event => setSource(event.target.value)}
             />
-            <button className={styles.install} type="submit" disabled={busy || !source.trim()}>安装</button>
+            <button className="pf-rounded-[5px] pf-p-[8px_12px] pf-bg-ink pf-text-bg pf-text-[0.8rem]" type="submit" disabled={busy || !source.trim()}>安装</button>
           </form>
 
-          <div className={styles.body}>
+          <div className={`${styles.body} pf-min-h-[120px] pf-overflow-y-auto pf-p-[8px]`}>
             {extensions === null
-              ? <p className={styles.message}>读取扩展中…</p>
+              ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>读取扩展中…</p>
               : extensions.length === 0
-                ? <p className={styles.message}>尚未配置扩展</p>
+                ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>尚未配置扩展</p>
                 : extensions.map(extension => (
-                    <div key={`${extension.scope}:${extension.source}`} className={styles.row}>
-                      <span className={styles.scope}>{scopeLabel(extension.scope)}</span>
-                      <span className={styles.source} title={extension.installedPath ?? extension.source}>
+                    <div key={`${extension.scope}:${extension.source}`} className={`${styles.row} pf-flex pf-items-center pf-gap-[10px] pf-rounded-[5px] pf-p-[8px_12px]`}>
+                      <span className="pf-shrink-0 pf-border pf-border-solid pf-border-line pf-rounded-[4px] pf-p-[1px_6px] pf-text-muted pf-text-[0.68rem]">{scopeLabel(extension.scope)}</span>
+                      <span className="pf-min-w-0 pf-flex-1 pf-overflow-hidden pf-text-mid pf-font-mono pf-text-[0.76rem] pf-text-ellipsis pf-whitespace-nowrap" title={extension.installedPath ?? extension.source}>
                         {extension.source}
                       </span>
                       <IconButton
@@ -114,11 +114,11 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
                       </IconButton>
                     </div>
                   ))}
-            {error ? <p className={styles.error}>{error}</p> : null}
+            {error ? <p className={`${styles.error} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>{error}</p> : null}
           </div>
 
-          <footer className={styles.footer}>
-            <span className={styles.hint}>变更后所有空闲会话会自动重载扩展</span>
+          <footer className={`${styles.footer} pf-flex pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
+            <span className="pf-text-faint pf-text-[0.72rem]">变更后所有空闲会话会自动重载扩展</span>
           </footer>
         </>
       )}

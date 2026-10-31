@@ -1,36 +1,20 @@
 .views {
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 8px;
-  background: var(--c-press);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.view {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 5px;
-  color: var(--c-muted);
-  font-size: var(--text-ui);
-  line-height: var(--line-ui);
-  font-weight: 500;
-  white-space: nowrap;
+.slider {
+  transition: transform var(--duration-fast) var(--ease-smooth-out);
 }
 
-.view:hover {
-  background: var(--c-surface);
-  color: var(--c-ink);
+.views[data-active='flow'] .slider {
+  transform: translateX(calc(100% + 2px));
 }
 
-.view[aria-current] {
-  background: var(--c-canvas);
-  color: var(--c-ink);
-  box-shadow: var(--shadow-control);
+@media (prefers-reduced-motion: reduce) {
+  .slider {
+    transition: none;
+  }
 }
 
 @media (width <= 768px) {

@@ -1,9 +1,8 @@
-import { presetWind3 } from 'unocss'
 import UnoCSS from 'unocss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [UnoCSS({ presets: [presetWind3({ prefix: 'pf-', preflight: false })] })],
+  plugins: [UnoCSS()],
   css: {
     modules: { localsConvention: 'camelCaseOnly' },
   },

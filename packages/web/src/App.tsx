@@ -65,8 +65,8 @@ export default function App() {
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
   return (
-    <div className={styles.shell} data-sidebar-collapsed={sidebarCollapsed || undefined}>
-      <a className={styles.skipLink} href="#workspace-content">跳到工作区</a>
+    <div className={`${styles.shell} pf-flex pf-h-full pf-bg-bg`} data-sidebar-collapsed={sidebarCollapsed || undefined}>
+      <a className={`${styles.skipLink} pf-fixed pf-z-30 pf-top-[8px] pf-left-[8px] pf-p-[8px_14px] pf-rounded-control pf-bg-ink pf-text-bg pf-text-[13px] pf-no-underline`} href="#workspace-content">跳到工作区</a>
       <WorkspaceSidebar collapsed={sidebarCollapsed} open={store.sidebarOpen} narrow={narrow} onClose={closeSidebar}>
         <SessionList
           theme={theme}
@@ -77,14 +77,14 @@ export default function App() {
           onToggleSidebar={toggleWorkspaceSidebar}
         />
       </WorkspaceSidebar>
-      <main id="workspace-content" className={styles.main} tabIndex={-1} inert={narrow && store.sidebarOpen}>
-        <div className={`${styles.pane} ${view !== 'chat' ? styles.paneHidden : ''}`}>
+      <main id="workspace-content" className="pf-flex-1 pf-min-w-0 pf-flex pf-flex-col pf-overflow-hidden pf-bg-canvas" tabIndex={-1} inert={narrow && store.sidebarOpen}>
+        <div className={`${styles.pane} pf-flex-1 pf-min-w-0 pf-min-h-0 pf-flex-col ${view !== 'chat' ? styles.paneHidden : ''}`}>
           <ChatView onToggleSidebar={toggleWorkspaceSidebar} sidebarCollapsed={sidebarCollapsed} />
         </div>
         {flowReady
           ? (
-              <div className={`${styles.pane} ${view !== 'flow' ? styles.paneHidden : ''}`}>
-                <Suspense fallback={<div className={styles.loading}>正在加载 Flow…</div>}>
+              <div className={`${styles.pane} pf-flex-1 pf-min-w-0 pf-min-h-0 pf-flex-col ${view !== 'flow' ? styles.paneHidden : ''}`}>
+                <Suspense fallback={<div className="pf-grid pf-flex-1 pf-place-items-center pf-text-muted pf-text-[0.85rem]">正在加载 Flow…</div>}>
                   <FlowView
                     active={view === 'flow'}
                     onShowChat={onShowChat}

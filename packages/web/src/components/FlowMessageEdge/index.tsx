@@ -58,7 +58,7 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
       />
       {activities.length > 0 && !data?.reducedMotion
         ? (
-            <g className={styles.pulses} aria-hidden="true">
+            <g className={`${styles.pulses} pf-pointer-events-none`} aria-hidden="true">
               {activities.map((activity, index) => {
                 const messageForward = activity.source === source
                 const reverse = activity.kind === 'request' ? !messageForward : messageForward
@@ -76,7 +76,15 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
       {activities.length > 1 || (activities.length > 0 && data?.reducedMotion)
         ? (
             <EdgeLabelRenderer>
-              <span className={styles.count} style={{ left: labelX, top: labelY }} aria-label={`${activities.length} 条消息活动`}>
+              <span
+                className={[
+                  `${styles.count} pf-absolute pf-grid pf-w-[20px] pf-h-[20px] pf-place-items-center pf-border pf-border-solid`,
+                  'pf-border-line-strong pf-rounded-[50%] pf-bg-surface pf-text-ink pf-text-[11px]',
+                  'pf-[font-variant-numeric:tabular-nums] pf-pointer-events-none',
+                ].join(' ')}
+                style={{ left: labelX, top: labelY }}
+                aria-label={`${activities.length} 条消息活动`}
+              >
                 {activities.length}
               </span>
             </EdgeLabelRenderer>

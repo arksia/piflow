@@ -1,21 +1,5 @@
-.pulses {
-  pointer-events: none;
-}
-
 .count {
-  position: absolute;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
   transform: translate(-50%, -50%);
-  border: 1px solid var(--c-line-strong);
-  border-radius: 50%;
-  background: var(--c-surface);
-  color: var(--c-ink);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

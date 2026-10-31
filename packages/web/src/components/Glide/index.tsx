@@ -84,12 +84,12 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
     <div
       ref={listRef}
       data-glide-list=""
-      className={[styles.root, className].filter(Boolean).join(' ')}
+      className={['pf-relative', className].filter(Boolean).join(' ')}
       onPointerOver={event => track(event.target)}
       onPointerLeave={rest}
       onFocus={event => track(event.target)}
     >
-      <span ref={pillRef} className={styles.pill} aria-hidden="true" />
+      <span ref={pillRef} className={`${styles.pill} pf-absolute pf-z-0 pf-top-0 pf-right-0 pf-left-0 pf-h-[32px] pf-rounded-[6px] pf-bg-press pf-pointer-events-none`} aria-hidden="true" />
       {children}
     </div>
   )

@@ -1,6 +1,4 @@
 .bar {
-  position: relative;
-  z-index: 3;
   container-type: inline-size;
 
   /* 10px matches the thin scrollbar, so the field lines up with the transcript. */
@@ -12,33 +10,12 @@
 }
 
 .column {
-  position: relative;
-  z-index: 2;
-
   /* Transcript column is inset 28px, then its own 4px padding. Match that content box. */
   width: min(calc(100% - 64px), calc(var(--chat-w, 900px) - 8px));
   margin: 0 auto;
-  pointer-events: auto;
-}
-
-.queue {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--c-muted);
-  font-size: 0.78rem;
-  padding: 0 4px 8px;
-}
-
-.queue-groups {
-  display: grid;
-  min-width: 0;
-  gap: 5px;
 }
 
 .queue-group {
-  display: grid;
   grid-template-columns: 82px minmax(0, 1fr);
   gap: 3px 8px;
 }
@@ -47,29 +24,10 @@
   color: var(--c-faint);
 }
 
-.queue-messages {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
 .queue-messages > div {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-
-.error {
-  padding: 0 4px 8px;
-  color: var(--c-danger);
-  font-size: 0.78rem;
-}
-
-.notice {
-  padding: 0 4px 8px;
-  color: var(--c-muted);
-  font-size: 0.78rem;
 }
 
 .box {
@@ -78,7 +36,6 @@
 
   position: relative;
   display: flex;
-  flex-direction: column;
   background: var(--c-raise);
   border: 1px solid var(--c-line);
   border-radius: 999px;
@@ -106,28 +63,11 @@
 }
 
 .menu {
-  position: absolute;
-  z-index: 4;
-  right: 0;
   bottom: calc(100% + 8px);
-  left: 0;
-  overflow: auto;
-  padding: 4px;
-  border: 1px solid var(--c-line);
-  border-radius: 10px;
-  background: var(--c-raise);
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
 
 .mark {
-  position: absolute;
-  z-index: 0;
-  top: 0;
-  right: 4px;
-  left: 4px;
-  border-radius: 6px;
-  background: var(--c-press);
-  pointer-events: none;
   opacity: 0;
   transition:
     transform var(--tabs-dur) var(--tabs-ease),
@@ -135,21 +75,8 @@
 }
 
 .menu-row {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  min-height: 32px;
-  padding: 4px 8px;
   border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--c-ink);
   font: inherit;
-  text-align: start;
-  cursor: pointer;
 }
 
 .menu-path,
@@ -166,22 +93,6 @@
 
 .menu-command {
   flex: none;
-  font-weight: 600;
-}
-
-.menu-desc {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--c-muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.menu-note {
-  padding: 8px;
-  color: var(--c-muted);
-  font-size: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -191,10 +102,7 @@
 }
 
 .composer {
-  display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 4px;
   min-height: calc(var(--side-button) + var(--side-inset) * 2);
   padding: var(--side-inset);
 }
@@ -268,8 +176,6 @@
 }
 
 .images {
-  display: flex;
-  gap: 6px;
   padding: 8px 8px 0;
   overflow-x: auto;
 }
@@ -301,25 +207,7 @@
   filter: drop-shadow(0 0 2px rgb(0 0 0 / 80%));
 }
 
-.meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 8px 10px;
-}
-
-.meter {
-  position: relative;
-  margin-left: auto;
-}
-
 .ring {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 50%;
   color: var(--c-muted);
 }
 
@@ -357,20 +245,8 @@
 
 .meter-tip {
   position: absolute;
-  z-index: 32;
-  right: 0;
   bottom: calc(100% + 4px);
   display: none;
-  width: max-content;
-  min-width: 200px;
-  max-width: 280px;
-  padding: 8px 10px;
-  border: 1px solid var(--c-line);
-  border-radius: var(--radius-control);
-  background: var(--c-bg);
-  color: var(--c-faint);
-  font-size: 0.72rem;
-  line-height: 1.7;
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
 
@@ -387,9 +263,7 @@
 }
 
 .model-slot {
-  display: flex;
   grid-column: 3;
-  min-width: 0;
 }
 
 .box.wide .model-slot {
@@ -397,20 +271,9 @@
 }
 
 .model {
-  display: inline-flex;
-  max-width: 180px;
-  min-width: 0;
   height: var(--side-button);
-  flex-shrink: 1;
-  align-items: center;
-  gap: 2px;
-  padding: 0 8px;
-  border-radius: 999px;
   color: var(--c-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
   overflow: hidden;
-  white-space: nowrap;
   transition: color 0.15s var(--ease), background 0.15s var(--ease);
 }
 
@@ -426,14 +289,9 @@
 }
 
 .button {
-  display: grid;
   grid-column: 4;
   width: var(--side-button);
   height: var(--side-button);
-  flex-shrink: 0;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--c-press);
 }
 
 .box.wide .button {
@@ -442,8 +300,6 @@
 
 .core {
   display: grid;
-  place-items: center;
-  line-height: 0;
   color: var(--c-faint);
 }
 
@@ -466,4 +322,3 @@
 .send:disabled {
   cursor: default;
 }
-

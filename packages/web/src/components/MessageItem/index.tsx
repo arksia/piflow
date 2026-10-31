@@ -85,13 +85,13 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
 
   if (message.role === 'user') {
     return (
-      <div className={`${styles.message} ${styles.user}`} data-user={userText}>
-        <div className={styles.userBubble}>
+      <div className={`${styles.message} ${styles.user} pf-flex pf-justify-end`} data-user={userText}>
+        <div className={`${styles.userBubble} pf-grid pf-gap-[8px] pf-w-fit pf-p-[7px_12px] pf-bg-press pf-rounded-[8px] pf-text-ui`}>
           {typeof content === 'string'
-            ? <span className={styles.userText}>{content}</span>
+            ? <span className="pf-text-ink pf-whitespace-pre-wrap pf-break-words">{content}</span>
             : blocks.map((block) => {
                 if (block.type === 'text')
-                  return <span key={blockKey(block)} className={styles.userText}>{block.text}</span>
+                  return <span key={blockKey(block)} className="pf-text-ink pf-whitespace-pre-wrap pf-break-words">{block.text}</span>
                 if (block.type === 'image')
                   return <ContentImage key={blockKey(block)} image={block} alt="用户图片" />
                 return null
@@ -122,9 +122,9 @@ function MessageItem({ message, toolResults, live = false, showTime = false, ses
           )
         })}
         {message.stopReason === 'error'
-          ? <div className={styles.messageError}>{message.errorMessage || '请求失败'}</div>
+          ? <div className={`${styles.messageError} pf-mt-[8px] pf-p-[10px_14px] pf-text-danger pf-whitespace-pre-wrap pf-break-words`}>{message.errorMessage || '请求失败'}</div>
           : message.stopReason === 'aborted'
-            ? <div className={styles.messageNote}>已中止</div>
+            ? <div className="pf-mt-[8px] pf-text-muted">已中止</div>
             : null}
       </div>
     )
@@ -178,14 +178,14 @@ function ToolRunGroup({ calls, toolResults }: { calls: ToolCallBlock[], toolResu
       ? `调用了 ${calls.length} 个工具，${failed} 个失败`
       : `调用了 ${calls.length} 个工具`
   return (
-    <div className={styles.tools}>
-      <div className={styles.toolsLabel}>
+    <div className="pf-m-[2px_0_8px] pf-text-[13px]">
+      <div className="pf-inline-flex pf-items-center pf-gap-[6px] pf-min-h-[28px] pf-ml-[-6px] pf-p-[2px_6px] pf-text-muted pf-text-[14px] pf-font-medium">
         <Wrench size={14} aria-hidden="true" />
         {running
           ? <span className="t-shimmer" role="status" data-text={label}>{label}</span>
           : <span role="status">{label}</span>}
       </div>
-      <div className={styles.toolsList}>
+      <div className={`${styles.toolsList} pf-m-[2px_0_4px_6px] pf-pl-[12px]`}>
         {calls.map(call => (
           <ToolCallCard key={call.id} plain call={call} state={toolResults[call.id]} />
         ))}
@@ -213,10 +213,10 @@ function ThinkingBlock({ text, live }: { text: string, live: boolean }) {
 
   const label = live ? '思考中' : seconds ? `思考了 ${seconds} 秒` : '已思考'
   return (
-    <div className={`${styles.thinking} t-acc t-acc-trace`} data-open={String(expanded)}>
+    <div className="pf-m-[2px_0_8px] pf-text-muted pf-text-[13px] t-acc t-acc-trace" data-open={String(expanded)}>
       <button
         type="button"
-        className={`${styles.thinkingHead} t-acc-head`}
+        className={`${styles.thinkingHead} pf-inline-flex pf-items-center pf-gap-[6px] pf-min-h-[28px] pf-ml-[-6px] pf-p-[2px_6px] pf-rounded-[6px] pf-text-muted pf-text-[14px] pf-font-medium pf-cursor-pointer t-acc-head`}
         aria-expanded={expanded}
         onClick={() => setManual(value => !(value ?? live))}
       >
@@ -228,7 +228,7 @@ function ThinkingBlock({ text, live }: { text: string, live: boolean }) {
       </button>
       <div className="t-acc-panel">
         <div className="t-acc-panel-inner">
-          <div className={styles.thinkingBody}>{text}</div>
+          <div className={`${styles.thinkingBody} pf-m-[2px_0_4px_6px] pf-p-[2px_0_2px_12px] pf-text-muted pf-whitespace-pre-wrap pf-break-words`}>{text}</div>
         </div>
       </div>
     </div>
@@ -322,7 +322,7 @@ function MessageActions({
   }
 
   return (
-    <div className={styles.actions}>
+    <div className="pf-flex pf-items-center pf-gap-[2px] pf-mt-[4px] pf-text-faint">
       <IconButton size="compact" label={copied ? '已复制' : '复制'} disabled={!text} onClick={() => void copyMessage()}>
         {copied ? <Check /> : <Copy />}
       </IconButton>
@@ -337,9 +337,9 @@ function MessageActions({
       <Popover
         label="消息统计"
         content={(
-          <dl className={styles.rows}>
+          <dl className={`${styles.rows} pf-grid`}>
             {facts.map(([name, value]) => (
-              <span key={name} className={styles.fact}>
+              <span key={name} className="pf-contents">
                 <dt>{name}</dt>
                 <dd>{value}</dd>
               </span>
@@ -349,7 +349,7 @@ function MessageActions({
       >
         <button
           type="button"
-          className={styles.age}
+          className={`${styles.age} pf-p-[0_6px] pf-text-[0.75rem] pf-leading-[24px]`}
           data-show={showTime || undefined}
         >
           {time(message.timestamp)}

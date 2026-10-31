@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { tokenMs, usePresence } from '../../motion'
-import styles from './styles.module.css'
 
 /**
  * antd Popover with placement topLeft: the popup's bottom-left sits on the
@@ -61,7 +60,7 @@ export default function Popover({ content, label, children }: { content: ReactNo
     <>
       <span
         ref={triggerRef}
-        className={styles.trigger}
+        className="pf-inline-flex"
         data-open={open ? '' : undefined}
         onPointerEnter={show}
         onPointerLeave={hide}
@@ -74,14 +73,14 @@ export default function Popover({ content, label, children }: { content: ReactNo
         ? createPortal(
             <div
               ref={popupRef}
-              className={`${styles.popup} t-dropdown ${presence.className}`}
+              className={`pf-fixed pf-z-30 pf-w-max pf-pb-[4px] t-dropdown ${presence.className}`}
               data-origin="bottom-left"
               role="region"
               aria-label={label}
               onPointerEnter={show}
               onPointerLeave={hide}
             >
-              <div className={styles.card}>{content}</div>
+              <div className="pf-[box-shadow:0_10px_34px_rgb(0_0_0_/_50%)] pf-min-w-[168px] pf-p-[8px_10px] pf-border pf-border-solid pf-border-line pf-rounded-[8px] pf-bg-raise pf-text-body pf-text-[0.75rem]">{content}</div>
             </div>,
             document.body,
           )

@@ -169,15 +169,15 @@ export default function ProviderDialog({ onClose }: Props) {
   }
 
   return (
-    <ModalFrame backdropClass={styles.backdrop} dialogClass={styles.dialog} onClose={onClose} labelledBy="providers-title">
+    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="providers-title">
       {close => (
         <>
-          <header className={styles.header}>
+          <header className={`${styles.header} pf-flex pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
             <div>
-              <p className={styles.eyebrow}>Provider</p>
+              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">Provider</p>
               <h2 id="providers-title">模型服务与凭证</h2>
             </div>
-            <div className={styles.actions}>
+            <div className={`${styles.actions} pf-flex pf-gap-[4px]`}>
               <IconButton label="刷新 Provider" onClick={() => void refresh()}>
                 <RefreshCw />
               </IconButton>
@@ -187,17 +187,17 @@ export default function ProviderDialog({ onClose }: Props) {
             </div>
           </header>
 
-          <div className={styles.body}>
+          <div className="pf-min-h-[120px] pf-overflow-y-auto pf-p-[8px]">
             {providers === null
-              ? <p className={styles.message}>读取 Provider 中…</p>
+              ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>读取 Provider 中…</p>
               : providers.map(provider => (
-                  <div key={provider.id} className={styles.row}>
-                    <span className={`${styles.status} ${provider.configured ? styles.configured : ''}`} aria-hidden="true" />
-                    <span className={styles.identity}>
+                  <div key={provider.id} className={`${styles.row} pf-flex pf-gap-[10px] pf-rounded-[5px] pf-p-[9px_12px]`}>
+                    <span className={`${styles.status} pf-w-[7px] pf-h-[7px] pf-flex-none ${provider.configured ? `${styles.configured} pf-bg-success` : ''}`} aria-hidden="true" />
+                    <span className={`${styles.identity} pf-flex pf-min-w-0 pf-flex-col pf-flex-1`}>
                       <strong>{provider.name}</strong>
                       <span>{provider.id}</span>
                     </span>
-                    <span className={styles.meta}>
+                    <span className={`${styles.meta} pf-flex pf-min-w-0 pf-flex-col pf-flex-none`}>
                       <span>
                         {provider.modelCount}
                         {' '}
@@ -219,7 +219,7 @@ export default function ProviderDialog({ onClose }: Props) {
                       : null}
                   </div>
                 ))}
-            {error ? <p className={styles.error} role="alert">{error}</p> : null}
+            {error ? <p className={`${styles.error} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`} role="alert">{error}</p> : null}
           </div>
           {operation?.prompt
             ? <AuthPromptDialog prompt={operation.prompt} busy={operation.busy} onSubmit={value => void answer(value)} onCancel={cancel} />
@@ -237,7 +237,7 @@ function AuthEventPanel({ event, onCancel }: { event: AuthDisplayEvent, onCancel
     <div className={styles.prompt}>
       {event.type === 'auth_url'
         ? (
-            <a className={styles.authLink} href={event.url} target="_blank" rel="noreferrer">
+            <a className="pf-inline-flex pf-items-center pf-gap-[5px] pf-text-signal pf-text-[0.78rem]" href={event.url} target="_blank" rel="noreferrer">
               <ExternalLink size={14} />
               打开授权页面
             </a>
@@ -246,15 +246,15 @@ function AuthEventPanel({ event, onCancel }: { event: AuthDisplayEvent, onCancel
           ? (
               <>
                 <p>请打开授权页面并输入设备码</p>
-                <a className={styles.authLink} href={event.verificationUri} target="_blank" rel="noreferrer">
+                <a className="pf-inline-flex pf-items-center pf-gap-[5px] pf-text-signal pf-text-[0.78rem]" href={event.verificationUri} target="_blank" rel="noreferrer">
                   <ExternalLink size={14} />
                   打开授权页面
                 </a>
-                <code className={styles.deviceCode}>{event.userCode}</code>
+                <code className={`${styles.deviceCode} pf-block pf-mt-[10px] pf-text-ink pf-font-mono pf-text-[1rem]`}>{event.userCode}</code>
               </>
             )
           : <p>{event.type === 'info' || event.type === 'progress' ? event.message : ''}</p>}
-      <div className={styles.promptActions}>
+      <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
         <button onClick={onCancel}>取消</button>
       </div>
     </div>
@@ -271,7 +271,7 @@ function AuthPromptDialog({ prompt, busy, onSubmit, onCancel }: { prompt: Provid
       {isSelect
         ? <select value={value} onChange={event => setValue(event.target.value)}>{(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
         : <input autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
-      <div className={styles.promptActions}>
+      <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
         <button onClick={onCancel}>取消</button>
         <button disabled={busy || !value} onClick={() => onSubmit(value)}>继续</button>
       </div>

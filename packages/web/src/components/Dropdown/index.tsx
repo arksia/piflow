@@ -276,7 +276,7 @@ export default function Dropdown({
   return (
     <span
       ref={rootRef}
-      className={styles.root}
+      className="pf-relative pf-inline-flex pf-max-w-full pf-min-w-0"
       onMouseLeave={() => {
         if (trigger.includes('hover'))
           setMergedOpen(false, 'trigger')
@@ -302,17 +302,17 @@ export default function Dropdown({
         ? (
             <div
               ref={popupRef}
-              className={`${styles.popup} t-dropdown ${presence.className}`}
+              className={`${styles.popup} pf-absolute pf-z-32 t-dropdown ${presence.className}`}
               onBlur={(event) => {
                 if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))
                   return
                 scheduleClose()
               }}
             >
-              <div className={styles.menu} style={{ maxWidth, minWidth }}>
+              <div className={`${styles.menu} pf-border pf-border-solid pf-border-line pf-rounded-[10px] pf-bg-raise pf-p-[4px] pf-w-max pf-min-w-[220px]`} style={{ maxWidth, minWidth }}>
                 {search
                   ? (
-                      <div className={styles.search}>
+                      <div className={`${styles.search} pf-items-center pf-gap-[6px] pf-h-[28px] pf-mb-[4px]`}>
                         <Search size={14} />
                         <input
                           ref={searchRef}
@@ -346,7 +346,7 @@ export default function Dropdown({
                               key={item.key}
                               type="button"
                               data-glide={item.key}
-                              className={styles.item}
+                              className={`${styles.item} pf-relative pf-z-1 pf-flex pf-w-full pf-h-[32px] pf-items-center pf-justify-between pf-gap-[8px] pf-p-[4px_8px] pf-rounded-[6px] pf-text-[0.82rem] pf-text-left`}
                               disabled={item.disabled}
                               role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
                               aria-checked={item.selected}
@@ -357,10 +357,10 @@ export default function Dropdown({
                               onFocus={event => activate(item, event.currentTarget)}
                               onClick={() => pick(item)}
                             >
-                              <span className={styles.label}>{item.label}</span>
+                              <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">{item.label}</span>
                               {(item.extra || item.children?.length)
                                 ? (
-                                    <span className={styles.extra}>
+                                    <span className={`${styles.extra} pf-inline-flex pf-shrink-0 pf-items-center pf-gap-[2px] pf-max-w-[120px] pf-text-muted pf-text-[0.78rem]`}>
                                       {item.extra ? <span>{item.extra}</span> : null}
                                       {item.children?.length ? <ChevronRight size={14} /> : null}
                                     </span>
@@ -371,7 +371,7 @@ export default function Dropdown({
                           ))}
                         </Glide>
                       )
-                    : <div className={styles.empty}>没有匹配</div>}
+                    : <div className="pf-p-[8px] pf-text-faint pf-text-[0.75rem]">没有匹配</div>}
                 </div>
               </div>
               {openItem?.children?.length
@@ -489,17 +489,17 @@ function Flyout({
   return (
     <div
       ref={frameRef}
-      className={`${styles.submenu} t-resize`}
+      className={`${styles.submenu} pf-absolute pf-z-2 pf-w-[240px] t-resize`}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
       <div
         ref={panelRef}
-        className={`${styles.panel} t-dropdown ${presence.className}`}
+        className={`${styles.panel} pf-border pf-border-solid pf-border-line pf-rounded-[10px] pf-bg-raise pf-p-[4px] pf-w-full pf-h-full pf-min-h-0 pf-box-border pf-overflow-hidden t-dropdown ${presence.className}`}
         role="menu"
         aria-label={label}
       >
-        <div ref={scrollerRef} className={styles.scroller}>
+        <div ref={scrollerRef} className="pf-h-full pf-min-h-0 pf-overflow-auto">
           <Glide className={styles.list} pin={pin}>
             {children}
           </Glide>
@@ -514,7 +514,7 @@ function ItemList({ items, onPick }: { items: DropdownItem[], onPick: (item: Dro
     if (item.type === 'group') {
       return (
         <div key={item.key} className={styles.group}>
-          <div className={styles.groupLabel}>{item.label}</div>
+          <div className="pf-p-[4px_8px_2px] pf-text-faint pf-font-mono pf-text-[0.7rem]">{item.label}</div>
           <ItemList items={item.children ?? []} onPick={onPick} />
         </div>
       )
@@ -526,11 +526,11 @@ function ItemList({ items, onPick }: { items: DropdownItem[], onPick: (item: Dro
         role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
         aria-checked={item.selected}
         data-glide={item.key}
-        className={styles.item}
+        className={`${styles.item} pf-relative pf-z-1 pf-flex pf-w-full pf-h-[32px] pf-items-center pf-justify-between pf-gap-[8px] pf-p-[4px_8px] pf-rounded-[6px] pf-text-[0.82rem] pf-text-left`}
         disabled={item.disabled}
         onClick={() => onPick(item)}
       >
-        <span className={styles.label}>
+        <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">
           {item.label}
           {item.extra}
         </span>

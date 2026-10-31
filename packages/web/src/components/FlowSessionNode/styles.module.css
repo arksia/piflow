@@ -1,19 +1,12 @@
 .node {
-  position: relative;
-  display: grid;
   width: 172px;
-  min-height: 128px;
   justify-items: center;
   align-content: center;
-  gap: 8px;
-  padding: 8px 7px;
   border: 1px solid transparent;
   border-radius: 15px;
   background: transparent;
   color: var(--c-body);
   font: inherit;
-  text-align: center;
-  cursor: pointer;
   transition: opacity 140ms var(--ease), background 140ms var(--ease);
 }
 
@@ -27,15 +20,9 @@
 }
 
 .agent-icon {
-  position: relative;
-  display: grid;
-  width: 51px;
-  height: 51px;
   flex: 0 0 51px;
-  place-items: center;
   border: 1px solid var(--c-line-strong);
   border-radius: 17px;
-  background: var(--c-surface);
   color: var(--c-mid);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-line) 35%, transparent);
   transition: border-color 140ms var(--ease), color 140ms var(--ease), box-shadow 140ms var(--ease);
@@ -75,13 +62,7 @@
 }
 
 .status-mark {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 12px;
-  height: 12px;
   border: 2px solid var(--c-canvas);
-  border-radius: 50%;
   background: var(--c-signal);
 }
 
@@ -106,14 +87,7 @@
 }
 
 .status {
-  width: max-content;
-  max-width: 100%;
-  overflow: hidden;
   color: var(--c-faint);
-  font-size: 0.68rem;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .status.running { color: var(--c-signal); }
@@ -148,24 +122,9 @@
   }
 }
 
-.wrapper {
-  position: relative;
-  width: 172px;
-}
-
 .members {
-  display: flex;
-  width: 100%;
-  justify-content: center;
-  align-items: center;
-  gap: 3px;
-  padding: 3px;
   border: 0;
-  border-radius: 5px;
-  background: var(--c-surface);
-  color: var(--c-muted);
   font: inherit;
-  font-size: 0.63rem;
   cursor: pointer;
 }
 
@@ -176,11 +135,4 @@
 .members:focus-visible {
   outline: 2px solid var(--c-signal);
   outline-offset: 2px;
-}
-
-.reference {
-  display: block;
-  color: var(--c-muted);
-  font-size: 0.63rem;
-  text-align: center;
 }

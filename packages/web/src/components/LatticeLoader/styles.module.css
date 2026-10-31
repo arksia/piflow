@@ -6,8 +6,6 @@
   --ll-peak: 1;
   --ll-ease: cubic-bezier(0.23, 1, 0.32, 1);
 
-  position: relative;
-  display: inline-flex;
   opacity: 0;
   transition: opacity var(--lattice-fade, 200ms) ease-in;
 }
@@ -32,21 +30,12 @@
   transition-timing-function: ease-out;
 }
 
-.grid {
-  display: grid;
-}
-
 .layer {
   grid-area: 1 / 1;
-  display: grid;
   grid-template-columns: repeat(3, 4px);
-  gap: 2px;
 }
 
 .cell {
-  width: 4px;
-  height: 4px;
-  border-radius: 1px;
   background: var(--ll-color);
   opacity: var(--ll-idle);
 }
@@ -65,13 +54,6 @@
 }
 
 .sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  white-space: nowrap;
   border: 0;
   clip-path: inset(50%);
 }

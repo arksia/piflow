@@ -871,26 +871,26 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   const sourceNode = connectMode ? document?.nodes.find(node => node.id === connectMode.sourceId) : undefined
 
   return (
-    <div className={styles.workspace}>
-      <header className={styles.bar}>
+    <div className={`${styles.workspace} pf-relative pf-flex pf-flex-1 pf-min-h-0 pf-flex-col`}>
+      <header className={`${styles.bar} pf-bg-canvas pf-z-4 pf-flex pf-items-center pf-gap-2 pf-px-2`}>
         <SidebarToggle collapsed={sidebarCollapsed} onToggle={onToggleSidebar} />
-        <div className={styles.heading}>
+        <div className={`${styles.heading} pf-flex pf-min-w-0 pf-flex-1 pf-items-center pf-gap-2`}>
           <strong>Flow</strong>
           <span title={projectPath}>{shortenPath(projectPath)}</span>
         </div>
-        {saving ? <span className={styles.saving}><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
+        {saving ? <span className="pf-text-muted pf-text-[0.74rem] pf-whitespace-nowrap"><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
         {(selection.nodes.length > 1 || selection.edges.length) && !connectMode
-          ? <button className={styles.delete} onClick={deleteSelection}>移出画布</button>
+          ? <button className={`${styles.delete} pf-text-danger`} onClick={deleteSelection}>移出画布</button>
           : null}
         {connectMode
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
           : null}
-        <button className={styles.add} disabled={!document} aria-expanded={panelOpen} onClick={() => setPanelOpen(open => !open)}>添加节点</button>
+        <button className={`${styles.add} pf-font-semibold`} disabled={!document} aria-expanded={panelOpen} onClick={() => setPanelOpen(open => !open)}>添加节点</button>
       </header>
 
       {attentionItems.length
         ? (
-            <div className={`${styles.attention} ${attentionItems[0]!.reason === 'needs_input' ? styles.attentionNeedsInput : ''}`} role="status">
+            <div className={`${styles.attention} pf-min-h-[42px] pf-p-[7px_16px] ${attentionItems[0]!.reason === 'needs_input' ? styles.attentionNeedsInput : ''}`} role="status">
               <CircleAlert size={15} aria-hidden="true" />
               <span>
                 <strong>
@@ -904,7 +904,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                   {attentionItems[0]!.name}
                 </span>
               </span>
-              <button className={styles.attentionAction} type="button" onClick={reviewAttention}>
+              <button className={`${styles.attentionAction} pf-inline-flex pf-min-h-[28px] pf-flex-none pf-items-center pf-gap-[5px] pf-p-[3px_7px] pf-rounded-[4px] pf-font-semibold`} type="button" onClick={reviewAttention}>
                 查看
                 <ArrowRight size={14} aria-hidden="true" />
               </button>
@@ -914,7 +914,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
       {panelOpen
         ? (
-            <form className={styles.panel} onSubmit={event => void addNode(event)}>
+            <form className={`${styles.panel} pf-absolute pf-z-5 pf-right-[16px] pf-overflow-y-auto`} onSubmit={event => void addNode(event)}>
               <label>
                 执行类型
                 <select value={draftKind} onChange={event => setDraftKind(event.target.value as 'persistent' | 'subagent-role')}>
@@ -949,7 +949,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                     </label>
                   )
                 : null}
-              <div className={styles.panelActions}>
+              <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
                 <button type="button" onClick={() => setPanelOpen(false)}>取消</button>
                 <button type="submit" className={styles.confirm} disabled={saving || !name.trim()}>添加</button>
               </div>
@@ -959,7 +959,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
       {briefOpen
         ? (
-            <form className={styles.panel} onSubmit={saveBrief} aria-label="Agent 配置">
+            <form className={`${styles.panel} pf-absolute pf-z-5 pf-right-[16px] pf-overflow-y-auto`} onSubmit={saveBrief} aria-label="Agent 配置">
               <strong>Agent 配置</strong>
               <label>
                 执行类型
@@ -975,7 +975,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                         模型
                         <input value={roleModel} maxLength={200} onChange={event => setRoleModel(event.target.value)} placeholder="留空继承主 Agent；或 provider/model-id" />
                       </label>
-                      <fieldset className={styles.members}>
+                      <fieldset className="pf-min-w-0 pf-m-[0_0_12px] pf-p-[10px] pf-border pf-border-solid pf-border-line pf-rounded-[6px] pf-text-muted pf-text-[0.75rem]">
                         <legend>角色工具范围</legend>
                         <p>实际执行取角色配置与主 Agent 已启用工具的交集。</p>
                         {['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'].map(tool => (
@@ -1016,10 +1016,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 <input type="checkbox" checked={orchestrationEnabled} disabled={configurationKind === 'subagent-role' || Boolean(document?.memberships?.some(item => item.memberId === selection.nodes[0]))} onChange={event => setOrchestrationEnabled(event.target.checked)} />
                 启用编排能力
               </label>
-              {document?.memberships?.some(item => item.memberId === selection.nodes[0]) ? <p className={styles.configHint}>启用前请先从所属编排者的成员列表中移除该 Agent。</p> : null}
+              {document?.memberships?.some(item => item.memberId === selection.nodes[0]) ? <p className="pf-text-muted pf-text-[0.75rem]">启用前请先从所属编排者的成员列表中移除该 Agent。</p> : null}
               {configurationKind === 'persistent' && orchestrationEnabled
                 ? (
-                    <fieldset className={styles.members}>
+                    <fieldset className="pf-min-w-0 pf-m-[0_0_12px] pf-p-[10px] pf-border pf-border-solid pf-border-line pf-rounded-[6px] pf-text-muted pf-text-[0.75rem]">
                       <legend>成员（不创建通信连接）</legend>
                       {document?.nodes.filter(node => node.id !== selection.nodes[0] && node.kind === 'subagent-role').map(node => (
                         <label key={node.id} className={styles.toggleField}>
@@ -1035,7 +1035,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 Brief
                 <textarea maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
               </label>
-              <div className={styles.panelActions}>
+              <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
                 <button type="button" onClick={() => setBriefOpen(false)}>取消</button>
                 <button type="submit" className={styles.confirm} disabled={saving}>保存</button>
               </div>
@@ -1043,16 +1043,16 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
           )
         : null}
 
-      {error ? <div className={styles.error}>{error}</div> : null}
-      <button type="button" className={styles.conductorButton} disabled={!document} onClick={() => void showConductor()}>编排</button>
+      {error ? <div className={`${styles.error} pf-absolute pf-z-8 pf-right-[16px] pf-bottom-[64px] pf-p-[9px_12px] pf-rounded-[6px] pf-text-danger pf-text-[0.78rem] pf-leading-[1.5]`}>{error}</div> : null}
+      <button type="button" className={`${styles.conductorButton} pf-absolute pf-z-5 pf-right-[16px] pf-bottom-[16px] pf-h-[36px] pf-p-[0_14px] pf-border pf-border-solid pf-border-line-strong pf-rounded-[999px] pf-text-ink pf-text-[0.82rem]`} disabled={!document} onClick={() => void showConductor()}>编排</button>
       {conductorOpen
         ? (
-            <aside className={styles.conductor} aria-label="编排">
-              <header className={styles.conductorBar}>
+            <aside className={`${styles.conductor} pf-right-0 pf-bottom-0 pf-bg-canvas pf-absolute pf-z-7 pf-flex pf-flex-col`} aria-label="编排">
+              <header className={`${styles.conductorBar} pf-p-[10px_12px] pf-flex pf-items-center pf-justify-between pf-gap-2`}>
                 <strong>编排</strong>
                 <button type="button" onClick={() => setConductorOpen(false)}>关闭</button>
               </header>
-              <div className={styles.conductorChat}>
+              <div className={`${styles.conductorChat} pf-min-h-0 pf-overflow-hidden`}>
                 {conductorView
                   ? (
                       <ChatView
@@ -1065,9 +1065,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
             </aside>
           )
         : null}
-      <div className={styles.canvas}>
+      <div className="pf-relative pf-flex pf-flex-1 pf-min-h-0 pf-flex-col">
         {!document
-          ? <div className={styles.loading}>正在读取项目 Flow…</div>
+          ? <div className="pf-grid pf-flex-1 pf-place-items-center pf-text-muted pf-text-[0.82rem]">正在读取项目 Flow…</div>
           : (
               <ReactFlow<FlowCanvasNode, Edge>
                 nodes={visibleNodes}
@@ -1106,15 +1106,15 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
         {selectedNode && !connectMode && !briefOpen && !panelOpen
           ? (
-              <aside className={styles.runtimePanel} aria-label={`会话运行面板：${selectedNode.name}`}>
-                <header className={styles.runtimeHeader}>
-                  <div className={styles.runtimeIdentity}>
+              <aside className={`${styles.runtimePanel} pf-top-0 pf-right-0 pf-bottom-0 pf-absolute pf-z-6 pf-flex pf-flex-col`} aria-label={`会话运行面板：${selectedNode.name}`}>
+                <header className={`${styles.runtimeHeader} pf-p-[4px_8px_4px_12px] pf-flex pf-items-center pf-gap-2`}>
+                  <div className={`${styles.runtimeIdentity} pf-flex pf-min-w-0 pf-flex-1 pf-items-center pf-gap-2`}>
                     <strong title={selectedNode.name}>{selectedNode.name}</strong>
-                    <span className={`${styles.runtimeStatus} ${styles[`runtime${selectedNode.kind === 'subagent-role' ? rolePanelKind : panelStatusKind(selectedNodeView, selectedNode.sessionPath, store.statuses)}`]}`}>
+                    <span className={`pf-flex-none pf-text-[0.7rem] ${styles[`runtime${selectedNode.kind === 'subagent-role' ? rolePanelKind : panelStatusKind(selectedNodeView, selectedNode.sessionPath, store.statuses)}`]}`}>
                       {selectedNode.kind === 'subagent-role' ? rolePanelState ? RUN_STATUS_LABELS[rolePanelState] : '尚无运行' : panelStatusLabel(selectedNodeView, selectedNode.sessionPath, store.statuses)}
                     </span>
                   </div>
-                  <div className={styles.runtimeActions}>
+                  <div className={`${styles.runtimeActions} pf-flex pf-flex-none pf-items-center pf-gap-1`}>
                     <button type="button" disabled={selectedNode.kind === 'subagent-role'} title={selectedNode.kind === 'subagent-role' ? '角色没有唯一长期会话' : '在完整聊天视图中打开'} onClick={() => void focusSession(selectedNode.id)}>
                       <ExternalLink size={14} aria-hidden="true" />
                       <span>打开聊天</span>
@@ -1124,35 +1124,35 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                     </IconButton>
                   </div>
                 </header>
-                <div className={styles.runtimeSummary}>
+                <div className={`${styles.runtimeSummary} pf-flex-none pf-p-[9px_12px]`}>
                   <p>{[selectedNode.orchestrationEnabled ? '编排者' : '', selectedNode.roleLabel].filter(Boolean).join(' · ') || '自定义 Agent'}</p>
                   <p>{selectedNode.goal || '尚未设置目标'}</p>
                   {selectedNode.brief?.trim() ? <p className={styles.runtimeBrief}>{selectedNode.brief.trim()}</p> : null}
                 </div>
-                <div className={styles.runtimeToolbar} role="toolbar" aria-label="节点操作">
+                <div className={`${styles.runtimeToolbar} pf-p-[5px_8px] pf-flex pf-flex-none pf-items-center pf-gap-1`} role="toolbar" aria-label="节点操作">
                   {expandedAgents.has(selectedNode.id)
                     ? (
-                        <button type="button" className={styles.runtimeTool} onClick={() => void instance?.fitView({ nodes: visibleNodes.filter(node => node.id === selectedNode.id || node.data.displayOwnerId === selectedNode.id), padding: 0.5, maxZoom: 1, duration: reducedMotion ? 0 : 180 })}>
+                        <button type="button" className={`${styles.runtimeTool} pf-inline-flex pf-min-h-[30px] pf-items-center pf-gap-[5px] pf-p-[0_8px] pf-rounded-control pf-text-[0.7rem]`} onClick={() => void instance?.fitView({ nodes: visibleNodes.filter(node => node.id === selectedNode.id || node.data.displayOwnerId === selectedNode.id), padding: 0.5, maxZoom: 1, duration: reducedMotion ? 0 : 180 })}>
                           聚焦成员
                         </button>
                       )
                     : null}
-                  <button type="button" className={styles.runtimeTool} disabled={selectedNode.kind === 'subagent-role'} onClick={startConnect}>
+                  <button type="button" className={`${styles.runtimeTool} pf-inline-flex pf-min-h-[30px] pf-items-center pf-gap-[5px] pf-p-[0_8px] pf-rounded-control pf-text-[0.7rem]`} disabled={selectedNode.kind === 'subagent-role'} onClick={startConnect}>
                     <Link2 size={14} aria-hidden="true" />
                     连接
                   </button>
-                  <button type="button" className={styles.runtimeTool} onClick={openBrief}>
+                  <button type="button" className={`${styles.runtimeTool} pf-inline-flex pf-min-h-[30px] pf-items-center pf-gap-[5px] pf-p-[0_8px] pf-rounded-control pf-text-[0.7rem]`} onClick={openBrief}>
                     <FileText size={14} aria-hidden="true" />
                     Agent 配置
                   </button>
-                  <button type="button" className={`${styles.runtimeTool} ${styles.runtimeDelete}`} onClick={deleteSelection}>
+                  <button type="button" className={`${styles.runtimeTool} pf-inline-flex pf-min-h-[30px] pf-items-center pf-gap-[5px] pf-p-[0_8px] pf-rounded-control pf-text-[0.7rem] ${styles.runtimeDelete} pf-ml-auto`} onClick={deleteSelection}>
                     <Trash2 size={14} aria-hidden="true" />
                     移出画布
                   </button>
                 </div>
                 {selectedNode.kind === 'subagent-role'
                   ? (
-                      <label className={styles.runFilter}>
+                      <label className={`${styles.runFilter} pf-flex pf-items-center pf-gap-[8px] pf-text-[0.75rem]`}>
                         调用者
                         <select aria-label="调用者" value={runOwnerFilter} onChange={event => setRunOwnerFilter(event.target.value)}>
                           <option value="">全部主 Agent</option>
@@ -1163,9 +1163,9 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                   : null}
                 {selectedNode.orchestrationEnabled && selectedNode.kind !== 'subagent-role'
                   ? (
-                      <details className={styles.delegationEntry} open={delegationOpen} onToggle={event => setDelegationOpen(event.currentTarget.open)}>
+                      <details className={`${styles.delegationEntry} pf-text-[0.75rem]`} open={delegationOpen} onToggle={event => setDelegationOpen(event.currentTarget.open)}>
                         <summary>委派任务</summary>
-                        <form className={styles.delegation} onSubmit={delegateTask}>
+                        <form className={`${styles.delegation} pf-grid pf-gap-[8px]`} onSubmit={delegateTask}>
                           <label htmlFor="delegation-role">委派给角色</label>
                           <select id="delegation-role" required value={delegationRole} onChange={event => setDelegationRole(event.target.value)}>
                             <option value="">选择 Subagent 角色</option>
@@ -1186,10 +1186,10 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                   : null}
                 {selectedRuns.length
                   ? (
-                      <section className={styles.runList} aria-label="Subagent 运行记录">
+                      <section className={`${styles.runList} pf-max-h-[45vh] pf-overflow-y-auto pf-p-[12px]`} aria-label="Subagent 运行记录">
                         <h3>Subagent 运行</h3>
                         {selectedRuns.map(run => (
-                          <details key={run.id} className={styles.run}>
+                          <details key={run.id} className={`${styles.run} pf-p-[8px_0]`}>
                             <summary>
                               {RUN_STATUS_LABELS[run.status]}
                               {' '}
@@ -1221,14 +1221,14 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                         ))}
                       </section>
                     )
-                  : selectedNode.kind === 'subagent-role' ? <p className={styles.runtimeEmpty}>尚无调用记录</p> : null}
+                  : selectedNode.kind === 'subagent-role' ? <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">尚无调用记录</p> : null}
                 {recentMessages.length
                   ? (
-                      <section className={styles.deliveryList} aria-label="最近的跨会话消息">
+                      <section className={`${styles.deliveryList} pf-overflow-y-auto pf-p-[8px_12px] pf-flex-none`} aria-label="最近的跨会话消息">
                         <h3>最近消息</h3>
                         {recentMessages.map(message => (
-                          <article key={message.id} className={styles.delivery}>
-                            <span className={`${styles.deliveryState} ${styles[`delivery${message.status}`]}`}>{deliveryStatusLabel(message.status)}</span>
+                          <article key={message.id} className={`${styles.delivery} pf-p-[6px_0]`}>
+                            <span className={`pf-text-[0.65rem] ${styles[`delivery${message.status}`]}`}>{deliveryStatusLabel(message.status)}</span>
                             <p>{message.preview || message.body}</p>
                             {message.reply ? <p className={styles.deliveryReply}>{message.reply}</p> : null}
                           </article>
@@ -1236,12 +1236,12 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                       </section>
                     )
                   : null}
-                <div className={styles.runtimeChat}>
+                <div className={`${styles.runtimeChat} pf-flex pf-min-h-0 pf-flex-1`}>
                   {selectedNode.kind === 'subagent-role'
-                    ? <p className={styles.runtimeEmpty}>角色不绑定长期会话。主 Agent 通过 subagent 工具调用它，每次运行使用独立上下文。</p>
+                    ? <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">角色不绑定长期会话。主 Agent 通过 subagent 工具调用它，每次运行使用独立上下文。</p>
                     : selectedNodeView
                       ? <ChatView sessionKey={selectedNodeView.key} />
-                      : <p className={styles.runtimeEmpty}>正在打开会话运行状态…</p>}
+                      : <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">正在打开会话运行状态…</p>}
                 </div>
               </aside>
             )
@@ -1249,7 +1249,12 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
 
         {connectMode && sourceNode
           ? (
-              <div className={styles.mode}>
+              <div className={[
+                `${styles.mode} pf-absolute pf-z-5 pf-bottom-[16px] pf-left-[50%] pf-p-[8px_14px] pf-rounded-[6px] pf-bg-surface`,
+                'pf-border pf-border-solid pf-border-signal pf-text-ink pf-text-[0.78rem] pf-leading-[1.5]',
+                'pf-pointer-events-none',
+              ].join(' ')}
+              >
                 已选择“
                 {sourceNode.name}
                 ”，点击另一个会话建立关系，或按 Esc / 取消连接退出。
@@ -1409,8 +1414,8 @@ function draftCard(message: AgentMessage, draftMessage: AgentMessage | undefined
   if (!draft)
     return null
   return (
-    <div className={styles.conductorDraft}>
-      <div className={styles.conductorDraftBody}>
+    <div className={`${styles.conductorDraft} pf-border pf-border-solid pf-border-line pf-rounded-[8px]`}>
+      <div className="pf-p-[12px_12px_0]">
         {draft.modules.map(module => (
           <article key={module.id}>
             <h3>{module.name.trim() || '未命名'}</h3>
@@ -1431,7 +1436,7 @@ function draftCard(message: AgentMessage, draftMessage: AgentMessage | undefined
             )
           : <p className={styles.conductorEmpty}>没有连线</p>}
       </div>
-      <div className={styles.panelActions}>
+      <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
         <button type="button" className={styles.confirm} disabled={!ready || saving} onClick={onAccept}>接受</button>
       </div>
     </div>

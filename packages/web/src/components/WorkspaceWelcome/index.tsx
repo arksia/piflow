@@ -11,20 +11,20 @@ const STARTERS = [
 
 export default function WorkspaceWelcome({ cwd, onChoose }: { cwd: string, onChoose: (prompt: string) => void }) {
   return (
-    <section className={styles.welcome} aria-labelledby="workspace-welcome-title">
+    <section className={`${styles.welcome} pf-shrink-0`} aria-labelledby="workspace-welcome-title">
       <h1 id="workspace-welcome-title">从一个想法，开始工作。</h1>
-      <p className={styles.subtitle}>描述任务，让 pi 和你一起推进项目。</p>
+      <p className="pf-m-0 pf-text-muted pf-text-ui">描述任务，让 pi 和你一起推进项目。</p>
       {cwd
         ? (
-            <div className={styles.project} title={cwd}>
+            <div className={`${styles.project} pf-flex pf-items-center pf-gap-[12px] pf-m-[24px_0_12px] pf-pb-[12px] pf-text-muted`} title={cwd}>
               <span>当前项目</span>
               <code>{shortenPath(cwd)}</code>
             </div>
           )
         : null}
-      <div className={styles.starters}>
+      <div className={`${styles.starters} pf-grid pf-mt-[12px]`}>
         {STARTERS.map(({ title, description, prompt, icon: Icon }) => (
-          <button key={title} type="button" className={styles.starter} onClick={() => onChoose(prompt)}>
+          <button key={title} type="button" className={`${styles.starter} pf-items-center pf-gap-[12px] pf-min-w-0 pf-p-[12px] pf-rounded-control pf-text-left`} onClick={() => onChoose(prompt)}>
             <Icon size={18} strokeWidth={1.5} aria-hidden="true" />
             <span>
               <strong>{title}</strong>

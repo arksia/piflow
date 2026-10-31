@@ -185,9 +185,9 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
 
   return (
     <>
-      <div className={styles.list}>
-        <div className={styles.top}>
-          <div className={styles.brand}>
+      <div className={`${styles.list} pf-flex pf-w-full pf-h-full pf-min-h-0 pf-box-border pf-flex-col pf-text-ui`}>
+        <div className={`${styles.top} pf-flex pf-items-center pf-justify-between pf-shrink-0 pf-gap-2 pf-mb-[4px]`}>
+          <div className={`${styles.brand} pf-flex pf-items-center pf-gap-[8px] pf-text-[14px] pf-font-semibold`}>
             <Workflow size={18} aria-hidden="true" />
             <span>piflow</span>
           </div>
@@ -205,23 +205,33 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
           </IconButton>
         </div>
         <ViewSwitch active={view} onChange={next => next === 'flow' ? onShowFlow() : onShowChat()} />
-        {actionError ? <div className={styles.actionError} role="alert">{actionError}</div> : null}
+        {actionError ? <div className="pf-m-[10px_6px_0] pf-p-[7px_8px] pf-border pf-border-solid pf-border-danger pf-rounded-[4px] pf-text-danger pf-text-[0.76rem]" role="alert">{actionError}</div> : null}
         <button
           type="button"
-          className={styles.newSession}
+          className={`${styles.newSession} pf-flex pf-items-center pf-h-[32px] pf-mt-[8px] pf-rounded-[8px] pf-text-[length:var(--text-ui)] pf-font-medium pf-text-left`}
           disabled={!store.connected}
           onClick={() => setNewSessionOpen(true)}
         >
-          <span className={styles.slot}><MessageSquarePlus size={16} aria-hidden="true" /></span>
+          <span className={`${styles.slot} pf-grid pf-flex-none pf-place-items-center`}><MessageSquarePlus size={16} aria-hidden="true" /></span>
           新建会话
         </button>
-        <div className={styles.workspaceRow}>
-          <div className={`${styles.workspaceLabel} ${searchOpen ? styles.workspaceLabelHidden : ''}`} aria-hidden={searchOpen}>
+        <div className="pf-relative pf-h-[36px] pf-mt-[6px]">
+          <div
+            className={[
+              `${styles.workspaceLabel} pf-flex pf-items-center pf-h-[32px] pf-text-faint pf-text-[length:var(--text-small)]`,
+              `pf-font-medium ${searchOpen ? `${styles.workspaceLabelHidden} pf-pointer-events-none` : ''}`,
+            ].join(' ')}
+            aria-hidden={searchOpen}
+          >
             项目与会话
           </div>
           <button
             type="button"
-            className={`${styles.searchToggle} ${searchOpen ? styles.searchToggleHidden : ''}`}
+            className={[
+              `${styles.searchToggle} pf-grid pf-place-items-center pf-cursor-pointer pf-absolute pf-top-0 pf-right-0`,
+              'pf-w-[32px] pf-h-[32px] pf-rounded-[8px]',
+              searchOpen ? `${styles.searchToggleHidden} pf-pointer-events-none` : '',
+            ].join(' ')}
             ref={searchToggleRef}
             aria-label="搜索会话"
             aria-expanded={searchOpen}
@@ -231,8 +241,8 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
           >
             <Search size={15} />
           </button>
-          <div className={`${styles.searchField} ${searchOpen ? styles.searchFieldOpen : ''}`} aria-hidden={!searchOpen}>
-            <span className={styles.slot}><Search size={16} aria-hidden="true" /></span>
+          <div className={`${styles.searchField} pf-absolute pf-top-0 pf-right-0 pf-flex pf-h-[32px] pf-items-center pf-overflow-hidden ${searchOpen ? styles.searchFieldOpen : ''}`} aria-hidden={!searchOpen}>
+            <span className={`${styles.slot} pf-grid pf-flex-none pf-place-items-center`}><Search size={16} aria-hidden="true" /></span>
             <input
               ref={searchRef}
               value={query}
@@ -245,20 +255,20 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
               placeholder="搜索会话"
               aria-label="搜索会话"
             />
-            <button type="button" className={styles.searchClose} aria-label="关闭搜索" tabIndex={searchOpen ? 0 : -1} onClick={closeSearch}>
+            <button type="button" className={`${styles.searchClose} pf-grid pf-place-items-center pf-cursor-pointer pf-w-[32px] pf-h-[32px] pf-flex-none pf-rounded-[8px]`} aria-label="关闭搜索" tabIndex={searchOpen ? 0 : -1} onClick={closeSearch}>
               <X size={15} />
             </button>
           </div>
         </div>
-        <div className={styles.sessions} aria-label="项目与会话">
+        <div className="pf-flex-1 pf-min-h-0 pf-overflow-auto" aria-label="项目与会话">
           {[...byCwd.entries()].map(([cwd]) => {
             const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
             return (
-              <div key={cwd} className={`${styles.group} t-acc t-acc-fold`} data-open={String(shown)}>
-                <div className={styles.projectHeading}>
+              <div key={cwd} className="pf-mt-[6px] t-acc t-acc-fold" data-open={String(shown)}>
+                <div className={`${styles.projectHeading} pf-flex pf-items-center pf-gap-[2px]`}>
                   <button
                     type="button"
-                    className={`${styles.cwdRow} t-folder`}
+                    className={`${styles.cwdRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-min-w-0 pf-flex-1 pf-bg-transparent pf-cursor-pointer pf-text-left t-folder`}
                     aria-expanded={shown}
                     aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
                     onClick={() => {
@@ -266,16 +276,16 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
                         toggleProject(cwd)
                     }}
                   >
-                    <span className={`t-icon-swap ${styles.folder}`} data-state="a">
+                    <span className={`t-icon-swap ${styles.folder} pf-place-items-center pf-text-muted pf-leading-0`} data-state="a">
                       <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
                       <span className="t-icon" data-icon="b"><AccChevron /></span>
                     </span>
-                    <div className={styles.projectName} title={shortenPath(cwd)}>
-                      <span className={styles.projectLabel}>{projectName(cwd)}</span>
+                    <div className="pf-min-w-0 pf-text-mid pf-text-[length:var(--text-small)]" title={shortenPath(cwd)}>
+                      <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">{projectName(cwd)}</span>
                     </div>
                   </button>
                   <IconButton
-                    className={styles.projectAdd}
+                    className={`${styles.projectAdd} pf-mr-[2px]`}
                     size="compact"
                     label={`在 ${projectName(cwd)} 中新建会话`}
                     disabled={!store.connected}
@@ -324,7 +334,7 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
 
           {store.connected && store.sessions.length === 0
             ? (
-                <div className={styles.empty}>
+                <div className="pf-p-[18px_8px] pf-text-faint pf-text-center pf-text-[length:var(--text-small)]">
                   还没有会话
                   <br />
                   新建会话，选择项目开始工作。
@@ -332,16 +342,16 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
               )
             : null}
 
-          {query.trim() && filteredSessions.length === 0 ? <div className={styles.empty}>没有匹配的会话</div> : null}
+          {query.trim() && filteredSessions.length === 0 ? <div className="pf-p-[18px_8px] pf-text-faint pf-text-center pf-text-[length:var(--text-small)]">没有匹配的会话</div> : null}
 
-          {!store.connected ? <div className={styles.offline}><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
+          {!store.connected ? <div className="pf-mt-[16px] pf-p-[8px] pf-text-faint pf-text-[0.8rem]"><span className="t-shimmer" data-text={store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}>{store.connectionState === 'reconnecting' ? '重连中…' : '连接中…'}</span></div> : null}
         </div>
-        <div className={styles.footer}>
-          <button type="button" className={styles.settings} onClick={() => setSettingsOpen(true)}>
+        <div className={`${styles.footer} pf-flex pf-shrink-0 pf-items-center pf-min-h-[52px] pf-gap-[8px] pf-mt-auto`}>
+          <button type="button" className={`${styles.settings} pf-flex pf-items-center pf-gap-[8px] pf-min-h-[32px] pf-p-[0_6px] pf-rounded-control pf-text-[12px]`} onClick={() => setSettingsOpen(true)}>
             <Settings size={16} aria-hidden="true" />
             设置
           </button>
-          <span className={styles.connection} data-connected={store.connected} role="status">{store.connected ? '本地已连接' : store.connectionState === 'reconnecting' ? '重新连接中' : '连接中'}</span>
+          <span className={`${styles.connection} pf-flex pf-items-center pf-gap-[6px] pf-ml-auto pf-text-muted pf-text-caption pf-whitespace-nowrap`} data-connected={store.connected} role="status">{store.connected ? '本地已连接' : store.connectionState === 'reconnecting' ? '重新连接中' : '连接中'}</span>
         </div>
       </div>
       {newSessionOpen
@@ -411,13 +421,13 @@ function SessionRail({ status, hasChildren, collapsed, sessionLabel, onToggle }:
   if (status)
     shownRef.current = status
   return (
-    <span className={styles.rail}>
+    <span className={`${styles.rail} pf-place-items-center`}>
       {presence.mounted && shownRef.current
         ? <LatticeLoader status={shownRef.current} phase={presence.className} />
         : hasChildren
           ? (
               <button
-                className={styles.chevron}
+                className={`${styles.chevron} pf-grid pf-w-[16px] pf-h-[16px] pf-place-items-center pf-rounded-[4px]`}
                 title={collapsed ? '展开子会话' : '折叠子会话'}
                 aria-label={collapsed ? `展开子会话：${sessionLabel}` : `折叠子会话：${sessionLabel}`}
                 aria-expanded={!collapsed}
@@ -443,7 +453,7 @@ function SessionRow({ session, active, streaming, attention, rail, connected, op
   ].filter(Boolean).join('\n')
   return (
     <div
-      className={styles.sessionRow}
+      className={`${styles.sessionRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-relative pf-z-1`}
       data-glide={session.path}
       aria-current={active ? 'page' : undefined}
       style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}
@@ -455,15 +465,15 @@ function SessionRow({ session, active, streaming, attention, rail, connected, op
         sessionLabel={label(session)}
         onToggle={onToggle}
       />
-      <div className={`${styles.item} ${active ? styles.active : ''} t-session`} title={title}>
-        <button className={styles.itemMain} disabled={!connected || opening} onClick={onPick}>
-          <span className={styles.label}>{label(session)}</span>
+      <div className={`${styles.item} pf-relative pf-items-center pf-min-h-[32px] pf-rounded-[6px] pf-leading-[1.3] ${active ? styles.active : ''} t-session`} title={title}>
+        <button className={`${styles.itemMain} pf-flex pf-row-start-1 pf-items-center pf-min-w-0 pf-gap-[5px] pf-rounded-[4px] pf-text-left pf-p-[4px_32px_4px_0]`} disabled={!connected || opening} onClick={onPick}>
+          <span className={`${styles.label} pf-block pf-overflow-hidden pf-text-[length:var(--text-ui)] pf-font-normal pf-leading-[var(--line-ui)] pf-text-ellipsis pf-whitespace-nowrap`}>{label(session)}</span>
         </button>
         {connected
           ? (
-              <span className={`t-icon-swap ${styles.swap}`} data-state="a">
-                <span className={`t-icon ${styles.ageSlot}`} data-icon="a">
-                  <span className={styles.age}>{opening ? '…' : age}</span>
+              <span className={`t-icon-swap ${styles.swap} pf-col-start-2 pf-row-start-1`} data-state="a">
+                <span className="t-icon pf-inline-flex pf-items-center pf-justify-center pf-w-[32px] pf-h-[32px]" data-icon="a">
+                  <span className="pf-text-faint pf-text-caption pf-[font-variant-numeric:tabular-nums] pf-whitespace-nowrap">{opening ? '…' : age}</span>
                 </span>
                 <span className="t-icon" data-icon="b">
                   <SessionItemMenu
@@ -476,8 +486,8 @@ function SessionRow({ session, active, streaming, attention, rail, connected, op
               </span>
             )
           : (
-              <span className={styles.ageSlot}>
-                <span className={styles.age}>{opening ? '…' : age}</span>
+              <span className="pf-inline-flex pf-items-center pf-justify-center pf-w-[32px] pf-h-[32px]">
+                <span className="pf-text-faint pf-text-caption pf-[font-variant-numeric:tabular-nums] pf-whitespace-nowrap">{opening ? '…' : age}</span>
               </span>
             )}
       </div>
@@ -513,9 +523,9 @@ function RenameRow({ session, indent, onDone }: { session: SessionInfoLite, inde
   }
 
   return (
-    <div className={styles.sessionRow} style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}>
-      <span className={styles.rail} />
-      <div className={`${styles.item} ${styles.editing}`}>
+    <div className={`${styles.sessionRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-relative pf-z-1`} style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}>
+      <span className={`${styles.rail} pf-place-items-center`} />
+      <div className={`${styles.item} pf-relative pf-items-center pf-min-h-[32px] pf-rounded-[6px] pf-leading-[1.3] ${styles.editing} pf-p-[4px_8px]`}>
         <form
           onSubmit={(event) => {
             event.preventDefault()
@@ -524,7 +534,7 @@ function RenameRow({ session, indent, onDone }: { session: SessionInfoLite, inde
         >
           <input
             ref={inputRef}
-            className={styles.renameInput}
+            className={`${styles.renameInput} pf-block pf-box-border pf-w-full pf-p-[5px_7px] pf-bg-bg pf-text-[0.85rem]`}
             defaultValue={session.name ?? ''}
             placeholder={session.firstMessage || '空会话'}
             aria-label="会话名称"
@@ -539,7 +549,7 @@ function RenameRow({ session, indent, onDone }: { session: SessionInfoLite, inde
             }}
             onBlur={() => cancelledRef.current ? onDone() : void commit()}
           />
-          {error ? <span className={styles.renameError}>{error}</span> : null}
+          {error ? <span className="pf-block pf-p-[4px_2px_0] pf-text-danger pf-text-[0.7rem]">{error}</span> : null}
         </form>
       </div>
     </div>
