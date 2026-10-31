@@ -1,12 +1,12 @@
 import type { SessionInfoLite } from '@piflow/protocol'
-import type { NewNodeDraft } from '../../flow/node-forms'
+import type { NewNodeDraft } from '../../node-forms'
 import { useState } from 'react'
-import Button from '../Button'
+import Button from '../../../../components/Button'
+import Select from '../../../../components/Select'
+import Textarea from '../../../../components/Textarea'
+import TextInput from '../../../../components/TextInput'
+import { useFormSubmit } from '../../use-form-submit'
 import styles from '../flow-form.module.css'
-import Select from '../Select'
-import Textarea from '../Textarea'
-import TextInput from '../TextInput'
-import { useFormSubmit } from '../use-form-submit'
 
 interface Props {
   sessions: SessionInfoLite[]

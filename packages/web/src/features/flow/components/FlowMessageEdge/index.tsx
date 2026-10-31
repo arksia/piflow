@@ -1,8 +1,8 @@
 import type { Edge, EdgeProps } from '@xyflow/react'
-import type { FlowEdgeActivity } from '../../flow/edges'
-import type { FlowRoutePoint } from '../../flow/routes'
+import type { FlowEdgeActivity } from '../../edges'
+import type { FlowRoutePoint } from '../../routes'
 import { BaseEdge, EdgeLabelRenderer } from '@xyflow/react'
-import { roundedOrthogonalPath } from '../../flow/routes'
+import { roundedOrthogonalPath } from '../../routes'
 import styles from './styles.module.css'
 
 export interface FlowMessageEdgeData extends Record<string, unknown> {

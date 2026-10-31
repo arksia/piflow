@@ -1,5 +1,5 @@
 import { ArrowUpRight, FileSearch, GitCompareArrows, ListTodo, ScanSearch } from 'lucide-react'
-import { shortenPath } from '../../path'
+import { shortenPath } from '../../../../path'
 import styles from './styles.module.css'
 
 const STARTERS = [

@@ -1,12 +1,12 @@
 import type { FlowDocument, FlowNode } from '@piflow/protocol'
-import type { NodeConfigurationDraft } from '../../flow/node-forms'
+import type { NodeConfigurationDraft } from '../../node-forms'
 import { useState } from 'react'
-import Button from '../Button'
+import Button from '../../../../components/Button'
+import Select from '../../../../components/Select'
+import Textarea from '../../../../components/Textarea'
+import TextInput from '../../../../components/TextInput'
+import { useFormSubmit } from '../../use-form-submit'
 import styles from '../flow-form.module.css'
-import Select from '../Select'
-import Textarea from '../Textarea'
-import TextInput from '../TextInput'
-import { useFormSubmit } from '../use-form-submit'
 
 const ROLE_TEMPLATES = [
   { label: '程序员', prompt: '你负责实现代码。先理解需求和现有实现，再完成范围明确的改动，验证行为，并汇报结果、测试与剩余风险。' },

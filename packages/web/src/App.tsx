@@ -1,13 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import styles from './App.module.css'
-import ChatView from './components/ChatView'
 import ExtensionDialog from './components/ExtensionDialog'
 import SessionList from './components/SessionList'
 import WorkspaceSidebar from './components/WorkspaceSidebar'
+import ChatView from './features/chat'
 import { setSidebarOpen, setWorkspaceView as setStoreWorkspaceView } from './session/store'
 import { useStore } from './session/use-store'
 
-const FlowView = lazy(() => import('./components/FlowView'))
+const LazyFlowView = lazy(() => import('./features/flow'))
 type Theme = 'dark' | 'light'
 
 export default function App() {
@@ -85,7 +85,7 @@ export default function App() {
           ? (
               <div className={`${styles.pane} pf-flex-1 pf-min-w-0 pf-min-h-0 pf-flex-col ${view !== 'flow' ? styles.paneHidden : ''}`}>
                 <Suspense fallback={<div className="pf-grid pf-flex-1 pf-place-items-center pf-text-muted pf-text-[0.85rem]">正在加载 Flow…</div>}>
-                  <FlowView
+                  <LazyFlowView
                     active={view === 'flow'}
                     onShowChat={onShowChat}
                     onToggleSidebar={toggleWorkspaceSidebar}

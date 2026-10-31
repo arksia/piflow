@@ -1,8 +1,8 @@
 import type { GitBranchesResponse } from '@piflow/protocol'
 import { ChevronDown, GitBranch } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { checkoutGitBranch, fetchGitBranches } from '../../session/actions'
-import Dropdown from '../Dropdown'
+import Dropdown from '../../../../components/Dropdown'
+import { checkoutGitBranch, fetchGitBranches } from '../../../../session/actions'
 import styles from './styles.module.css'
 
 export default function BranchNavigator({ cwd }: { cwd: string }) {

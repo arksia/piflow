@@ -1,6 +1,6 @@
 import type { AcceptConductorRequest, ConductorDraft, FlowDocument, FlowDocumentResponse, FlowTopology, ReplaceFlowRequest } from '@piflow/protocol'
 import { API_FLOW_ACCEPT_PATH, API_FLOW_PATH, buildFlowPath } from '@piflow/protocol'
-import { api } from '../session/api'
+import { api } from '../../session/api'
 
 export async function loadFlow(projectPath: string): Promise<FlowDocumentResponse> {
   return api<FlowDocumentResponse>(buildFlowPath(projectPath))
