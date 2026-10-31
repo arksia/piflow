@@ -41,27 +41,3 @@
   background: var(--c-bg);
   color: var(--c-ink);
 }
-
-.cancel,
-.confirm-danger {
-  border-radius: 5px;
-  transition: color 0.15s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease);
-}
-
-.cancel {
-  border: 1px solid var(--c-line);
-  color: var(--c-muted);
-}
-
-.cancel:hover {
-  border-color: var(--c-faint);
-  color: var(--c-ink);
-}
-
-.confirm-danger:disabled {
-  opacity: 0.5;
-}
-
-.confirm-danger:hover:not(:disabled) {
-  background: var(--c-danger-tint);
-}

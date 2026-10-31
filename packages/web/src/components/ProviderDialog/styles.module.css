@@ -4,24 +4,6 @@
   align-items: center;
 }
 
-.login,
-.prompt-actions button {
-  border: 1px solid var(--c-line);
-  border-radius: 4px;
-  padding: 4px 8px;
-  color: var(--c-body);
-  font-size: 0.7rem;
-}
-
-.login:hover,
-.prompt-actions button:hover {
-  border-color: var(--c-signal);
-}
-
-.login:disabled {
-  opacity: 0.45;
-}
-
 .prompt {
   border-top: 1px solid var(--c-line);
   padding: 14px 12px 6px;

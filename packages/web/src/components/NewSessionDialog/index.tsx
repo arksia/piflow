@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Folder, FolderUp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { requestDirectories, selectProjectForNewChat } from '../../session/actions'
+import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -64,7 +65,7 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
           aria-label="项目文件夹路径"
           onChange={event => setPath(event.target.value)}
         />
-        <button className={`${styles.go} pf-rounded-[5px] pf-p-[8px_12px] pf-text-[0.8rem]`} type="submit" disabled={loading}>前往</button>
+        <Button type="submit" disabled={loading}>前往</Button>
       </form>
 
       <div className={`${styles.location} pf-flex pf-items-center pf-gap-[8px] pf-min-w-0 pf-text-faint pf-font-mono pf-text-[0.7rem]`} title={listing?.path ?? path}>
@@ -101,9 +102,9 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
 
       <footer className={`${styles.footer} pf-flex pf-justify-between pf-gap-[16px]`}>
         <span className="pf-text-faint pf-text-[0.72rem]">发送第一条消息后创建会话</span>
-        <button className={`${styles.create} pf-rounded-[5px] pf-p-[8px_12px] pf-text-[0.8rem] pf-shrink-0`} disabled={!listing || loading} onClick={create}>
+        <Button variant="primary" disabled={!listing || loading} onClick={create}>
           在此开始
-        </button>
+        </Button>
       </footer>
     </Dialog>
   )

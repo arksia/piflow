@@ -243,29 +243,6 @@
   color: var(--c-faint);
 }
 
-.panel-actions button {
-  min-height: 32px;
-  padding: 4px 10px;
-  border-radius: 5px;
-  color: var(--c-muted);
-  font-size: 0.78rem;
-}
-
-.panel-actions button:hover {
-  color: var(--c-ink);
-}
-
-.panel-actions .confirm {
-  background: var(--c-accent);
-  color: var(--c-accent-contrast);
-  font-weight: 600;
-}
-
-.panel-actions .confirm:disabled {
-  background: var(--c-press);
-  color: var(--c-faint);
-}
-
 .conductor-button {
   background: var(--c-canvas);
 }

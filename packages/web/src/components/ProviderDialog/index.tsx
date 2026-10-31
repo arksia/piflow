@@ -2,6 +2,7 @@ import type { ProviderAuthEvent, ProviderAuthPrompt, ProviderInfo, ServerMessage
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cancelProviderAuth, checkProvider, fetchProviders, logoutProvider, refreshProvider, respondProviderAuth, startProviderLogin } from '../../session/actions'
+import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -190,16 +191,16 @@ export default function ProviderDialog({ onClose }: Props) {
                   <span>{provider.configured ? authLabel(provider) : '未配置'}</span>
                   {checkResult[provider.id] ? <span>{checkResult[provider.id]}</span> : null}
                 </span>
-                <button className={styles.login} title={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}>测试</button>
-                <button className={styles.login} title={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}>刷新模型</button>
+                <Button variant="outline" size="compact" title={`测试 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void testProvider(provider)}>测试</Button>
+                <Button variant="outline" size="compact" title={`刷新 ${provider.name} 模型`} disabled={action !== null || operation !== null} onClick={() => void refreshProviderModels(provider)}>刷新模型</Button>
                 {provider.configured && provider.credentialType
-                  ? <button className={styles.login} title={`登出 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void logout(provider)}>登出</button>
+                  ? <Button variant="outline" size="compact" title={`登出 ${provider.name}`} disabled={action !== null || operation !== null} onClick={() => void logout(provider)}>登出</Button>
                   : null}
                 {!provider.configured && provider.authTypes.includes('api_key')
-                  ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</button>
+                  ? <Button variant="outline" size="compact" disabled={operation !== null} onClick={() => void login(provider, 'api_key')}>API key</Button>
                   : null}
                 {!provider.configured && provider.authTypes.includes('oauth')
-                  ? <button className={styles.login} disabled={operation !== null} onClick={() => void login(provider, 'oauth')}>OAuth</button>
+                  ? <Button variant="outline" size="compact" disabled={operation !== null} onClick={() => void login(provider, 'oauth')}>OAuth</Button>
                   : null}
               </div>
             ))}
@@ -237,7 +238,7 @@ function AuthEventPanel({ event, onCancel }: { event: AuthDisplayEvent, onCancel
             )
           : <p>{event.type === 'info' || event.type === 'progress' ? event.message : ''}</p>}
       <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
-        <button onClick={onCancel}>取消</button>
+        <Button variant="outline" size="compact" onClick={onCancel}>取消</Button>
       </div>
     </div>
   )
@@ -254,8 +255,8 @@ function AuthPromptDialog({ prompt, busy, onSubmit, onCancel }: { prompt: Provid
         ? <select value={value} onChange={event => setValue(event.target.value)}>{(authPrompt as Extract<typeof authPrompt, { type: 'select' }>).options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
         : <input autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
       <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
-        <button onClick={onCancel}>取消</button>
-        <button disabled={busy || !value} onClick={() => onSubmit(value)}>继续</button>
+        <Button variant="outline" size="compact" onClick={onCancel}>取消</Button>
+        <Button variant="outline" size="compact" disabled={busy || !value} onClick={() => onSubmit(value)}>继续</Button>
       </div>
     </div>
   )

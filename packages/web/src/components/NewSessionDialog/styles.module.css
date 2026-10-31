@@ -24,12 +24,6 @@
   border-color: var(--c-signal);
 }
 
-.go,
-.create {
-  color: var(--c-ink);
-  background: var(--c-line);
-}
-
 .location {
   padding: 5px 20px 12px;
 }
@@ -56,11 +50,6 @@
 
 .error {
   color: var(--c-danger);
-}
-
-.create {
-  background: var(--c-ink);
-  color: var(--c-bg);
 }
 
 @media (width <= 520px) {

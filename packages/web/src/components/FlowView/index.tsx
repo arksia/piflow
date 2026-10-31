@@ -35,6 +35,7 @@ import { shortenPath } from '../../path'
 import { createBackgroundSession, createConductorSession, openBackgroundSession, openSession, requestModels, requestProjectTrust, sendPrompt } from '../../session/actions'
 import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
+import Button from '../Button'
 import ChatView from '../ChatView'
 import FlowMessageEdge from '../FlowMessageEdge'
 import FlowSessionNode from '../FlowSessionNode'
@@ -950,8 +951,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                   )
                 : null}
               <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
-                <button type="button" onClick={() => setPanelOpen(false)}>取消</button>
-                <button type="submit" className={styles.confirm} disabled={saving || !name.trim()}>添加</button>
+                <Button variant="ghost" size="panel" onClick={() => setPanelOpen(false)}>取消</Button>
+                <Button type="submit" variant="accent" size="panel" disabled={saving || !name.trim()}>添加</Button>
               </div>
             </form>
           )
@@ -1036,8 +1037,8 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
                 <textarea maxLength={8000} rows={8} value={brief} onChange={event => setBrief(event.target.value)} placeholder="这个节点固定带上的说明，类似仓库里的 AGENTS.md。可以留空。" />
               </label>
               <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
-                <button type="button" onClick={() => setBriefOpen(false)}>取消</button>
-                <button type="submit" className={styles.confirm} disabled={saving}>保存</button>
+                <Button variant="ghost" size="panel" onClick={() => setBriefOpen(false)}>取消</Button>
+                <Button type="submit" variant="accent" size="panel" disabled={saving}>保存</Button>
               </div>
             </form>
           )
@@ -1437,7 +1438,7 @@ function draftCard(message: AgentMessage, draftMessage: AgentMessage | undefined
           : <p className={styles.conductorEmpty}>没有连线</p>}
       </div>
       <div className={`${styles.panelActions} pf-flex pf-justify-end pf-gap-2`}>
-        <button type="button" className={styles.confirm} disabled={!ready || saving} onClick={onAccept}>接受</button>
+        <Button variant="accent" size="panel" disabled={!ready || saving} onClick={onAccept}>接受</Button>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import { usePresence } from '../../motion'
 import { deleteSession, fetchForkPoints, forkSession } from '../../session/actions'
 import { sessionUrl } from '../../session/api'
 import { setSidebarOpen } from '../../session/store'
+import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -204,8 +205,8 @@ function DeleteDialog({ path, label, onClose }: { path: string, label: string, o
           </p>
           {error ? <p className="pf-m-[8px_12px_0] pf-text-danger pf-text-[0.76rem]">{error}</p> : null}
           <footer className="pf-flex pf-justify-end pf-gap-[8px] pf-p-[6px_20px_18px]">
-            <button className={`${styles.cancel} pf-p-[7px_12px] pf-text-[0.8rem]`} onClick={close}>取消</button>
-            <button className={`${styles.confirmDanger} pf-p-[7px_12px] pf-text-[0.8rem] pf-border pf-border-solid pf-border-danger pf-text-danger`} disabled={busy} onClick={() => void confirm()}>删除</button>
+            <Button variant="outline" onClick={close}>取消</Button>
+            <Button variant="danger" disabled={busy} onClick={() => void confirm()}>删除</Button>
           </footer>
         </>
       )}

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { fetchExtensions, installExtension, removeExtension } from '../../session/actions'
+import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -81,7 +82,7 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
           placeholder="npm:@scope/pkg 或 git:https://…"
           onChange={event => setSource(event.target.value)}
         />
-        <button className="pf-rounded-[5px] pf-p-[8px_12px] pf-bg-ink pf-text-bg pf-text-[0.8rem]" type="submit" disabled={busy || !source.trim()}>安装</button>
+        <Button variant="primary" type="submit" disabled={busy || !source.trim()}>安装</Button>
       </form>
 
       <div className={`${styles.body} pf-min-h-[120px] pf-overflow-y-auto pf-p-[8px]`}>

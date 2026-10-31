@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { answerExtensionRequest, dismissExtensionNotice } from '../../session/actions'
 import { useStore } from '../../session/use-store'
+import Button from '../Button'
 import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
@@ -33,7 +34,7 @@ function SelectDialog({ session, request }: { session: string, request: Extract<
         ))}
       </div>
       <footer className="pf-flex pf-justify-end pf-gap-[8px]">
-        <button className="pf-rounded-[5px] pf-p-[7px_14px] pf-text-[0.8rem] pf-text-muted pf-bg-line" onClick={() => answer(session, request, { cancelled: true })}>取消</button>
+        <Button onClick={() => answer(session, request, { cancelled: true })}>取消</Button>
       </footer>
     </>
   )
@@ -44,8 +45,8 @@ function ConfirmDialog({ session, request }: { session: string, request: Extract
     <>
       {request.message ? <p className="pf-m-0 pf-text-mid pf-text-[0.82rem] pf-leading-[1.6] pf-whitespace-pre-wrap">{request.message}</p> : null}
       <footer className="pf-flex pf-justify-end pf-gap-[8px]">
-        <button className="pf-rounded-[5px] pf-p-[7px_14px] pf-text-[0.8rem] pf-text-muted pf-bg-line" onClick={() => answer(session, request, { cancelled: true })}>取消</button>
-        <button className="pf-rounded-[5px] pf-p-[7px_14px] pf-text-[0.8rem] pf-bg-ink pf-text-bg" onClick={() => answer(session, request, { confirmed: true })}>确认</button>
+        <Button onClick={() => answer(session, request, { cancelled: true })}>取消</Button>
+        <Button variant="primary" onClick={() => answer(session, request, { confirmed: true })}>确认</Button>
       </footer>
     </>
   )
@@ -73,8 +74,8 @@ function InputDialog({ session, request }: { session: string, request: TextDialo
         />
       </form>
       <footer className="pf-flex pf-justify-end pf-gap-[8px]">
-        <button className="pf-rounded-[5px] pf-p-[7px_14px] pf-text-[0.8rem] pf-text-muted pf-bg-line" onClick={() => answer(session, request, { cancelled: true })}>取消</button>
-        <button className="pf-rounded-[5px] pf-p-[7px_14px] pf-text-[0.8rem] pf-bg-ink pf-text-bg" onClick={() => answer(session, request, { value })}>提交</button>
+        <Button onClick={() => answer(session, request, { cancelled: true })}>取消</Button>
+        <Button variant="primary" onClick={() => answer(session, request, { value })}>提交</Button>
       </footer>
     </>
   )
