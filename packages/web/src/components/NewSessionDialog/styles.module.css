@@ -26,8 +26,7 @@
   background: var(--c-bg);
 }
 
-.message,
-.error {
+.message {
   color: var(--c-faint);
 }
 
