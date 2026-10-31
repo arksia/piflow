@@ -1,10 +1,11 @@
 import type { ForkPoint, SessionInfoLite } from '@piflow/protocol'
-import { Download, ExternalLink, GitFork, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { Download, ExternalLink, GitFork, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { ModalFrame, usePresence } from '../../motion'
+import { usePresence } from '../../motion'
 import { deleteSession, fetchForkPoints, forkSession } from '../../session/actions'
 import { sessionUrl } from '../../session/api'
 import { setSidebarOpen } from '../../session/store'
+import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
@@ -153,34 +154,23 @@ export function ForkDialog({ session, label, onClose }: { session: SessionInfoLi
   }
 
   return (
-    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="fork-dialog-title">
-      {close => (
-        <>
-          <header className={`${styles.header} pf-flex pf-items-center pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
-            <div>
-              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">分叉</p>
-              <h2 id="fork-dialog-title">选择分叉点</h2>
-            </div>
-            <IconButton label="关闭" onClick={close}><X /></IconButton>
-          </header>
-          <p className="pf-m-0 pf-p-[14px_20px_4px] pf-text-faint pf-text-[0.76rem] pf-leading-[1.55]">
-            从「
-            {label}
-            」的这条消息创建新会话，新会话只包含它及之前的内容。
-          </p>
-          <div className="pf-min-h-[72px] pf-overflow-y-auto pf-p-[10px_8px_12px]">
-            {error ? <p className="pf-m-[8px_12px_0] pf-text-danger pf-text-[0.76rem]">{error}</p> : null}
-            {points === null && !error ? <p className="pf-m-0 pf-p-[22px_12px] pf-text-faint pf-text-[0.8rem] pf-text-center">读取消息中…</p> : null}
-            {points?.length === 0 ? <p className="pf-m-0 pf-p-[22px_12px] pf-text-faint pf-text-[0.8rem] pf-text-center">没有可分叉的用户消息</p> : null}
-            {points?.map(point => (
-              <button key={point.entryId} className={`${styles.point} pf-block pf-w-full pf-overflow-hidden pf-rounded-[5px] pf-p-[8px_12px] pf-text-[0.8rem] pf-text-left pf-text-ellipsis pf-whitespace-nowrap`} disabled={busy} onClick={() => void pickForkPoint(point)}>
-                {point.text}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </ModalFrame>
+    <Dialog title="选择分叉点" eyebrow="分叉" width={440} maxHeight={560} onClose={onClose}>
+      <p className="pf-m-0 pf-p-[14px_20px_4px] pf-text-faint pf-text-[0.76rem] pf-leading-[1.55]">
+        从「
+        {label}
+        」的这条消息创建新会话，新会话只包含它及之前的内容。
+      </p>
+      <div className="pf-min-h-[72px] pf-overflow-y-auto pf-p-[10px_8px_12px]">
+        {error ? <p className="pf-m-[8px_12px_0] pf-text-danger pf-text-[0.76rem]">{error}</p> : null}
+        {points === null && !error ? <p className="pf-m-0 pf-p-[22px_12px] pf-text-faint pf-text-[0.8rem] pf-text-center">读取消息中…</p> : null}
+        {points?.length === 0 ? <p className="pf-m-0 pf-p-[22px_12px] pf-text-faint pf-text-[0.8rem] pf-text-center">没有可分叉的用户消息</p> : null}
+        {points?.map(point => (
+          <button key={point.entryId} className={`${styles.point} pf-block pf-w-full pf-overflow-hidden pf-rounded-[5px] pf-p-[8px_12px] pf-text-[0.8rem] pf-text-left pf-text-ellipsis pf-whitespace-nowrap`} disabled={busy} onClick={() => void pickForkPoint(point)}>
+            {point.text}
+          </button>
+        ))}
+      </div>
+    </Dialog>
   )
 }
 
@@ -204,16 +194,9 @@ function DeleteDialog({ path, label, onClose }: { path: string, label: string, o
   }
 
   return (
-    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="delete-dialog-title" describedBy="delete-dialog-desc" role="alertdialog">
+    <Dialog title="删除会话？" eyebrow="删除" width={440} maxHeight={560} onClose={onClose} describedBy="delete-dialog-desc" role="alertdialog">
       {close => (
         <>
-          <header className={`${styles.header} pf-flex pf-items-center pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
-            <div>
-              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">删除</p>
-              <h2 id="delete-dialog-title">删除会话？</h2>
-            </div>
-            <IconButton label="关闭" onClick={close}><X /></IconButton>
-          </header>
           <p className="pf-m-0 pf-p-[14px_20px_4px] pf-text-faint pf-text-[0.76rem] pf-leading-[1.55]" id="delete-dialog-desc">
             将永久删除「
             {label}
@@ -226,6 +209,6 @@ function DeleteDialog({ path, label, onClose }: { path: string, label: string, o
           </footer>
         </>
       )}
-    </ModalFrame>
+    </Dialog>
   )
 }

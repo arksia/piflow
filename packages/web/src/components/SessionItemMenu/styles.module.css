@@ -32,23 +32,6 @@
 
 /* ---------- dialogs (fork picker / delete confirm) ---------- */
 
-
-
-.dialog {
-  width: min(440px, 100%);
-  max-height: min(560px, 90vh);
-}
-
-.header {
-  border-bottom: 1px solid var(--c-line);
-}
-
-.header h2 {
-  margin: 0;
-  color: var(--c-ink);
-  font-size: 1.05rem;
-}
-
 .point {
   color: var(--c-mid);
   transition: color 0.15s var(--ease), background 0.15s var(--ease);

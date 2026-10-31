@@ -1,17 +1,3 @@
-.dialog {
-  width: min(420px, 100%);
-}
-
-.header {
-  border-bottom: 1px solid var(--c-line);
-}
-
-.header h2 {
-  margin: 0;
-  color: var(--c-ink);
-  font-size: 1rem;
-}
-
 .theme {
   padding: 2px;
   border: 1px solid var(--c-line);

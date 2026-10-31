@@ -2,10 +2,6 @@ import { defineConfig, presetWind3 } from 'unocss'
 
 export default defineConfig({
   presets: [presetWind3({ prefix: 'pf-', preflight: false })],
-  shortcuts: {
-    'pf-dialog-backdrop': 'pf-fixed pf-z-40 pf-inset-0 pf-grid pf-place-items-center pf-bg-[rgb(0_0_0_/_68%)] pf-[backdrop-filter:blur(6px)]',
-    'pf-dialog-surface': 'pf-flex pf-flex-col pf-overflow-hidden pf-border pf-border-solid pf-border-line pf-rounded-[8px] pf-bg-raise pf-[box-shadow:0_24px_80px_rgb(0_0_0_/_55%)]',
-  },
   theme: {
     colors: {
       'bg': 'var(--c-bg)',

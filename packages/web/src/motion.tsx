@@ -43,66 +43,6 @@ export function usePresence(open: boolean, closeVar: string, fallback: number) {
   return { mounted, className }
 }
 
-export function useDelayedClose(onClose: () => void, closeVar: string, fallback: number) {
-  const [phase, setPhase] = useState<Phase>('idle')
-  useLayoutEffect(() => {
-    const frame = requestAnimationFrame(() => setPhase('open'))
-    return () => cancelAnimationFrame(frame)
-  }, [])
-  const close = useCallback(() => {
-    setPhase('closing')
-    window.setTimeout(onClose, tokenMs(closeVar, fallback))
-  }, [closeVar, fallback, onClose])
-  const className = phase === 'open' ? 'is-open' : phase === 'closing' ? 'is-closing' : ''
-  return { close, className }
-}
-
-export function ModalFrame({
-  backdropClass,
-  dialogClass,
-  onClose,
-  labelledBy,
-  label,
-  describedBy,
-  role = 'dialog',
-  children,
-}: {
-  backdropClass: string | undefined
-  dialogClass: string | undefined
-  onClose: () => void
-  labelledBy?: string
-  label?: string
-  describedBy?: string
-  role?: 'dialog' | 'alertdialog'
-  children: (close: () => void) => ReactNode
-}) {
-  const { className, close } = useDelayedClose(onClose, '--modal-close-dur', 150)
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape')
-        close()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [close])
-
-  return (
-    <div className={backdropClass} onMouseDown={event => event.target === event.currentTarget && close()}>
-      <section
-        className={`${dialogClass} t-modal ${className}`}
-        role={role}
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        aria-label={label}
-        aria-describedby={describedBy}
-      >
-        {children(close)}
-      </section>
-    </div>
-  )
-}
-
 export function useTabsPill(barRef: RefObject<HTMLElement | null>, active: string) {
   const pillRef = useRef<HTMLSpanElement>(null)
   const firstRef = useRef(true)

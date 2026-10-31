@@ -2,9 +2,10 @@ import type { RpcExtensionUIRequest } from '@earendil-works/pi-coding-agent'
 import type { ExtensionUIResponseBody } from '@piflow/protocol'
 import type { FormEvent } from 'react'
 import { X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { answerExtensionRequest, dismissExtensionNotice } from '../../session/actions'
 import { useStore } from '../../session/use-store'
+import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
@@ -24,7 +25,6 @@ function answer(session: string, request: DialogRequest, response: { cancelled?:
 function SelectDialog({ session, request }: { session: string, request: Extract<DialogRequest, { method: 'select' }> }) {
   return (
     <>
-      <h2 className="pf-m-0 pf-text-ink pf-text-[0.95rem]">{request.title ?? '选择一项'}</h2>
       <div className="pf-flex pf-flex-col pf-gap-[6px] pf-overflow-y-auto">
         {(request.options ?? []).map(option => (
           <button key={option} className={`${styles.option} pf-p-[9px_12px] pf-bg-bg pf-text-[0.8rem] pf-text-left`} onClick={() => answer(session, request, { value: option })}>
@@ -42,7 +42,6 @@ function SelectDialog({ session, request }: { session: string, request: Extract<
 function ConfirmDialog({ session, request }: { session: string, request: Extract<DialogRequest, { method: 'confirm' }> }) {
   return (
     <>
-      <h2 className="pf-m-0 pf-text-ink pf-text-[0.95rem]">{request.title ?? '确认'}</h2>
       {request.message ? <p className="pf-m-0 pf-text-mid pf-text-[0.82rem] pf-leading-[1.6] pf-whitespace-pre-wrap">{request.message}</p> : null}
       <footer className="pf-flex pf-justify-end pf-gap-[8px]">
         <button className="pf-rounded-[5px] pf-p-[7px_14px] pf-text-[0.8rem] pf-text-muted pf-bg-line" onClick={() => answer(session, request, { cancelled: true })}>取消</button>
@@ -53,6 +52,8 @@ function ConfirmDialog({ session, request }: { session: string, request: Extract
 }
 
 function InputDialog({ session, request }: { session: string, request: TextDialogRequest }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => inputRef.current?.focus(), [])
   const [value, setValue] = useState(request.method === 'editor' ? request.prefill ?? '' : '')
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -62,10 +63,9 @@ function InputDialog({ session, request }: { session: string, request: TextDialo
 
   return (
     <>
-      <h2 className="pf-m-0 pf-text-ink pf-text-[0.95rem]">{request.title ?? '输入'}</h2>
       <form className={styles.inputForm} onSubmit={submit}>
         <input
-          autoFocus
+          ref={inputRef}
           value={value}
           aria-label={request.title ?? '输入'}
           placeholder={request.method === 'input' ? request.placeholder : undefined}
@@ -86,31 +86,19 @@ export default function ExtensionDialog() {
   const request = view?.extensionRequests[0]
   const pending = request && isDialogRequest(request) ? request : undefined
 
-  useEffect(() => {
-    if (!pending || !store.activeKey)
-      return
-    const session = store.activeKey
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && pending)
-        answer(session, pending, { cancelled: true })
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [pending, store.activeKey])
-
   return (
     <>
       {pending && store.activeKey
         ? (
-            <div className={`${styles.backdrop} pf-fixed pf-z-50 pf-inset-0 pf-grid pf-place-items-center pf-p-[20px]`}>
-              <section className={`${styles.dialog} pf-flex pf-flex-col pf-overflow-hidden pf-border pf-border-solid pf-border-line pf-rounded-[8px] pf-bg-raise pf-p-[18px_20px] pf-gap-[12px] t-modal is-open`} role="dialog" aria-modal="true" aria-label={pending.title ?? '扩展请求'}>
+            <Dialog key={pending.id} title={pending.title ?? '扩展请求'} width={440} maxHeight={560} onClose={() => answer(store.activeKey!, pending, { cancelled: true })}>
+              <div className="pf-flex pf-flex-col pf-overflow-y-auto pf-p-[18px_20px] pf-gap-[12px]">
                 {pending.method === 'select' ? <SelectDialog session={store.activeKey} request={pending} /> : null}
                 {pending.method === 'confirm' ? <ConfirmDialog session={store.activeKey} request={pending} /> : null}
                 {pending.method === 'input' || pending.method === 'editor'
                   ? <InputDialog session={store.activeKey} request={pending} />
                   : null}
-              </section>
-            </div>
+              </div>
+            </Dialog>
           )
         : null}
       {store.extensionNotices.length > 0

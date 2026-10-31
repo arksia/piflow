@@ -1,26 +1,6 @@
-.backdrop {
-  padding: 20px;
-}
-
-.dialog {
-  width: min(560px, 100%);
-  max-height: min(680px, 90vh);
-}
-
-.header,
 .footer {
-  align-items: center;
+  align-items: flex-end;
   padding: 18px 20px;
-}
-
-.header {
-  border-bottom: 1px solid var(--c-line);
-}
-
-h2 {
-  margin: 0;
-  color: var(--c-ink);
-  font-size: 1.05rem;
 }
 
 .path-form {
@@ -78,21 +58,12 @@ h2 {
   color: var(--c-danger);
 }
 
-.footer {
-  align-items: flex-end;
-}
-
 .create {
   background: var(--c-ink);
   color: var(--c-bg);
 }
 
 @media (width <= 520px) {
-  .backdrop {
-    padding: 10px;
-  }
-
-  .header,
   .footer {
     padding: 16px;
   }

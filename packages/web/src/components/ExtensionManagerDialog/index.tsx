@@ -1,9 +1,9 @@
 import type { ExtensionSourceInfo } from '@piflow/protocol'
 import type { FormEvent } from 'react'
-import { Trash2, X } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { ModalFrame } from '../../motion'
 import { fetchExtensions, installExtension, removeExtension } from '../../session/actions'
+import Dialog from '../Dialog'
 import IconButton from '../IconButton'
 import styles from './styles.module.css'
 
@@ -67,61 +67,50 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
   }
 
   return (
-    <ModalFrame backdropClass="pf-dialog-backdrop pf-p-[20px]" dialogClass={`${styles.dialog} pf-dialog-surface`} onClose={onClose} labelledBy="extensions-title">
-      {close => (
-        <>
-          <header className={`${styles.header} pf-flex pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
-            <div>
-              <p className="pf-m-[0_0_4px] pf-text-signal pf-font-mono pf-text-[0.68rem] pf-uppercase">扩展</p>
-              <h2 id="extensions-title">管理 pi 扩展</h2>
-            </div>
-            <IconButton label="关闭" onClick={close}><X /></IconButton>
-          </header>
+    <Dialog initialFocus={inputRef} title="管理 pi 扩展" eyebrow="扩展" onClose={onClose}>
 
-          <form className={`${styles.installForm} pf-flex pf-gap-[8px]`} onSubmit={submitInstall}>
-            <select value={scope} aria-label="扩展范围" onChange={event => setScope(event.target.value as 'global' | 'project')}>
-              <option value="global">全局</option>
-              <option value="project">项目</option>
-            </select>
-            <input
-              ref={inputRef}
-              value={source}
-              aria-label="扩展来源"
-              placeholder="npm:@scope/pkg 或 git:https://…"
-              onChange={event => setSource(event.target.value)}
-            />
-            <button className="pf-rounded-[5px] pf-p-[8px_12px] pf-bg-ink pf-text-bg pf-text-[0.8rem]" type="submit" disabled={busy || !source.trim()}>安装</button>
-          </form>
+      <form className={`${styles.installForm} pf-flex pf-gap-[8px]`} onSubmit={submitInstall}>
+        <select value={scope} aria-label="扩展范围" onChange={event => setScope(event.target.value as 'global' | 'project')}>
+          <option value="global">全局</option>
+          <option value="project">项目</option>
+        </select>
+        <input
+          ref={inputRef}
+          value={source}
+          aria-label="扩展来源"
+          placeholder="npm:@scope/pkg 或 git:https://…"
+          onChange={event => setSource(event.target.value)}
+        />
+        <button className="pf-rounded-[5px] pf-p-[8px_12px] pf-bg-ink pf-text-bg pf-text-[0.8rem]" type="submit" disabled={busy || !source.trim()}>安装</button>
+      </form>
 
-          <div className={`${styles.body} pf-min-h-[120px] pf-overflow-y-auto pf-p-[8px]`}>
-            {extensions === null
-              ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>读取扩展中…</p>
-              : extensions.length === 0
-                ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>尚未配置扩展</p>
-                : extensions.map(extension => (
-                    <div key={`${extension.scope}:${extension.source}`} className={`${styles.row} pf-flex pf-items-center pf-gap-[10px] pf-rounded-[5px] pf-p-[8px_12px]`}>
-                      <span className="pf-shrink-0 pf-border pf-border-solid pf-border-line pf-rounded-[4px] pf-p-[1px_6px] pf-text-muted pf-text-[0.68rem]">{scopeLabel(extension.scope)}</span>
-                      <span className="pf-min-w-0 pf-flex-1 pf-overflow-hidden pf-text-mid pf-font-mono pf-text-[0.76rem] pf-text-ellipsis pf-whitespace-nowrap" title={extension.installedPath ?? extension.source}>
-                        {extension.source}
-                      </span>
-                      <IconButton
-                        size="compact"
-                        label={`移除 ${extension.source}`}
-                        disabled={busy}
-                        onClick={() => void run(() => removeExtension(extension.source, extension.scope === 'project' ? 'project' : 'global'))}
-                      >
-                        <Trash2 />
-                      </IconButton>
-                    </div>
-                  ))}
-            {error ? <p className={`${styles.error} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>{error}</p> : null}
-          </div>
+      <div className={`${styles.body} pf-min-h-[120px] pf-overflow-y-auto pf-p-[8px]`}>
+        {extensions === null
+          ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>读取扩展中…</p>
+          : extensions.length === 0
+            ? <p className={`${styles.message} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>尚未配置扩展</p>
+            : extensions.map(extension => (
+                <div key={`${extension.scope}:${extension.source}`} className={`${styles.row} pf-flex pf-items-center pf-gap-[10px] pf-rounded-[5px] pf-p-[8px_12px]`}>
+                  <span className="pf-shrink-0 pf-border pf-border-solid pf-border-line pf-rounded-[4px] pf-p-[1px_6px] pf-text-muted pf-text-[0.68rem]">{scopeLabel(extension.scope)}</span>
+                  <span className="pf-min-w-0 pf-flex-1 pf-overflow-hidden pf-text-mid pf-font-mono pf-text-[0.76rem] pf-text-ellipsis pf-whitespace-nowrap" title={extension.installedPath ?? extension.source}>
+                    {extension.source}
+                  </span>
+                  <IconButton
+                    size="compact"
+                    label={`移除 ${extension.source}`}
+                    disabled={busy}
+                    onClick={() => void run(() => removeExtension(extension.source, extension.scope === 'project' ? 'project' : 'global'))}
+                  >
+                    <Trash2 />
+                  </IconButton>
+                </div>
+              ))}
+        {error ? <p className={`${styles.error} pf-m-0 pf-p-[28px_12px] pf-text-[0.8rem] pf-text-center`}>{error}</p> : null}
+      </div>
 
-          <footer className={`${styles.footer} pf-flex pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
-            <span className="pf-text-faint pf-text-[0.72rem]">变更后所有空闲会话会自动重载扩展</span>
-          </footer>
-        </>
-      )}
-    </ModalFrame>
+      <footer className={`${styles.footer} pf-flex pf-justify-between pf-gap-[16px] pf-p-[18px_20px]`}>
+        <span className="pf-text-faint pf-text-[0.72rem]">变更后所有空闲会话会自动重载扩展</span>
+      </footer>
+    </Dialog>
   )
 }
