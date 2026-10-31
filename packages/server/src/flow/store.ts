@@ -13,7 +13,7 @@ import type {
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { InvalidAgentConfiguration, LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
+import { InvalidAgentConfiguration, LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, mergeConductorDraft, parseAgentConfiguration, parseFlowMemberships, parseLegacyModules, parseProjectCanvas, PROJECT_CANVAS_FILE, PROJECT_CANVAS_VERSION, serializeProjectCanvas } from '@piflow/protocol'
 
 const VERSION = 1 as const
 const MAX_MESSAGES = 500
@@ -74,6 +74,18 @@ export function createFlowStore(dataDir: string): FlowStore {
     const canvasPath = join(projectPath, PROJECT_CANVAS_FILE)
     try {
       return parseProjectCanvas(JSON.parse(await readFile(canvasPath, 'utf8')))
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        throw error
+    }
+    const legacyCanvasPath = join(projectPath, LEGACY_CANVAS_FILE)
+    try {
+      const text = await readFile(legacyCanvasPath, 'utf8')
+      const project = parseProjectCanvas(JSON.parse(text))
+      await writeAtomic(canvasPath, text)
+      await unlink(legacyCanvasPath)
+      return project
     }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT')

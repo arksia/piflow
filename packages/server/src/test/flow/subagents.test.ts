@@ -67,7 +67,7 @@ it('delegates to shared roles with isolated snapshots, returns results, and neve
     assert.deepEqual(after.memberships, before.memberships)
     const disk = await createFlowStore(join(root, 'data')).read(root)
     assert.deepEqual(disk.runs, after.runs)
-    const sharedFile = JSON.parse(await readFile(join(root, '.piflow/canvas.json'), 'utf8'))
+    const sharedFile = JSON.parse(await readFile(join(root, '.piflow/flow.json'), 'utf8'))
     assert.equal(sharedFile.runs, undefined)
     await assert.rejects(call.execute('bad', { roleId: 'other', task: '不应委派给主 Agent' }, undefined, undefined, emptyContext), /target must/)
     assert.equal((await flow.read(root)).runs?.length, 2)

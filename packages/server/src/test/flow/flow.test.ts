@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
-import { LEGACY_MODULES_FILE, PROJECT_CANVAS_FILE, UnsupportedProjectCanvasVersion } from '@piflow/protocol'
+import { LEGACY_CANVAS_FILE, LEGACY_MODULES_FILE, PROJECT_CANVAS_FILE, UnsupportedProjectCanvasVersion } from '@piflow/protocol'
 import { canAccessNode, createFlowStore, findConnection, listConnectedNodes } from '../../flow/store'
 import { formatFlowDirectory, moduleContext, searchMessages } from '../../flow/tools'
 
@@ -247,7 +247,7 @@ it('opens a committed module graph with no local binding and will not rewrite a 
   }
 })
 
-it('moves modules.json into canvas.json and keeps the local position', async () => {
+it('moves modules.json into flow.json and keeps the local position', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
   const dataDir = join(root, 'data')
   const now = new Date().toISOString()
@@ -451,6 +451,39 @@ it('persists Agent roles and multi-owner memberships independently of communicat
     }, { commitGraph: true }), /不存在的 Agent/)
     assert.deepEqual((await store.read(root)).memberships, topology.memberships)
     assert.match(moduleContext(restored.nodes.find(node => node.id === 'b')!)?.content ?? '', /用户角色指令\n验证验收标准/)
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('migrates canvas.json to flow.json unchanged and prefers flow.json', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  try {
+    await mkdir(join(root, '.piflow'))
+    const text = JSON.stringify({ version: 1, nodes: [{ id: 'a', name: 'A', brief: '', position: { x: 0, y: 0 }, custom: true }], links: [], extra: 'preserved' })
+    await writeFile(join(root, LEGACY_CANVAS_FILE), text)
+    assert.equal((await createFlowStore(join(root, 'data')).read(root)).nodes[0]?.id, 'a')
+    assert.equal(await readFile(join(root, PROJECT_CANVAS_FILE), 'utf8'), text)
+    await assert.rejects(readFile(join(root, LEGACY_CANVAS_FILE)), { code: 'ENOENT' })
+    await writeFile(join(root, LEGACY_CANVAS_FILE), '{invalid legacy file')
+    assert.equal((await createFlowStore(join(root, 'data')).read(root)).nodes[0]?.id, 'a')
+    assert.equal(await readFile(join(root, LEGACY_CANVAS_FILE), 'utf8'), '{invalid legacy file')
+  }
+  finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('does not migrate an unsupported legacy canvas version', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'piflow-flow-'))
+  try {
+    await mkdir(join(root, '.piflow'))
+    const text = JSON.stringify({ version: 99, nodes: [], links: [] })
+    await writeFile(join(root, LEGACY_CANVAS_FILE), text)
+    await assert.rejects(createFlowStore(join(root, 'data')).read(root), UnsupportedProjectCanvasVersion)
+    assert.equal(await readFile(join(root, LEGACY_CANVAS_FILE), 'utf8'), text)
+    await assert.rejects(readFile(join(root, PROJECT_CANVAS_FILE)), { code: 'ENOENT' })
   }
   finally {
     await rm(root, { recursive: true, force: true })

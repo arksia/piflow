@@ -16,6 +16,7 @@ export { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMembership
 export type { AgentConfiguration, FlowMembership, SubagentRun } from './agents'
 
 export {
+  LEGACY_CANVAS_FILE,
   LEGACY_MODULES_FILE,
   parseLegacyModules,
   parseProjectCanvas,
@@ -134,7 +135,7 @@ export interface FlowNode extends AgentConfiguration {
   sessionPath: string
   name: string
   goal: string
-  /** Standing text injected for this node. The committed copy is `.piflow/canvas.json`. */
+  /** Standing text injected for this node. The committed copy is `.piflow/flow.json`. */
   brief?: string
   position: FlowPosition
   createdAt: string
