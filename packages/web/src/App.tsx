@@ -4,6 +4,7 @@ import ExtensionDialog from './components/ExtensionDialog'
 import SessionList from './components/SessionList'
 import WorkspaceSidebar from './components/WorkspaceSidebar'
 import ChatView from './features/chat'
+import { readFlowProject, saveFlowProject } from './features/flow/workspace'
 import { setSidebarOpen, setWorkspaceView as setStoreWorkspaceView } from './session/store'
 import { useStore } from './session/use-store'
 
@@ -12,6 +13,7 @@ type Theme = 'dark' | 'light'
 
 export default function App() {
   const store = useStore()
+  const [flowProject, setFlowProject] = useState(readFlowProject)
   const [workspaceView, setWorkspaceView] = useState<'chat' | 'flow'>(
     () => localStorage.getItem('piflow.workspaceView') === 'flow' ? 'flow' : 'chat',
   )
@@ -45,10 +47,11 @@ export default function App() {
   }, [sidebarCollapsed])
 
   const onShowFlow = useCallback(() => {
+    setFlowProject(current => current || saveFlowProject(store.cwd))
     setFlowReady(true)
     setWorkspaceView('flow')
     localStorage.setItem('piflow.workspaceView', 'flow')
-  }, [])
+  }, [store.cwd])
   const onShowChat = useCallback(() => {
     setWorkspaceView('chat')
     localStorage.setItem('piflow.workspaceView', 'chat')
@@ -86,6 +89,9 @@ export default function App() {
               <div className={`${styles.pane} pf-flex-1 pf-min-w-0 pf-min-h-0 pf-flex-col ${view !== 'flow' ? styles.paneHidden : ''}`}>
                 <Suspense fallback={<div className="pf-grid pf-flex-1 pf-place-items-center pf-text-muted pf-text-[0.85rem]">正在加载 Flow…</div>}>
                   <LazyFlowView
+                    key={flowProject || store.cwd}
+                    projectPath={flowProject || store.cwd}
+                    onProjectChange={path => setFlowProject(saveFlowProject(path))}
                     active={view === 'flow'}
                     onShowChat={onShowChat}
                     onToggleSidebar={toggleWorkspaceSidebar}

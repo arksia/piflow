@@ -13,9 +13,10 @@ interface Props {
   initialPath: string
   onClose: () => void
   onCreated: () => void
+  onSelect?: (path: string) => void
 }
 
-export default function NewSessionDialog({ initialPath, onClose, onCreated }: Props) {
+export default function NewSessionDialog({ initialPath, onClose, onCreated, onSelect }: Props) {
   const [path, setPath] = useState(initialPath)
   const [listing, setListing] = useState<DirectoryListing | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,7 +46,10 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
   function create() {
     if (!listing)
       return
-    selectProjectForNewChat(listing.path)
+    if (onSelect)
+      onSelect(listing.path)
+    else
+      selectProjectForNewChat(listing.path)
     onCreated()
   }
 
@@ -56,7 +60,7 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
   }
 
   return (
-    <Dialog initialFocus={inputRef} title="选择项目文件夹" eyebrow="新会话" responsive onClose={onClose}>
+    <Dialog initialFocus={inputRef} title="选择项目文件夹" eyebrow={onSelect ? 'Flow' : '新会话'} responsive onClose={onClose}>
       <form className={`${styles.pathForm} pf-flex pf-gap-[8px]`} onSubmit={submitPath}>
         <TextInput
           className="pf-flex-1"
@@ -101,9 +105,9 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
       </div>
 
       <footer className={`${styles.footer} pf-flex pf-justify-between pf-gap-[16px]`}>
-        <span className="pf-text-faint pf-text-[0.72rem]">发送第一条消息后创建会话</span>
+        <span className="pf-text-faint pf-text-[0.72rem]">{onSelect ? '打开工程中的 Flow' : '发送第一条消息后创建会话'}</span>
         <Button variant="primary" disabled={!listing || loading} onClick={create}>
-          在此开始
+          {onSelect ? '打开 Flow' : '在此开始'}
         </Button>
       </footer>
     </Dialog>

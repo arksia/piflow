@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { FlowDeliveryStatus, FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionInfoLite, SessionStatusRecord } from '@piflow/protocol'
+import type { FlowDeliveryStatus, FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionStatusRecord } from '@piflow/protocol'
 import type {
   Edge,
   EdgeChange,
@@ -28,6 +28,7 @@ import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, Trash2, X } fro
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../components/Button'
 import IconButton from '../../components/IconButton'
+import NewSessionDialog from '../../components/NewSessionDialog'
 import Select from '../../components/Select'
 import SidebarToggle from '../../components/SidebarToggle'
 import Textarea from '../../components/Textarea'
@@ -47,7 +48,6 @@ import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, sub
 import { memberPlacements } from './members'
 import { addDraftNode, configureNode } from './node-forms'
 import { routeGraphEdges } from './routes'
-import { shouldSeedFlow } from './seed'
 import styles from './styles.module.css'
 import '@xyflow/react/dist/style.css'
 
@@ -76,6 +76,8 @@ function findFreeNodePosition(existing: FlowNode[], center: { x: number, y: numb
 }
 
 interface FlowViewProps {
+  projectPath: string
+  onProjectChange: (path: string) => void
   active?: boolean
   onShowChat: () => void
   onToggleSidebar: () => void
@@ -86,16 +88,9 @@ interface ConnectMode {
   sourceId: string
 }
 
-export default function FlowView({ active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
+export default function FlowView({ projectPath, onProjectChange, active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
   const store = useStore()
-  const activeView = store.activeKey ? store.views[store.activeKey] : undefined
-  const activeSessionPath = activeView?.sessionFile ?? store.activeKey
-  const activeSession = store.sessions.find(session => session.path === activeSessionPath)
-  const projectPath = activeSession?.cwd ?? store.cwd
-  const seedSessionPath = activeSession?.path ?? ''
-  const seedSessionName = activeSession ? sessionLabel(activeSession) : ''
-  const seedSessionGoal = activeSession?.firstMessage ?? ''
-  const seedSessionCwd = activeSession?.cwd ?? ''
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [document, setDocument] = useState<FlowDocument | null>(null)
   const documentRef = useRef<FlowDocument | null>(null)
   const [nodes, setNodes] = useState<FlowCanvasNode[]>([])
@@ -184,29 +179,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       .then(async (loaded) => {
         if (cancelled || rev !== saveRevRef.current)
           return
-        let resolved = loaded.document
-        if (shouldSeedFlow({
-          stored: loaded.stored,
-          nodeCount: resolved.nodes.length,
-          seedPath: seedSessionPath,
-          seedCwd: seedSessionCwd,
-          projectPath: resolved.projectPath,
-        })) {
-          const now = new Date().toISOString()
-          resolved = await saveFlow(resolved.projectPath, {
-            ...topologyOf(resolved),
-            nodes: [{
-              id: crypto.randomUUID(),
-              sessionPath: seedSessionPath,
-              name: seedSessionName,
-              goal: seedSessionGoal,
-              brief: '',
-              position: { x: 80, y: 80 },
-              createdAt: now,
-              updatedAt: now,
-            }],
-          })
-        }
+        const resolved = loaded.document
         if (cancelled || rev !== saveRevRef.current)
           return
         setDocument(resolved)
@@ -218,7 +191,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
     return () => {
       cancelled = true
     }
-  }, [focusSession, instance, projectPath, seedSessionCwd, seedSessionGoal, seedSessionName, seedSessionPath])
+  }, [focusSession, instance, projectPath])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -354,10 +327,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
   useEffect(() => {
     if (!active || !instance)
       return
-    const target = nodes.find(node => node.data.sessionPath === activeSessionPath)
-    if (target)
-      void instance.fitView({ nodes: [target], padding: 0.55, maxZoom: 1.1, duration: reducedMotion ? 0 : 180 })
-    else if (document)
+    if (document)
       void instance.setViewport(document.viewport)
     // ponytail: refit when the canvas first has nodes; later topology edits stay put
     // eslint-disable-next-line react/exhaustive-deps -- reading the latest session here would refit on every edit
@@ -785,7 +755,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
       status: node.data.kind === 'subagent-role' ? roleStatus(document?.runs ?? [], node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
       needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
       unread: store.unreadSessions.has(node.data.sessionPath),
-      isCurrent: node.data.sessionPath === activeSessionPath,
+      isCurrent: (node.data.agentId ?? node.id) === selectedNodeId,
       isAnchor: connectMode?.sourceId === node.id,
       isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
       isDimmed: Boolean(selectedNodeId && (node.data.agentId ?? node.id) !== selectedNodeId && !selectedNeighbors?.has(node.data.agentId ?? node.id) && !(expandedAgents.has(selectedNodeId) && document?.memberships?.some(item => item.orchestratorId === selectedNodeId && item.memberId === (node.data.agentId ?? node.id)))),
@@ -812,7 +782,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         <SidebarToggle collapsed={sidebarCollapsed} onToggle={onToggleSidebar} />
         <div className={`${styles.heading} pf-flex pf-min-w-0 pf-flex-1 pf-items-center pf-gap-2`}>
           <strong>Flow</strong>
-          <span title={projectPath}>{shortenPath(projectPath)}</span>
+          <button type="button" title={projectPath} onClick={() => setProjectPickerOpen(true)}>{shortenPath(projectPath) || '选择工程'}</button>
         </div>
         {saving ? <span className="pf-text-muted pf-text-[0.74rem] pf-whitespace-nowrap"><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
         {(selection.nodes.length > 1 || selection.edges.length) && !connectMode
@@ -834,6 +804,7 @@ export default function FlowView({ active = true, onShowChat, onToggleSidebar, s
         </button>
       </header>
 
+      {projectPickerOpen ? <NewSessionDialog initialPath={projectPath} onSelect={onProjectChange} onCreated={() => setProjectPickerOpen(false)} onClose={() => setProjectPickerOpen(false)} /> : null}
       {attentionItems.length
         ? (
             <div className={`${styles.attention} pf-min-h-[42px] pf-p-[7px_16px] ${attentionItems[0]!.reason === 'needs_input' ? styles.attentionNeedsInput : ''}`} role="status">
@@ -1174,10 +1145,6 @@ function sameSelection(a: { nodes: string[], edges: string[] }, b: { nodes: stri
     && a.edges.length === b.edges.length
     && a.nodes.every((id, index) => id === b.nodes[index])
     && a.edges.every((id, index) => id === b.edges[index])
-}
-
-function sessionLabel(session: SessionInfoLite) {
-  return session.name || session.firstMessage || '空会话'
 }
 
 function panelStatusKind(view: SessionView | null, sessionPath: string, statuses: Record<string, SessionStatusRecord>) {
