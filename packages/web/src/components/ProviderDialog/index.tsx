@@ -238,7 +238,7 @@ function AuthEventPanel({ event, onCancel }: { event: AuthDisplayEvent, onCancel
               </>
             )
           : <p>{event.type === 'info' || event.type === 'progress' ? event.message : ''}</p>}
-      <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
+      <div className="pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]">
         <Button variant="outline" size="compact" onClick={onCancel}>取消</Button>
       </div>
     </div>
@@ -268,7 +268,7 @@ function AuthPromptDialog({ prompt, busy, onSubmit, onCancel }: { prompt: Provid
             </Select>
           )
         : <TextInput appearance="prompt" className="pf-w-full" aria-labelledby={labelId} required autoFocus type={authPrompt.type === 'secret' ? 'password' : 'text'} placeholder={'placeholder' in authPrompt && typeof authPrompt.placeholder === 'string' ? authPrompt.placeholder : undefined} value={value} onChange={event => setValue(event.target.value)} />}
-      <div className={`${styles.promptActions} pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]`}>
+      <div className="pf-flex pf-justify-end pf-gap-[6px] pf-mt-[10px]">
         <Button variant="outline" size="compact" onClick={onCancel}>取消</Button>
         <Button variant="outline" size="compact" type="submit" disabled={busy || !value}>继续</Button>
       </div>

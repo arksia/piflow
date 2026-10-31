@@ -1,6 +1,4 @@
-.row,
-.identity,
-.meta {
+.row {
   align-items: center;
 }
 
@@ -32,8 +30,7 @@
   border-color: var(--c-success);
 }
 
-.identity,
-.meta {
+.identity {
   align-items: flex-start;
 }
 
@@ -58,8 +55,7 @@
   align-items: flex-end;
 }
 
-.message,
-.error {
+.message {
   color: var(--c-faint);
 }
 

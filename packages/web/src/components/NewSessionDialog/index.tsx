@@ -23,7 +23,6 @@ export default function NewSessionDialog({ initialPath, onClose, onCreated }: Pr
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    inputRef.current?.focus()
     void browse(initialPath)
   }, [initialPath])
 

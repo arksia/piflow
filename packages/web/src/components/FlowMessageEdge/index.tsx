@@ -64,7 +64,7 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
                 const reverse = activity.kind === 'request' ? !messageForward : messageForward
                 const color = activity.kind === 'error' ? 'var(--c-danger)' : activity.kind === 'response' ? 'var(--c-success)' : 'var(--c-signal)'
                 return (
-                  <path key={`${activity.messageId}:${activity.kind}`} className={styles.pulse} d="M -11 0 H 0" stroke={color} strokeWidth="2.5" strokeLinecap="round" opacity="0.95" style={{ filter: `drop-shadow(0 0 4px ${color})` }}>
+                  <path key={`${activity.messageId}:${activity.kind}`} d="M -11 0 H 0" stroke={color} strokeWidth="2.5" strokeLinecap="round" opacity="0.95" style={{ filter: `drop-shadow(0 0 4px ${color})` }}>
                     <animateMotion dur="900ms" begin={`${index * 120}ms`} fill="freeze" keyPoints={reverse ? '1;0' : '0;1'} keyTimes="0;1" path={path} rotate="auto" />
                     <animate attributeName="opacity" values="0;1;0" keyTimes="0;0.15;1" dur="900ms" begin={`${index * 120}ms`} fill="freeze" />
                   </path>

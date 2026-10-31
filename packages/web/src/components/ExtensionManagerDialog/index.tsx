@@ -27,7 +27,6 @@ export default function ExtensionManagerDialog({ onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    inputRef.current?.focus()
     void refresh()
   }, [])
 

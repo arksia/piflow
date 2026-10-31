@@ -109,7 +109,6 @@
 
 .add,
 .delete,
-.connect,
 .cancel {
   display: inline-flex;
   height: var(--control);
@@ -119,16 +118,6 @@
   font-size: 0.78rem;
   line-height: 1;
   transition: background 0.15s var(--ease), color 0.15s var(--ease);
-}
-
-.connect {
-  background: var(--c-accent);
-  color: var(--c-accent-contrast);
-  font-weight: 600;
-}
-
-.connect:hover {
-  background: var(--c-accent-hover);
 }
 
 .cancel {
