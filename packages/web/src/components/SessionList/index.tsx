@@ -1,27 +1,43 @@
-import type { FlowDocument, SessionInfoLite } from '@piflow/protocol'
-import type { SessionTreeRow } from '../../session/tree'
-import { Bot, ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings, Workflow, X } from 'lucide-react'
+import type { FlowDocument, FlowNode, SessionInfoLite } from '@piflow/protocol'
+import type { SessionTreeNode } from '../../session/tree'
+import { Bot, Folder, GitFork, MessageSquarePlus, PanelLeftClose, Plus, Search, Settings, Workflow, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { loadFlow } from '../../features/flow/api'
-import { AccChevron, usePresence } from '../../motion'
+import { usePresence } from '../../motion'
 import { shortenPath } from '../../path'
 import { openBackgroundSession, openSession, renameSession, selectProjectForNewChat } from '../../session/actions'
 import { sessionAttention, sessionRailStatus } from '../../session/attention'
 import { readCollapsedProjects, readCollapsedSessions, saveCollapsedProjects, saveCollapsedSessions } from '../../session/persistence'
 
 import { requestConductorPanel, setSidebarOpen } from '../../session/store'
-import { buildSessionForest, filterSessions, flattenSessionForest, sessionAncestors, sessionLineage } from '../../session/tree'
+import { buildSessionForest, filterSessions, sessionAncestors, sessionLineage } from '../../session/tree'
 import { useStore } from '../../session/use-store'
 import ExtensionManagerDialog from '../ExtensionManagerDialog'
-import Glide from '../Glide'
 import IconButton from '../IconButton'
 import LatticeLoader from '../LatticeLoader'
 import NewSessionDialog from '../NewSessionDialog'
 import ProviderDialog from '../ProviderDialog'
 import SessionItemMenu from '../SessionItemMenu'
 import SettingsDialog from '../SettingsDialog'
+import SidebarTree from '../SidebarTree'
+import { SidebarTreeGroup, SidebarTreeRow, SidebarTreeToggle } from '../SidebarTree/parts'
 import ViewSwitch from '../ViewSwitch'
 import styles from './styles.module.css'
+
+const FLOW_STATUS_CLASSES = {
+  idle: 'pf-text-faint',
+  role: 'pf-text-muted',
+  running: 'pf-text-signal',
+  needsInput: 'pf-text-warning',
+  failed: 'pf-text-danger',
+}
+
+interface FlowSidebarItem {
+  id: string
+  kind: 'persistent' | 'subagent-role'
+  node?: FlowNode
+  children: FlowSidebarItem[]
+}
 
 function sessionAge(timestamp: string) {
   const minutes = Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000)
@@ -50,6 +66,21 @@ function projectName(cwd: string) {
   return trimmed.split(/[\\/]/).pop() || cwd
 }
 
+function flowNodeStatus(kind: 'persistent' | 'subagent-role', sessionPath: string, store: ReturnType<typeof useStore>): { label: string, state: keyof typeof FLOW_STATUS_CLASSES } {
+  if (kind === 'subagent-role')
+    return { label: '角色', state: 'role' }
+  if (!sessionPath)
+    return { label: '未开始', state: 'idle' }
+  const status = store.statuses[sessionPath]
+  if (status?.needsInputAt)
+    return { label: '待回答', state: 'needsInput' }
+  if (status?.status === 'running')
+    return { label: '运行中', state: 'running' }
+  if (status?.status === 'failed')
+    return { label: '失败', state: 'failed' }
+  return { label: '空闲', state: 'idle' }
+}
+
 function togglePersisted(
   id: string,
   save: (next: ReadonlySet<string>) => void,
@@ -74,11 +105,12 @@ interface SessionListProps {
   onToggleTheme: () => void
   onToggleSidebar: () => void
   flowProject: string
+  selectedFlowNodeId: string | null
   onFlowProjectChange: (path: string) => void
   onSelectFlowNode: (id: string) => void
 }
 
-function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onToggleSidebar, flowProject, onFlowProjectChange, onSelectFlowNode }: SessionListProps) {
+function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onToggleSidebar, flowProject, selectedFlowNodeId, onFlowProjectChange, onSelectFlowNode }: SessionListProps) {
   const store = useStore()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -105,12 +137,12 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
     return map
   }, [filteredSessions])
 
-  const rowsByCwd = useMemo(() => {
-    const map = new Map<string, SessionTreeRow[]>()
+  const forestByCwd = useMemo(() => {
+    const map = new Map<string, SessionTreeNode[]>()
     for (const [cwd, sessions] of byCwd)
-      map.set(cwd, flattenSessionForest(buildSessionForest(sessions), collapsed))
+      map.set(cwd, buildSessionForest(sessions))
     return map
-  }, [byCwd, collapsed])
+  }, [byCwd])
 
   // Expand the ancestor chain once when a session becomes active (covers fork-then-open).
   // Adjusted during render (not in an effect) and keyed per activeKey, so later
@@ -271,28 +303,18 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
                   {[...byCwd.entries()].map(([cwd]) => {
                     const shown = !collapsedProjects.has(cwd) || Boolean(query.trim())
                     return (
-                      <div key={cwd} className="pf-mt-[6px] t-acc t-acc-fold" data-open={String(shown)}>
-                        <div className={`${styles.projectHeading} pf-flex pf-items-center pf-gap-[2px]`}>
-                          <button
-                            type="button"
-                            className={`${styles.cwdRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-min-w-0 pf-flex-1 pf-bg-transparent pf-cursor-pointer pf-text-left t-folder`}
-                            aria-expanded={shown}
-                            aria-label={`${shown ? '收起' : '展开'} ${projectName(cwd)}`}
-                            onClick={() => {
-                              if (!query.trim())
-                                toggleProject(cwd)
-                            }}
-                          >
-                            <span className={`t-icon-swap ${styles.folder} pf-place-items-center pf-text-muted pf-leading-0`} data-state="a">
-                              <span className="t-icon" data-icon="a">{shown ? <FolderOpen size={16} /> : <Folder size={16} />}</span>
-                              <span className="t-icon" data-icon="b"><AccChevron /></span>
-                            </span>
-                            <div className="pf-min-w-0 pf-text-mid pf-text-[length:var(--text-small)]" title={shortenPath(cwd)}>
-                              <span className="pf-min-w-0 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap">{projectName(cwd)}</span>
-                            </div>
-                          </button>
+                      <SidebarTreeGroup
+                        key={cwd}
+                        label={projectName(cwd)}
+                        title={shortenPath(cwd)}
+                        open={shown}
+                        onToggle={() => {
+                          if (!query.trim())
+                            toggleProject(cwd)
+                        }}
+                        actions={(
                           <IconButton
-                            className={`${styles.projectAdd} pf-mr-[2px]`}
+                            className="pf-mr-[2px]"
                             size="compact"
                             label={`在 ${projectName(cwd)} 中新建会话`}
                             disabled={!store.connected}
@@ -304,38 +326,41 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
                           >
                             <Plus />
                           </IconButton>
-                        </div>
-                        <div className="t-acc-panel" inert={!shown} aria-hidden={!shown}>
-                          <div className="t-acc-panel-inner">
-                            <Glide className={styles.rows} pin={store.activeKey ?? undefined}>
-                              {(rowsByCwd.get(cwd) ?? []).map(({ node, indent, hasChildren }) => {
-                                const session = node.session
-                                return (
-                                  <SessionRow
-                                    key={session.path}
-                                    session={session}
-                                    active={store.activeKey === session.path}
-                                    streaming={store.statuses[session.path]?.status === 'running'}
-                                    attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
-                                    rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
-                                    connected={store.connected}
-                                    opening={openingPath === session.path}
-                                    editing={editingPath === session.path}
-                                    indent={indent}
-                                    hasChildren={hasChildren}
-                                    isCollapsed={collapsed.has(session.path)}
-                                    lineage={sessionLineage(store.sessions, session.path)}
-                                    onPick={() => void pick(session)}
-                                    onRenameStart={() => setEditingPath(session.path)}
-                                    onRenameEnd={() => setEditingPath(null)}
-                                    onToggle={() => toggleCollapsed(session.path)}
-                                  />
-                                )
-                              })}
-                            </Glide>
-                          </div>
-                        </div>
-                      </div>
+                        )}
+                      >
+                        <SidebarTree
+                          items={forestByCwd.get(cwd) ?? []}
+                          collapsed={collapsed}
+                          onToggle={toggleCollapsed}
+                          getKey={node => node.session.path}
+                          getChildren={node => node.children}
+                          pin={store.activeKey ?? undefined}
+                          maxDepth={3}
+                          renderItem={(node, tree) => {
+                            const session = node.session
+                            return (
+                              <SessionRow
+                                session={session}
+                                active={store.activeKey === session.path}
+                                streaming={store.statuses[session.path]?.status === 'running'}
+                                attention={sessionAttention(session.path, store.statuses, store.unreadSessions)}
+                                rail={sessionRailStatus(session.path, store.statuses, store.unreadSessions, store.seenFailures)}
+                                connected={store.connected}
+                                opening={openingPath === session.path}
+                                editing={editingPath === session.path}
+                                indent={tree.depth}
+                                hasChildren={tree.hasChildren}
+                                isCollapsed={tree.collapsed}
+                                lineage={sessionLineage(store.sessions, session.path)}
+                                onPick={() => void pick(session)}
+                                onRenameStart={() => setEditingPath(session.path)}
+                                onRenameEnd={() => setEditingPath(null)}
+                                onToggle={tree.toggle}
+                              />
+                            )
+                          }}
+                        />
+                      </SidebarTreeGroup>
                     )
                   })}
 
@@ -355,7 +380,7 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
                 </div>
               </>
             )
-          : <FlowSidebar projectPath={flowProject || store.cwd} onProjectChange={onFlowProjectChange} onSelectNode={onSelectFlowNode} />}
+          : <FlowSidebar projectPath={flowProject || store.cwd} selectedNodeId={selectedFlowNodeId} onProjectChange={onFlowProjectChange} onSelectNode={onSelectFlowNode} />}
         <div className={`${styles.footer} pf-flex pf-shrink-0 pf-items-center pf-min-h-[52px] pf-gap-[8px] pf-mt-auto`}>
           <button type="button" className={`${styles.settings} pf-flex pf-items-center pf-gap-[8px] pf-min-h-[32px] pf-p-[0_6px] pf-rounded-control pf-text-[12px]`} onClick={() => setSettingsOpen(true)}>
             <Settings size={16} aria-hidden="true" />
@@ -400,10 +425,15 @@ function SessionList({ theme, view, onShowChat, onShowFlow, onToggleTheme, onTog
   )
 }
 
-function FlowSidebar({ projectPath, onProjectChange, onSelectNode }: { projectPath: string, onProjectChange: (path: string) => void, onSelectNode: (id: string) => void }) {
+function FlowSidebar({ projectPath, selectedNodeId, onProjectChange, onSelectNode }: { projectPath: string, selectedNodeId: string | null, onProjectChange: (path: string) => void, onSelectNode: (id: string) => void }) {
   const store = useStore()
   const [document, setDocument] = useState<FlowDocument | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const treeItems: FlowSidebarItem[] = (['persistent', 'subagent-role'] as const).map(kind => ({
+    id: `group:${kind}`,
+    kind,
+    children: document?.nodes.filter(node => (node.kind === 'subagent-role' ? 'subagent-role' : 'persistent') === kind).map(node => ({ id: node.id, kind, node, children: [] })) ?? [],
+  })).filter(item => item.children.length > 0)
   useEffect(() => {
     let cancelled = false
     if (!projectPath) {
@@ -430,38 +460,50 @@ function FlowSidebar({ projectPath, onProjectChange, onSelectNode }: { projectPa
   return (
     <>
       <div className="pf-flex pf-min-h-0 pf-flex-1 pf-flex-col pf-overflow-hidden">
-        <div className="pf-flex pf-items-center pf-justify-between pf-gap-2 pf-p-[12px_4px_8px]">
-          <div className="pf-min-w-0">
-            <div className="pf-text-faint pf-text-[0.7rem]">工程</div>
-            <div className="pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.8rem] pf-text-ink" title={projectPath}>{projectPath ? projectName(projectPath) : '未选择'}</div>
+        <div className="pf-flex pf-min-h-[52px] pf-flex-none pf-items-center pf-gap-2 pf-border-b pf-border-solid pf-border-line pf-p-[6px_4px_6px_6px]">
+          <div className="pf-flex pf-min-w-0 pf-flex-1 pf-flex-col pf-gap-[1px]">
+            <span className="pf-text-[0.68rem] pf-leading-[1.25] pf-text-faint">工程</span>
+            <strong className="pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.86rem] pf-font-medium pf-leading-[1.35] pf-text-ink" title={projectPath}>{projectPath ? projectName(projectPath) : '未选择'}</strong>
           </div>
           <IconButton label="选择 Flow 工程" disabled={!store.connected} onClick={() => setPickerOpen(true)}><Folder /></IconButton>
         </div>
-        <div className="pf-flex pf-items-center pf-h-[32px] pf-text-faint pf-text-[length:var(--text-small)] pf-font-medium">Flow 节点</div>
-        <div className="pf-min-h-0 pf-flex-1 pf-overflow-auto" aria-label="Flow 节点">
-          {document?.nodes.map((node) => {
-            const status = node.kind === 'subagent-role'
-              ? '角色'
-              : !node.sessionPath
-                  ? '未开始'
-                  : store.statuses[node.sessionPath]?.status === 'running'
-                    ? '运行中'
-                    : store.statuses[node.sessionPath]?.status === 'failed' ? '失败' : '已开始'
-            return (
-              <button key={node.id} type="button" className="pf-flex pf-w-full pf-items-center pf-gap-2 pf-rounded-[5px] pf-p-[8px_7px] pf-text-left hover:pf-bg-press" onClick={() => onSelectNode(node.id)}>
-                <Bot size={15} className="pf-flex-none pf-text-muted" aria-hidden="true" />
-                <span className="pf-min-w-0 pf-flex-1 pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.78rem]">{node.name}</span>
-                <span className="pf-flex-none pf-text-[0.68rem] pf-text-faint">{status}</span>
-              </button>
-            )
-          })}
-          {document && document.nodes.length === 0 ? <p className="pf-p-[18px_8px] pf-text-center pf-text-[length:var(--text-small)] pf-text-faint">这个工程还没有 Flow 节点</p> : null}
-          {!document && projectPath ? <p className="pf-p-[18px_8px] pf-text-center pf-text-[length:var(--text-small)] pf-text-faint">正在读取 Flow…</p> : null}
-          {!projectPath ? <button type="button" className="pf-mt-2 pf-w-full pf-p-2 pf-text-left pf-text-[0.78rem] pf-text-muted" onClick={() => setPickerOpen(true)}>选择一个工程以打开 Flow</button> : null}
+        <div className="pf-flex pf-h-[36px] pf-flex-none pf-items-center pf-justify-between pf-px-[10px] pf-text-[length:var(--text-small)] pf-font-medium pf-text-faint">
+          <span>Flow 节点</span>
+          {document ? <span className="pf-font-mono pf-tabular-nums pf-text-caption">{document.nodes.length}</span> : null}
         </div>
+        <nav className="pf-min-h-0 pf-flex-1 pf-overflow-auto" aria-label="Flow 节点">
+          {treeItems.map(group => (
+            <FlowNodeGroup key={group.id} group={group} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} />
+          ))}
+          {document && document.nodes.length === 0 ? <p className="pf-m-0 pf-p-[18px_8px] pf-text-center pf-text-small pf-text-faint">这个工程还没有 Flow 节点</p> : null}
+          {!document && projectPath ? <p className="pf-m-0 pf-p-[18px_8px] pf-text-center pf-text-small pf-text-faint">正在读取 Flow…</p> : null}
+          {!projectPath ? <button type="button" className="pf-mt-2 pf-w-full pf-rounded-[5px] pf-border-0 pf-bg-transparent pf-p-2 pf-text-left pf-text-[0.78rem] pf-text-muted hover:pf-bg-press hover:pf-text-ink" onClick={() => setPickerOpen(true)}>选择一个工程以打开 Flow</button> : null}
+        </nav>
       </div>
       {pickerOpen ? <NewSessionDialog initialPath={projectPath || store.cwd} onSelect={onProjectChange} onCreated={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} /> : null}
     </>
+  )
+}
+
+function FlowNodeGroup({ group, selectedNodeId, onSelectNode }: { group: FlowSidebarItem, selectedNodeId: string | null, onSelectNode: (id: string) => void }) {
+  const store = useStore()
+  const [open, setOpen] = useState(true)
+  const heading = group.kind === 'persistent' ? '主 Agent' : 'Subagent 角色'
+  return (
+    <SidebarTreeGroup label={heading} open={open} onToggle={() => setOpen(value => !value)} metadata={<span className="pf-pr-[8px] pf-text-caption pf-text-faint">{group.children.length}</span>}>
+      <SidebarTree
+        items={group.children}
+        getKey={item => item.id}
+        getChildren={item => item.children}
+        pin={selectedNodeId ?? undefined}
+        renderItem={(item, tree) => {
+          const node = item.node!
+          const status = flowNodeStatus(item.kind, node.sessionPath, store)
+          const Icon = item.kind === 'persistent' ? Bot : GitFork
+          return <SidebarTreeRow id={node.id} label={node.name} indent={tree.depth + 1} active={selectedNodeId === node.id} rail={<Icon size={15} aria-hidden="true" />} trailing={<span className={`pf-whitespace-nowrap pf-text-caption ${FLOW_STATUS_CLASSES[status.state]}`}>{status.label}</span>} title={`${node.name} · ${status.label}`} ariaLabel={`${node.name}，${status.label}，定位到画布并打开节点面板`} onSelect={() => onSelectNode(node.id)} />
+        }}
+      />
+    </SidebarTreeGroup>
   )
 }
 
@@ -496,23 +538,13 @@ function SessionRail({ status, hasChildren, collapsed, sessionLabel, onToggle }:
   if (status)
     shownRef.current = status
   return (
-    <span className={`${styles.rail} pf-place-items-center`}>
+    <>
       {presence.mounted && shownRef.current
         ? <LatticeLoader status={shownRef.current} phase={presence.className} />
         : hasChildren
-          ? (
-              <button
-                className={`${styles.chevron} pf-grid pf-w-[16px] pf-h-[16px] pf-place-items-center pf-rounded-[4px]`}
-                title={collapsed ? '展开子会话' : '折叠子会话'}
-                aria-label={collapsed ? `展开子会话：${sessionLabel}` : `折叠子会话：${sessionLabel}`}
-                aria-expanded={!collapsed}
-                onClick={onToggle}
-              >
-                {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-              </button>
-            )
+          ? <SidebarTreeToggle label={sessionLabel} open={!collapsed} onToggle={onToggle} />
           : null}
-    </span>
+    </>
   )
 }
 
@@ -527,46 +559,26 @@ function SessionRow({ session, active, streaming, attention, rail, connected, op
     attention?.label ?? '',
   ].filter(Boolean).join('\n')
   return (
-    <div
-      className={`${styles.sessionRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-relative pf-z-1`}
-      data-glide={session.path}
-      aria-current={active ? 'page' : undefined}
-      style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}
-    >
-      <SessionRail
-        status={rail}
-        hasChildren={hasChildren}
-        collapsed={isCollapsed}
-        sessionLabel={label(session)}
-        onToggle={onToggle}
-      />
-      <div className={`${styles.item} pf-relative pf-items-center pf-min-h-[32px] pf-rounded-[6px] pf-leading-[1.3] ${active ? styles.active : ''} t-session`} title={title}>
-        <button className={`${styles.itemMain} pf-flex pf-row-start-1 pf-items-center pf-min-w-0 pf-gap-[5px] pf-rounded-[4px] pf-text-left pf-p-[4px_32px_4px_0]`} disabled={!connected || opening} onClick={onPick}>
-          <span className={`${styles.label} pf-block pf-overflow-hidden pf-text-[length:var(--text-ui)] pf-font-normal pf-leading-[var(--line-ui)] pf-text-ellipsis pf-whitespace-nowrap`}>{label(session)}</span>
-        </button>
-        {connected
+    <SidebarTreeRow
+      id={session.path}
+      label={label(session)}
+      active={active}
+      indent={indent}
+      title={title}
+      disabled={!connected || opening}
+      onSelect={onPick}
+      rail={<SessionRail status={rail} hasChildren={hasChildren} collapsed={isCollapsed} sessionLabel={label(session)} onToggle={onToggle} />}
+      trailing={
+        connected
           ? (
               <span className={`t-icon-swap ${styles.swap} pf-col-start-2 pf-row-start-1`} data-state="a">
-                <span className="t-icon pf-inline-flex pf-items-center pf-justify-center pf-w-[32px] pf-h-[32px]" data-icon="a">
-                  <span className="pf-text-faint pf-text-caption pf-[font-variant-numeric:tabular-nums] pf-whitespace-nowrap">{opening ? '…' : age}</span>
-                </span>
-                <span className="t-icon" data-icon="b">
-                  <SessionItemMenu
-                    session={session}
-                    label={label(session)}
-                    streaming={streaming}
-                    onRename={onRenameStart}
-                  />
-                </span>
+                <span className="t-icon pf-inline-flex pf-items-center pf-justify-center pf-w-[32px] pf-h-[32px]" data-icon="a"><span className="pf-text-faint pf-text-caption pf-[font-variant-numeric:tabular-nums] pf-whitespace-nowrap">{opening ? '…' : age}</span></span>
+                <span className="t-icon" data-icon="b"><SessionItemMenu session={session} label={label(session)} streaming={streaming} onRename={onRenameStart} /></span>
               </span>
             )
-          : (
-              <span className="pf-inline-flex pf-items-center pf-justify-center pf-w-[32px] pf-h-[32px]">
-                <span className="pf-text-faint pf-text-caption pf-[font-variant-numeric:tabular-nums] pf-whitespace-nowrap">{opening ? '…' : age}</span>
-              </span>
-            )}
-      </div>
-    </div>
+          : <span className="pf-inline-flex pf-items-center pf-justify-center pf-w-[32px] pf-h-[32px]"><span className="pf-text-faint pf-text-caption pf-[font-variant-numeric:tabular-nums] pf-whitespace-nowrap">{opening ? '…' : age}</span></span>
+      }
+    />
   )
 }
 
@@ -598,9 +610,8 @@ function RenameRow({ session, indent, onDone }: { session: SessionInfoLite, inde
   }
 
   return (
-    <div className={`${styles.sessionRow} pf-grid pf-items-center pf-min-h-[32px] pf-rounded-[8px] pf-relative pf-z-1`} style={indent ? { paddingLeft: `calc(var(--row-pad) + ${indent * 12}px)` } : undefined}>
-      <span className={`${styles.rail} pf-place-items-center`} />
-      <div className={`${styles.item} pf-relative pf-items-center pf-min-h-[32px] pf-rounded-[6px] pf-leading-[1.3] ${styles.editing} pf-p-[4px_8px]`}>
+    <SidebarTreeRow label={label(session)} indent={indent}>
+      <div className="pf-col-span-full pf-p-[4px_8px]">
         <form
           onSubmit={(event) => {
             event.preventDefault()
@@ -627,7 +638,7 @@ function RenameRow({ session, indent, onDone }: { session: SessionInfoLite, inde
           {error ? <span className="pf-block pf-p-[4px_2px_0] pf-text-danger pf-text-[0.7rem]">{error}</span> : null}
         </form>
       </div>
-    </div>
+    </SidebarTreeRow>
   )
 }
 

@@ -79,6 +79,7 @@ interface FlowViewProps {
   projectPath: string
   onProjectChange: (path: string) => void
   focusRequest: { id: string, request: number } | null
+  onSelectedNodeChange: (id: string | null) => void
   active?: boolean
   onShowChat: () => void
   onToggleSidebar: () => void
@@ -89,7 +90,7 @@ interface ConnectMode {
   sourceId: string
 }
 
-export default function FlowView({ projectPath, onProjectChange, focusRequest, active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
+export default function FlowView({ projectPath, onProjectChange, focusRequest, onSelectedNodeChange, active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
   const store = useStore()
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [document, setDocument] = useState<FlowDocument | null>(null)
@@ -488,6 +489,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
   const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: FlowCanvasNode[], edges: Edge[] }) => {
     const next = { nodes: [...new Set(selectedNodes.map(node => node.data.agentId ?? node.id))], edges: selectedEdges.map(edge => edge.id) }
     setSelection(current => sameSelection(current, next) ? current : next)
+    onSelectedNodeChange(next.nodes.length === 1 ? next.nodes[0]! : null)
     if (next.nodes.length !== 1)
       setConfigurationId(null)
     if (connectMode && !selectedNodes.some(node => node.id === connectMode.sourceId))
@@ -495,7 +497,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, a
     const selectedPath = selectedNodes[0]?.data.sessionPath
     if (selectedPath && next.nodes.length === 1)
       clearSessionUnread(selectedPath)
-  }, [connectMode])
+  }, [connectMode, onSelectedNodeChange])
 
   function onMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport) {
     const current = documentRef.current

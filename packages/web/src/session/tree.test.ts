@@ -5,8 +5,6 @@ import { describe, it } from 'node:test'
 import {
   buildSessionForest,
   filterSessions,
-  flattenSessionForest,
-  MAX_TREE_INDENT,
   sessionAncestors,
   sessionLineage,
 } from './tree'
@@ -79,33 +77,6 @@ describe('filterSessions', () => {
     assert.deepEqual(filterSessions(sessions, 'billing').map(item => item.path), ['message'])
     assert.deepEqual(filterSessions(sessions, 'PAYMENTS').map(item => item.path), ['cwd'])
     assert.deepEqual(filterSessions(sessions, '  ').map(item => item.path), ['named', 'message', 'cwd'])
-  })
-})
-
-describe('flattenSessionForest', () => {
-  function chain(depth: number): SessionInfoLite[] {
-    const sessions: SessionInfoLite[] = []
-    for (let index = 0; index < depth; index++)
-      sessions.push(session({ path: `s${index}`, parentSession: index === 0 ? null : `s${index - 1}` }))
-    return sessions
-  }
-
-  it('caps indent at MAX_TREE_INDENT for deep lineages', () => {
-    const rows = flattenSessionForest(buildSessionForest(chain(MAX_TREE_INDENT + 2)), new Set())
-    assert.deepEqual(rows.map(row => row.node.session.path), ['s0', 's1', 's2', 's3', 's4'])
-    assert.deepEqual(rows.map(row => row.indent), [0, 1, 2, 3, 3])
-  })
-
-  it('hides descendants of collapsed nodes but keeps the node itself', () => {
-    const rows = flattenSessionForest(buildSessionForest(chain(3)), new Set(['s0']))
-    assert.deepEqual(rows.map(row => row.node.session.path), ['s0'])
-    assert.equal(rows[0]?.hasChildren, true)
-  })
-
-  it('marks leaf nodes as childless', () => {
-    const rows = flattenSessionForest(buildSessionForest(chain(2)), new Set())
-    assert.equal(rows[0]?.hasChildren, true)
-    assert.equal(rows[1]?.hasChildren, false)
   })
 })
 

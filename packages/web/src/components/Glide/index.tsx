@@ -24,7 +24,8 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
     if (jump)
       pill.style.transition = 'none'
     pill.style.height = `${row.offsetHeight}px`
-    pill.style.transform = `translateY(${row.offsetTop}px)`
+    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop
+    pill.style.transform = `translateY(${top}px)`
     pill.style.opacity = '1'
     list.dataset.live = ''
     rowRef.current = row
@@ -52,7 +53,19 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
       move(row, true)
     else
       hide()
-    return () => window.clearTimeout(restTimerRef.current)
+    const observer = new ResizeObserver(() => {
+      const pinned = list ? pinnedRow(list, pin) : null
+      if (pinned)
+        move(pinned, true)
+      else
+        hide()
+    })
+    if (list)
+      observer.observe(list)
+    return () => {
+      window.clearTimeout(restTimerRef.current)
+      observer.disconnect()
+    }
   }, [pin])
 
   function track(target: EventTarget | null) {
@@ -69,10 +82,10 @@ export default function Glide({ pin, className, children }: { pin?: string, clas
   }
 
   function rest() {
-    const list = listRef.current
-    const row = list ? pinnedRow(list, pin) : null
     window.clearTimeout(restTimerRef.current)
     restTimerRef.current = window.setTimeout(() => {
+      const list = listRef.current
+      const row = list ? pinnedRow(list, pin) : null
       if (row)
         move(row, false)
       else

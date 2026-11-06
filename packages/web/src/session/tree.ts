@@ -1,8 +1,5 @@
 import type { SessionInfoLite } from '@piflow/protocol'
 
-/** Maximum rendered indent levels; deeper descendants align with this depth. */
-export const MAX_TREE_INDENT = 3
-
 /** Local session filtering; native list loading remains the source of truth. */
 export function filterSessions(sessions: SessionInfoLite[], query: string): SessionInfoLite[] {
   const needle = query.trim().toLocaleLowerCase()
@@ -56,28 +53,6 @@ export function buildSessionForest(sessions: SessionInfoLite[]): SessionTreeNode
     finalize(root, 0)
   roots.sort((a, b) => b.subtreeModified.localeCompare(a.subtreeModified))
   return roots
-}
-
-export interface SessionTreeRow {
-  node: SessionTreeNode
-  /** Indent level for rendering, capped at MAX_TREE_INDENT. */
-  indent: number
-  hasChildren: boolean
-}
-
-/** Flattens the forest into render rows, skipping children of collapsed nodes. */
-export function flattenSessionForest(forest: SessionTreeNode[], collapsed: ReadonlySet<string>): SessionTreeRow[] {
-  const rows: SessionTreeRow[] = []
-  function walk(node: SessionTreeNode) {
-    rows.push({ node, indent: Math.min(node.depth, MAX_TREE_INDENT), hasChildren: node.children.length > 0 })
-    if (!collapsed.has(node.session.path)) {
-      for (const child of node.children)
-        walk(child)
-    }
-  }
-  for (const root of forest)
-    walk(root)
-  return rows
 }
 
 /** Paths of the session's ancestors, nearest first — the chain to expand on activate. */
