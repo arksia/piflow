@@ -71,7 +71,7 @@ export const flowRoutes: FastifyPluginAsync<RegisterFlowRoutesOptions> = async (
       return send(reply, 400, { error: 'projectPath and topology required' })
     try {
       const projectPath = (await flow.read(body.projectPath)).projectPath
-      const knownSessions = await sessions.listSessions()
+      const knownSessions = await sessions.listSessions({ includeFlow: true })
       const invalidNode = body.topology.nodes.find((node) => {
         if (!node.sessionPath)
           return false

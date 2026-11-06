@@ -76,7 +76,7 @@ export interface SessionStore {
   setAutoCompaction: (managed: ManagedSession, enabled: boolean) => void
   get: (key: string) => ManagedSession | undefined
   listDirectories: (path: string) => Promise<DirectoryListing>
-  listSessions: () => Promise<SessionInfoLite[]>
+  listSessions: (options?: { includeFlow?: boolean }) => Promise<SessionInfoLite[]>
   getAvailableModels: (managed: ManagedSession) => Promise<ModelInfo[]>
   findModel: (managed: ManagedSession, provider: string, modelId: string) => AvailableModel | undefined
   getState: (managed: ManagedSession) => SessionState
@@ -509,7 +509,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     publish({ type: 'state', state: getState(managed) })
   }
 
-  async function listSessions(): Promise<SessionInfoLite[]> {
+  async function listSessions({ includeFlow = false }: { includeFlow?: boolean } = {}): Promise<SessionInfoLite[]> {
     const all = (await SessionManager.listAll()).filter(session => existsSync(session.cwd))
     const flowDocuments = new Map<string, Promise<FlowDocument | null>>()
     const flowOf = (cwd: string) => {
@@ -522,7 +522,7 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     }
     const sessions = await Promise.all(all.map(async (session) => {
       const document = await flowOf(session.cwd)
-      if (document && (document.conductorPath === session.path || document.nodes.some(node => node.sessionPath === session.path)))
+      if (!includeFlow && document && (document.conductorPath === session.path || document.nodes.some(node => node.sessionPath === session.path)))
         return null
       return {
         path: session.path,
