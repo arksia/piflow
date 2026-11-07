@@ -2,6 +2,9 @@
   "name": "piflow",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter piflow-web --filter piflow-server run dev",
     "build": "pnpm --filter @piflow/protocol run build && pnpm --filter piflow-server run build && pnpm --filter piflow-web run build",

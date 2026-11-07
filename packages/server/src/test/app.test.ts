@@ -2,6 +2,7 @@ import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { ExtensionManager } from '../extensions/manager'
 import type { FlowStore } from '../flow/store'
 import type { ProviderAuthManager } from '../providers/provider-auth'
+import type { SubagentRuns } from '../runs'
 import type { SessionStore } from '../sessions/index'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -23,12 +24,13 @@ function testApp() {
     config,
     extensions: {} as ExtensionManager,
     flow: {} as FlowStore,
+    runs: {} as SubagentRuns,
     getUsage: async () => null,
     logger: false,
     modelRuntime: {} as ModelRuntime,
     providerAuth: {} as ProviderAuthManager,
     sessions: { disposeAll: async () => {}, get: () => undefined } as unknown as SessionStore,
-    sse: { broadcast() {}, open() {}, setStateSnapshotProvider() {}, setStatusSnapshotProvider() {} },
+    sse: { broadcast() {}, open() {}, close() {}, setStateSnapshotProvider() {}, setStatusSnapshotProvider() {} },
   })
 }
 

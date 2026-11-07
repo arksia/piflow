@@ -12,7 +12,11 @@ piflow is a browser interface for the pi coding agent. It reads and writes the s
 - **Steering**: send another message while the agent is running and it joins the turn as steering input.
 - **Abort**: stop the active agent turn from the browser.
 
+- **Run observability**: open “运行记录” from Flow to inspect concurrent subagent timelines, tool steps, output, configuration snapshots, and parent calls, or cancel active runs.
+
 ## Development
+
+Requires Node.js **22.13 or newer**. Run history uses Node’s built-in SQLite.
 
 ```bash
 pnpm install
@@ -45,3 +49,5 @@ http://your-host:3141/?token=replace-this-with-a-long-random-token
 ```
 
 piflow stores the token in an HttpOnly cookie and removes it from the address bar after authentication. Prefer Tailscale or another trusted private network because plain HTTP does not encrypt traffic.
+
+Run records are stored separately from Flow topology in `~/.piflow/runs.sqlite` (override with `PIFLOW_DATA_DIR`). Existing embedded run records are imported automatically. On restart, unfinished records are marked interrupted; executions are not resumed. Only one server may own a data directory at a time.

@@ -31,8 +31,6 @@ export function configureNode(document: FlowDocument, id: string, draft: NodeCon
     throw new Error('该 Agent 仍属于其他编排者，请先移除归属关系，再启用编排能力。')
   if (draft.kind === 'subagent-role' && document.edges.some(edge => edge.source === id || edge.target === id))
     throw new Error('请先移除该节点的通信边，再将它改为 Subagent 角色。')
-  if (draft.kind !== (existing.kind ?? 'persistent') && document.runs?.some(run => run.roleId === id || run.orchestratorId === id))
-    throw new Error('该节点已有运行记录，请新建另一种执行类型的节点；原运行记录将保留。')
   return {
     ...document,
     memberships: [

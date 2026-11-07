@@ -10,11 +10,11 @@ import type {
   RpcExtensionUIResponse,
   SessionStats,
 } from '@earendil-works/pi-coding-agent'
-import type { AgentConfiguration, FlowMembership, SubagentRun } from './agents'
+import type { AgentConfiguration, FlowMembership } from './agents'
 
 export { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
-export type { AgentConfiguration, FlowMembership, SubagentRun } from './agents'
 
+export type { AgentConfiguration, FlowMembership } from './agents'
 export {
   LEGACY_CANVAS_FILE,
   LEGACY_MODULES_FILE,
@@ -25,6 +25,7 @@ export {
   serializeProjectCanvas,
   UnsupportedProjectCanvasVersion,
 } from './canvas'
+
 export type {
   CanvasLink,
   CanvasNode,
@@ -104,6 +105,7 @@ export type {
   SetThinkingRequest,
   TrustProjectRequest,
 } from './http'
+export * from './runs'
 export type { ImageContent } from '@earendil-works/pi-ai'
 export type { AuthEvent, AuthPrompt, AuthType } from '@earendil-works/pi-ai'
 export type { SessionStats } from '@earendil-works/pi-coding-agent'
@@ -181,7 +183,6 @@ export interface FlowTopology {
 }
 
 export interface FlowDocument extends FlowTopology {
-  runs?: SubagentRun[]
   version: 1
   projectPath: string
   messages: FlowMessageRecord[]
@@ -305,7 +306,8 @@ export interface SessionState {
 }
 
 export type ServerMessage
-  = | { type: 'hello', cwd: string }
+  = | import('./runs').RunMessage
+    | { type: 'hello', cwd: string }
     | { type: 'sessions', sessions: SessionInfoLite[] }
     | { type: 'models', models: ModelInfo[] }
     | { type: 'state', state: SessionState }

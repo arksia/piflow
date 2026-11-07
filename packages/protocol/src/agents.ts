@@ -7,30 +7,6 @@ export interface AgentConfiguration {
   orchestrationEnabled?: boolean
 }
 
-export interface SubagentRun {
-  id: string
-  orchestratorId: string
-  roleId: string
-  parentSessionPath: string
-  parentToolCallId: string
-  task: string
-  configurationSnapshot: {
-    roleName: string
-    effectivePrompt: string
-    model: string
-    thinkingLevel: string
-    tools: string[]
-    cwd: string
-    memberRoleIds: string[]
-  }
-  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted'
-  output: string
-  progress?: { phase: 'thinking' | 'responding' | 'tool', toolName?: string }
-  error?: string
-  createdAt: string
-  completedAt?: string
-}
-
 /** Organization is independent of the user-authored communication edges. */
 export interface FlowMembership {
   orchestratorId: string

@@ -7,6 +7,7 @@ import {
   API_EVENTS_PATH as eventsPath,
   API_SESSIONS_PATH as sessionsPath,
 } from '@piflow/protocol'
+import { setRunsConnected } from '../features/runs/store'
 import { openSession } from './actions'
 import { api } from './api'
 import { route } from './reducer'
@@ -61,16 +62,21 @@ async function connect() {
 
   source.onerror = () => {
     markReconnecting()
+    // A local restart rotates the cookie token; reauthenticate before retrying SSE.
+    source.close()
+    setTimeout(connect, 1500)
   }
 }
 
 export function markConnected() {
+  setRunsConnected(true)
   store.connected = true
   store.connectionState = 'connected'
   notify()
 }
 
 export function markReconnecting() {
+  setRunsConnected(false)
   store.connected = false
   store.connectionState = 'reconnecting'
   notify()

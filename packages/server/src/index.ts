@@ -4,6 +4,7 @@ import { build } from './app'
 import { createExtensionManager } from './extensions/manager'
 import { createFlowStore } from './flow/store'
 import { createProviderAuthManager } from './providers/provider-auth'
+import { createSubagentRuns } from './runs'
 import { loadConfig } from './server/config'
 import { createSseHub } from './server/sse'
 import { createSessionStore } from './sessions/index'
@@ -12,10 +13,12 @@ import { getUsage } from './usage/index'
 const config = loadConfig()
 const sse = createSseHub(config.rootCwd)
 const flow = createFlowStore(config.dataDir)
+const runs = await createSubagentRuns({ dataDir: config.dataDir, publish: sse.broadcast })
 const extensions = createExtensionManager()
 const modelRuntime = await ModelRuntime.create()
 const sessions = createSessionStore({
   rootCwd: config.rootCwd,
+  runs,
   flow,
   poolSize: config.sessionPoolSize,
   publish: sse.broadcast,
@@ -31,6 +34,7 @@ const app = await build({
   sse,
   getUsage,
   flow,
+  runs,
   extensions,
   logger: true,
   modelRuntime,
@@ -41,6 +45,8 @@ await app.listen({ host: config.host, port: config.port })
 console.info(`piflow · http://${config.host}:${config.port}`)
 
 async function shutdown() {
+  await runs.close()
+  await sessions.disposeAll()
   await app.close()
 }
 

@@ -4,6 +4,7 @@ import type { FastifyReply } from 'fastify'
 import type { ExtensionManager } from '../../extensions/manager'
 import type { FlowStore } from '../../flow/store'
 import type { ProviderAuthManager } from '../../providers/provider-auth'
+import type { SubagentRuns } from '../../runs'
 import type { SseHub } from '../../server/sse'
 import type { SessionStore } from '../../sessions/index'
 import assert from 'node:assert/strict'
@@ -21,6 +22,7 @@ function testApp(sse: SseHub) {
     config: loadConfig({ HOST: '127.0.0.1', PIFLOW_TOKEN: token, PORT: '3141' }),
     extensions: {} as ExtensionManager,
     flow: {} as FlowStore,
+    runs: {} as SubagentRuns,
     getUsage: async () => null,
     logger: false,
     modelRuntime: {} as ModelRuntime,
@@ -97,4 +99,22 @@ it('broadcasts delta messages to connected clients', () => {
   sse.broadcast({ type: 'status_delta', status: delta })
   assert.deepEqual(first.sent.at(-1), { type: 'status_delta', status: delta })
   assert.deepEqual(second.sent.at(-1), { type: 'status_delta', status: delta })
+})
+
+it('closes live SSE streams before waiting for HTTP shutdown', { timeout: 5000 }, async () => {
+  const app = await testApp(createSseHub('/project'))
+  await app.listen({ host: '127.0.0.1', port: 0 })
+  const address = app.server.address()
+  assert.ok(address && typeof address !== 'string')
+  const response = await fetch(`http://127.0.0.1:${address.port}${API_EVENTS_PATH}`, { headers: { accept: 'text/event-stream', cookie: `${AUTH_COOKIE}=${token}` } })
+  const reader = response.body!.getReader()
+  try {
+    assert.equal((await reader.read()).done, false)
+    await app.close()
+    while (!(await reader.read()).done) { /* drain buffered frames */ }
+  }
+  finally {
+    await reader.cancel()
+    await app.close()
+  }
 })

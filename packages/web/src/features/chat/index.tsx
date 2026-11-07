@@ -9,7 +9,7 @@ import { shortenPath } from '../../path'
 import { trustProject } from '../../session/actions'
 import { sessionAttention } from '../../session/attention'
 import { readDraft, saveDraftText } from '../../session/persistence'
-import { setSidebarOpen } from '../../session/store'
+import { finishToolFocus, setSidebarOpen } from '../../session/store'
 import { useStore } from '../../session/use-store'
 import InputBar from './components/InputBar'
 import MessageItem from './components/MessageItem'
@@ -140,6 +140,26 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
       })
     }
   }, [sessionKey])
+
+  useLayoutEffect(() => {
+    const focus = store.toolFocus
+    if (pinnedKey || store.workspaceView !== 'chat' || !focus || focus.sessionPath !== sessionKey || !view)
+      return
+    const card = [...(scrollerRef.current?.querySelectorAll<HTMLElement>('[data-tool-call-id]') ?? [])].find(element => element.dataset.toolCallId === focus.toolCallId)
+    if (!card) {
+      finishToolFocus('父调用不在当前会话分支中，或该记录已不可用。')
+      return
+    }
+    stickToBottomRef.current = false
+    programmaticScrollRef.current = true
+    card.scrollIntoView({ block: 'center' })
+    card.focus({ preventScroll: true })
+    finishToolFocus()
+    const frame = requestAnimationFrame(() => {
+      programmaticScrollRef.current = false
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [store.toolFocus, store.workspaceView, pinnedKey, sessionKey, view])
 
   // Anchor scroll to the bottom while streaming, but only when the user is already near the bottom.
   // ResizeObserver batches content changes and requestAnimationFrame throttles the scroll update.
@@ -324,6 +344,7 @@ export default function ChatView({ onToggleSidebar, sidebarCollapsed = false, se
                     {compactionNoticeLabel(view.compactionNotice)}
                   </div>
                 )}
+                {store.toolFocusError ? <div role="status" className="pf-text-muted pf-p-[8px_0]">{store.toolFocusError}</div> : null}
                 {view.error ? <div className="pf-text-danger pf-p-[8px_0]">{view.error}</div> : null}
               </div>
             )}

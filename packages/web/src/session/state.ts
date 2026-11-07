@@ -56,6 +56,8 @@ export interface ExtensionNotice {
 }
 
 export interface StoreState {
+  toolFocus: { sessionPath: string, toolCallId: string } | null
+  toolFocusError: string | null
   connected: boolean
   connectionState: 'connecting' | 'connected' | 'reconnecting'
   cwd: string

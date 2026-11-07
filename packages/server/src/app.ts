@@ -5,6 +5,7 @@ import type { ExtensionManager } from './extensions/manager'
 import type { FlowStore } from './flow/store'
 import type { ProviderAuthManager } from './providers/provider-auth'
 import type { UsageSnapshot } from './routes/usage'
+import type { SubagentRuns } from './runs'
 import type { ServerConfig } from './server/config'
 import type { SseHub } from './server/sse'
 import type { SessionStore } from './sessions/index'
@@ -18,12 +19,14 @@ import { extensionRoutes } from './routes/extensions'
 import { flowRoutes } from './routes/flow'
 import { projectRoutes } from './routes/project'
 import { providerRoutes } from './routes/providers'
+import { runRoutes } from './routes/runs'
 import { sessionRoutes } from './routes/sessions'
 import { usageRoutes } from './routes/usage'
 import { send } from './server/reply'
 import { SessionsStreamingError } from './sessions/index'
 
 interface CreateAppOptions {
+  runs: SubagentRuns
   config: ServerConfig
   sessions: SessionStore
   sse: SseHub
@@ -65,6 +68,7 @@ export async function build(options: CreateAppOptions) {
   })
 
   await app.register(fastifySse)
+  app.addHook('preClose', async () => sse.close())
   app.get(API_EVENTS_PATH, { sse: 'only' }, (_request, reply) => {
     sse.open(reply)
   })
@@ -76,6 +80,7 @@ export async function build(options: CreateAppOptions) {
   app.register(sessionRoutes, { sessions, sse })
   app.register(usageRoutes, { getUsage, sessions })
   app.register(flowRoutes, { config, flow, sessions })
+  app.register(runRoutes, { runs: options.runs })
   app.register(providerRoutes, { modelRuntime, providerAuth, sessions })
   app.register(projectRoutes, { config, sessions })
   app.register(extensionRoutes, { config, extensions, sessions })

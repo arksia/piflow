@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
-import type { FlowDeliveryStatus, FlowDocument, FlowEdge, FlowNode, FlowTopology, SessionStatusRecord } from '@piflow/protocol'
+import type { FlowDeliveryStatus, FlowDocument, FlowEdge, FlowNode, FlowTopology, RunSummary, SessionStatusRecord } from '@piflow/protocol'
 import type {
   Edge,
   EdgeChange,
@@ -11,10 +11,11 @@ import type {
   Viewport,
 } from '@xyflow/react'
 import type { SessionView } from '../../session/state'
+import type { RunFilter } from '../runs/store'
 import type { FlowCanvasNode } from './components/FlowSessionNode'
 import type { FlowEdgeActivity } from './edges'
 import type { NewNodeDraft, NodeConfigurationDraft } from './node-forms'
-import { conductorDraftReady, parseConductorDraft } from '@piflow/protocol'
+import { conductorDraftReady, parseConductorDraft, RUN_STATUS_LABELS } from '@piflow/protocol'
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -38,7 +39,10 @@ import { sessionNeedsInputFor, sessionStatusFor } from '../../session/attention'
 import { clearSessionUnread } from '../../session/reducer'
 import { useStore } from '../../session/use-store'
 import ChatView from '../chat'
-import { acceptConductor, cancelRun, loadFlow, saveFlow } from './api'
+import RunPanel from '../runs'
+import { runOrder } from '../runs/time'
+import { useRunProject } from '../runs/use-runs'
+import { acceptConductor, loadFlow, saveFlow } from './api'
 import { flowAttentionItems } from './attention'
 import FlowAgentForm from './components/FlowAgentForm'
 import FlowMessageEdge from './components/FlowMessageEdge'
@@ -53,8 +57,6 @@ import '@xyflow/react/dist/style.css'
 
 const nodeTypes = { session: FlowSessionNode }
 const edgeTypes = { message: FlowMessageEdge }
-
-const RUN_STATUS_LABELS = { running: '运行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '已中断' }
 
 const NODE_WIDTH = 172
 const NODE_HEIGHT = 128
@@ -92,6 +94,9 @@ interface ConnectMode {
 
 export default function FlowView({ projectPath, onProjectChange, focusRequest, onSelectedNodeChange, active = true, onShowChat, onToggleSidebar, sidebarCollapsed }: FlowViewProps) {
   const store = useStore()
+  const runState = useRunProject(projectPath, true)
+  const runs = useMemo(() => Object.values(runState.runs).sort(runOrder), [runState.runs])
+  const [runPanel, setRunPanel] = useState<RunFilter | null>(null)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [document, setDocument] = useState<FlowDocument | null>(null)
   const documentRef = useRef<FlowDocument | null>(null)
@@ -103,7 +108,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
   const [activities, setActivities] = useState<FlowEdgeActivity[]>([])
   const previousMessagesRef = useRef<FlowDocument['messages'] | null>(null)
-  const previousRunsRef = useRef<NonNullable<FlowDocument['runs']>>([])
+  const previousRunsRef = useRef<RunSummary[]>([])
   const messageProjectRef = useRef<string | null>(null)
   const activityTimersRef = useRef(new Map<string, number>())
   const saveRevRef = useRef(0)
@@ -224,9 +229,9 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
           setDocument((current) => {
             if (!current || current.projectPath !== loaded.document.projectPath)
               return current
-            if (sameDeliveryState(current.messages, loaded.document.messages) && JSON.stringify(current.runs) === JSON.stringify(loaded.document.runs))
+            if (sameDeliveryState(current.messages, loaded.document.messages))
               return current
-            return { ...current, messages: loaded.document.messages, runs: loaded.document.runs }
+            return { ...current, messages: loaded.document.messages }
           })
         })
         .catch(() => {
@@ -278,7 +283,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     if (messageProjectRef.current !== document.projectPath) {
       messageProjectRef.current = document.projectPath
       previousMessagesRef.current = document.messages
-      previousRunsRef.current = document.runs ?? []
+      previousRunsRef.current = runs
       for (const timer of activityTimersRef.current.values())
         window.clearTimeout(timer)
       activityTimersRef.current.clear()
@@ -289,8 +294,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     previousMessagesRef.current = document.messages
     if (!previous)
       return
-    const next = [...changedDeliveryActivities(previous, document.messages), ...changedRunActivities(previousRunsRef.current, document.runs ?? [])]
-    previousRunsRef.current = document.runs ?? []
+    const next = [...changedDeliveryActivities(previous, document.messages), ...changedRunActivities(previousRunsRef.current, runs)]
+    previousRunsRef.current = runs
     for (const [index, activity] of next.entries()) {
       const key = `${activity.messageId}:${activity.kind}:${Date.now()}:${index}`
       // eslint-disable-next-line react/set-state-in-effect -- this projects a transient event observed from a completed poll.
@@ -301,7 +306,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       }, 1200 + index * 120)
       activityTimersRef.current.set(key, timer)
     }
-  }, [document])
+  }, [document, runs])
 
   useEffect(() => () => {
     for (const timer of activityTimersRef.current.values())
@@ -630,9 +635,9 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const configurationNode = document?.nodes.find(node => node.id === configurationId)
   const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
   const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
-  const selectedRuns = (document?.runs ?? []).filter(run => selectedNode?.kind === 'subagent-role'
+  const selectedRuns = runs.filter(run => selectedNode?.kind === 'subagent-role'
     ? run.roleId === selectedNodeId && (!runOwnerFilter || run.orchestratorId === runOwnerFilter)
-    : run.orchestratorId === selectedNodeId).slice().reverse()
+    : run.orchestratorId === selectedNodeId)
   const rolePanelState = selectedRuns.some(run => run.status === 'running') ? 'running' : selectedRuns[0]?.status
   const rolePanelKind = rolePanelState === 'running' ? 'Running' : rolePanelState === 'failed' || rolePanelState === 'interrupted' ? 'Failed' : 'Idle'
   const selectedNodeView = selectedNode ? (viewForSession(store.views, selectedNode.sessionPath) ?? null) : null
@@ -640,7 +645,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     ? new Set([
         ...(document?.edges.flatMap(edge => edge.source === selectedNodeId ? [edge.target] : edge.target === selectedNodeId ? [edge.source] : []) ?? []),
         ...(document?.memberships?.flatMap(item => item.orchestratorId === selectedNodeId ? [item.memberId] : item.memberId === selectedNodeId ? [item.orchestratorId] : []) ?? []),
-        ...(document?.runs?.filter(run => run.status === 'running').flatMap(run => run.orchestratorId === selectedNodeId ? [run.roleId] : run.roleId === selectedNodeId ? [run.orchestratorId] : []) ?? []),
+        ...runs.filter(run => run.status === 'running').flatMap(run => run.orchestratorId === selectedNodeId ? [run.roleId] : run.roleId === selectedNodeId ? [run.orchestratorId] : []),
       ])
     : null
   const recentMessages = selectedNodeId
@@ -701,8 +706,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     if (!document)
       return
     // eslint-disable-next-line react/set-state-in-effect -- derived user edges and live message activity
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, instance, subagentCallEdges(document.runs ?? [], activities, projectedNodes)))
-  }, [document, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active])
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, instance, subagentCallEdges(runs, activities, projectedNodes)))
+  }, [document, runs, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active])
 
   async function delegateTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -750,14 +755,14 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       memberSummary: node.data.orchestrationEnabled
         ? (() => {
             const members = (document?.memberships ?? []).filter(item => item.orchestratorId === node.id)
-            const runs = (document?.runs ?? []).filter(run => run.orchestratorId === node.id)
-            return { total: members.length, running: runs.filter(run => run.status === 'running').length, failed: runs.filter(run => run.status === 'failed' || run.status === 'interrupted').length }
+            const ownedRuns = runs.filter(run => run.orchestratorId === node.id)
+            return { total: members.length, running: ownedRuns.filter(run => run.status === 'running').length, failed: ownedRuns.filter(run => run.status === 'failed' || run.status === 'interrupted').length }
           })()
         : undefined,
       membersExpanded: expandedAgents.has(node.id),
       onToggleMembers: () => toggleMembers(node.id),
       modelName: node.data.kind === 'subagent-role' ? node.data.roleModel || '继承调用者模型' : viewForSession(store.views, node.data.sessionPath)?.model?.id,
-      status: node.data.kind === 'subagent-role' ? roleStatus(document?.runs ?? [], node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
+      status: node.data.kind === 'subagent-role' ? roleStatus(runs, node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
       needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
       unread: store.unreadSessions.has(node.data.sessionPath),
       isCurrent: (node.data.agentId ?? node.id) === selectedNodeId,
@@ -796,6 +801,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
         {connectMode
           ? <button className={styles.cancel} onClick={() => setConnectMode(null)}>取消连接</button>
           : null}
+        <button type="button" className={styles.cancel} onClick={() => setRunPanel({})}>运行记录</button>
         <button
           className={`${styles.add} pf-font-semibold`}
           disabled={!document}
@@ -809,6 +815,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
         </button>
       </header>
 
+      {runPanel ? <RunPanel key={projectPath + JSON.stringify(runPanel)} projectPath={projectPath} initialFilter={runPanel} onClose={() => setRunPanel(null)} onShowChat={onShowChat} /> : null}
       {projectPickerOpen ? <NewSessionDialog initialPath={projectPath} onSelect={onProjectChange} onCreated={() => setProjectPickerOpen(false)} onClose={() => setProjectPickerOpen(false)} /> : null}
       {attentionItems.length
         ? (
@@ -987,44 +994,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                       </details>
                     )
                   : null}
-                {selectedRuns.length
-                  ? (
-                      <section className={`${styles.runList} pf-max-h-[45vh] pf-overflow-y-auto pf-p-[12px]`} aria-label="Subagent 运行记录">
-                        <h3>Subagent 运行</h3>
-                        {selectedRuns.map(run => (
-                          <details key={run.id} className={`${styles.run} pf-p-[8px_0]`}>
-                            <summary>
-                              {RUN_STATUS_LABELS[run.status]}
-                              {' '}
-                              ·
-                              {' '}
-                              {run.configurationSnapshot.roleName}
-                              {' '}
-                              ·
-                              {' '}
-                              {document?.nodes.find(node => node.id === run.orchestratorId)?.name ?? run.orchestratorId}
-                            </summary>
-                            <p>{run.task}</p>
-                            <small>
-                              {run.id}
-                              {' '}
-                              ·
-                              {' '}
-                              {run.configurationSnapshot.model}
-                            </small>
-                            <pre>{run.output || '等待执行输出…'}</pre>
-                            {run.status === 'running' && run.progress ? <p role="status">{run.progress.phase === 'tool' ? `正在执行工具：${run.progress.toolName ?? '工具'}` : run.progress.phase === 'thinking' ? '思考中…' : '正在输出…'}</p> : null}
-                            {run.error ? <p role="status">{run.error}</p> : null}
-                            {run.status === 'running' ? <button type="button" onClick={() => void cancelRun(document!.projectPath, run.id).catch(reason => setError(String(reason)))}>取消运行</button> : null}
-                            <details>
-                              <summary>启动配置快照</summary>
-                              <pre>{JSON.stringify(run.configurationSnapshot, null, 2)}</pre>
-                            </details>
-                          </details>
-                        ))}
-                      </section>
-                    )
-                  : selectedNode.kind === 'subagent-role' ? <p className="pf-m-auto pf-text-muted pf-text-[0.78rem]">尚无调用记录</p> : null}
+                <button type="button" className={styles.runtimeTool} onClick={() => setRunPanel(selectedNode.kind === 'subagent-role' ? { roleId: selectedNode.id, ...(runOwnerFilter ? { orchestratorId: runOwnerFilter } : {}) } : { orchestratorId: selectedNode.id })}>查看运行记录</button>
                 {recentMessages.length
                   ? (
                       <section className={`${styles.deliveryList} pf-overflow-y-auto pf-p-[8px_12px] pf-flex-none`} aria-label="最近的跨会话消息">
@@ -1103,11 +1073,11 @@ function FlowFirstPrompt({ busy, onSend }: { busy: boolean, onSend: (text: strin
   )
 }
 
-function roleStatus(runs: NonNullable<FlowDocument['runs']>, roleId: string): 'running' | 'failed' | 'idle' {
+function roleStatus(runs: RunSummary[], roleId: string): 'running' | 'failed' | 'idle' {
   const relevant = runs.filter(run => run.roleId === roleId)
   if (relevant.some(run => run.status === 'running'))
     return 'running'
-  const latest = relevant.at(-1)
+  const latest = relevant.slice().sort(runOrder)[0]
   return latest?.status === 'failed' || latest?.status === 'interrupted' ? 'failed' : 'idle'
 }
 

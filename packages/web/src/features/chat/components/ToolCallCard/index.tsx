@@ -56,7 +56,7 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
   const nested = state?.children ?? []
 
   return (
-    <article className={`${styles.tool} ${styles[status]} ${plain ? styles.plain : ''} ${expandable ? 't-acc t-acc-fold' : ''}`} data-open={expandable ? String(open) : undefined}>
+    <article data-tool-call-id={call.id} tabIndex={-1} className={`${styles.tool} ${styles[status]} ${plain ? styles.plain : ''} ${expandable ? 't-acc t-acc-fold' : ''}`} data-open={expandable ? String(open) : undefined}>
       <div className={`${styles.headRow} pf-flex pf-items-center pf-gap-2`}>
         {expandable
           ? (

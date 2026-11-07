@@ -1,4 +1,4 @@
-import type { FlowMessageRecord, SubagentRun } from '@piflow/protocol'
+import type { FlowMessageRecord, RunSummary } from '@piflow/protocol'
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from './edges'
@@ -48,7 +48,7 @@ describe('flow delivery edges', () => {
 })
 
 it('keeps concurrent calls separate and routes shared roles to the caller reference without persistent edges', () => {
-  const first = { id: 'run-1', orchestratorId: 'main', roleId: 'role', status: 'running' } as SubagentRun
+  const first = { id: 'run-1', orchestratorId: 'main', roleId: 'role', status: 'running' } as RunSummary
   const second = { ...first, id: 'run-2' }
   const activities = changedRunActivities([], [first, second])
   assert.deepEqual(activities.map(item => item.messageId), ['run-1', 'run-2'])

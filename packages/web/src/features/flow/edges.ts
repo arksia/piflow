@@ -1,4 +1,4 @@
-import type { FlowMessageRecord, SubagentRun } from '@piflow/protocol'
+import type { FlowMessageRecord, RunSummary } from '@piflow/protocol'
 
 export interface FlowEdgeActivity {
   messageId: string
@@ -8,11 +8,11 @@ export interface FlowEdgeActivity {
   kind: 'request' | 'response' | 'error'
 }
 
-export function subagentEdgeId(run: Pick<SubagentRun, 'orchestratorId' | 'roleId'>): string {
+export function subagentEdgeId(run: Pick<RunSummary, 'orchestratorId' | 'roleId'>): string {
   return `subagent:${JSON.stringify([run.orchestratorId, run.roleId])}`
 }
 
-export function changedRunActivities(previous: SubagentRun[], current: SubagentRun[]): FlowEdgeActivity[] {
+export function changedRunActivities(previous: RunSummary[], current: RunSummary[]): FlowEdgeActivity[] {
   const before = new Map(previous.map(run => [run.id, run.status]))
   return current.flatMap((run) => {
     if (before.get(run.id) === run.status)
@@ -29,7 +29,7 @@ export function changedRunActivities(previous: SubagentRun[], current: SubagentR
 
 /** Display-only calls; shared roles resolve to the reference beside the calling main Agent. */
 export function subagentCallEdges(
-  runs: SubagentRun[],
+  runs: RunSummary[],
   activities: FlowEdgeActivity[],
   nodes: { id: string, data: { agentId?: string, displayOwnerId?: string } }[],
 ): { id: string, source: string, target: string }[] {

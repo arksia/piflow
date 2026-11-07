@@ -1,12 +1,10 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { FlowDocument, FlowNode, SubagentRun } from '@piflow/protocol'
+import type { FlowDocument, FlowNode, RunInput } from '@piflow/protocol'
+import type { SubagentRuns } from '../runs'
 import type { FlowStore } from './store'
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import { findNodeBySession } from './store'
-import { runSubagentProcess } from './subagent-process'
-
-const activeRuns = new Map<string, { projectPath: string, controller: AbortController }>()
 
 export function orchestrationContext(document: FlowDocument, node: FlowNode): { path: string, content: string } | null {
   if (!node.orchestrationEnabled || node.kind === 'subagent-role')
@@ -31,20 +29,12 @@ export function orchestrationContext(document: FlowDocument, node: FlowNode): { 
   }
 }
 
-export function cancelSubagentRun(projectPath: string, id: string): boolean {
-  const active = activeRuns.get(id)
-  if (!active || active.projectPath !== projectPath)
-    return false
-  active.controller.abort()
-  return true
-}
-
 interface SubagentToolsOptions {
   flow: FlowStore
-  agentDir: string
+  runs: SubagentRuns
+  agentDir?: string
   source: () => { cwd: string, sessionPath: string | null, model: string, thinkingLevel: string, tools: string[] } | undefined
   isTrusted: (cwd: string) => boolean
-  execute?: typeof runSubagentProcess
 }
 
 export function createSubagentTools(options: SubagentToolsOptions): ToolDefinition[] {
@@ -89,33 +79,8 @@ export function createSubagentTools(options: SubagentToolsOptions): ToolDefiniti
       const run = createRun(node, role, source, document.memberships ?? [], toolCallId, params.task)
       if (!run.configurationSnapshot.model)
         throw new Error('Choose a model for the main Agent or role before delegating')
-      await options.flow.saveRun(source.cwd, run)
-      const controller = new AbortController()
-      activeRuns.set(run.id, { projectPath: document.projectPath, controller })
-      const combined = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
-      try {
-        const outcome = await (options.execute ?? runSubagentProcess)(run, combined, async (output, progress) => {
-          run.output = output
-          if (progress)
-            run.progress = progress
-          await options.flow.saveRun(source.cwd, run)
-          onUpdate?.(result(output, run))
-        }, { agentDir: options.agentDir })
-        run.output = outcome.output
-        if (outcome.error)
-          run.error = outcome.error
-        run.status = outcome.cancelled ? 'cancelled' : outcome.error ? 'failed' : 'succeeded'
-      }
-      catch (error) {
-        run.status = combined.aborted ? 'cancelled' : 'failed'
-        run.error = error instanceof Error ? error.message : String(error)
-      }
-      finally {
-        run.completedAt = new Date().toISOString()
-        activeRuns.delete(run.id)
-        await options.flow.saveRun(source.cwd, run)
-      }
-      return result(JSON.stringify({ runId: run.id, status: run.status, output: run.output, error: run.error }), run)
+      const outcome = await options.runs.execute(run, signal, output => onUpdate?.(result(output)), options.agentDir ? { agentDir: options.agentDir } : undefined)
+      return { content: [{ type: 'text' as const, text: JSON.stringify(outcome) }], details: { runId: outcome.runId, status: outcome.status } }
     },
   })]
 }
@@ -127,9 +92,11 @@ function createRun(
   memberships: { orchestratorId: string, memberId: string }[],
   toolCallId: string,
   task: string,
-): SubagentRun {
+): RunInput {
   return {
-    id: crypto.randomUUID(),
+    projectPath: source.cwd,
+    orchestratorName: main.name,
+    roleName: role.name,
     orchestratorId: main.id,
     roleId: role.id,
     parentSessionPath: source.sessionPath!,
@@ -144,12 +111,9 @@ function createRun(
       cwd: source.cwd,
       memberRoleIds: memberships.filter(item => item.orchestratorId === main.id).map(item => item.memberId),
     },
-    status: 'running',
-    output: '',
-    createdAt: new Date().toISOString(),
   }
 }
 
-function result(text: string, run?: SubagentRun) {
-  return { content: [{ type: 'text' as const, text }], details: { run } }
+function result(text: string) {
+  return { content: [{ type: 'text' as const, text }], details: {} }
 }

@@ -18,6 +18,7 @@ import type {
   SessionStatusRecord,
 } from '@piflow/protocol'
 import type { FlowStore } from '../flow/store'
+import type { SubagentRuns } from '../runs'
 import { existsSync } from 'node:fs'
 import { readdir, realpath, stat, unlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -100,6 +101,7 @@ export interface SessionStore {
 }
 
 interface CreateSessionStoreOptions {
+  runs?: SubagentRuns
   rootCwd: string
   flow: FlowStore
   poolSize: number
@@ -371,14 +373,17 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
                 },
                 readMessages: (node, projectPath) => readMessages(node.sessionPath, projectPath),
                 onDispatchError: (target, error) => publishError(target.sessionPath ?? target.cwd, String(error)),
-              }), ...createSubagentTools({
-                flow,
-                agentDir: runtimeAgentDir,
-                isTrusted: cwd => !hasTrustRequiringProjectResources(cwd) || trustStore.get(cwd) === true,
-                source: () => managed
-                  ? { cwd: managed.cwd, sessionPath: managed.runtime.session.sessionManager.getSessionFile() ?? null, model: managed.runtime.session.model ? `${managed.runtime.session.model.provider}/${managed.runtime.session.model.id}` : '', thinkingLevel: managed.runtime.session.thinkingLevel, tools: managed.runtime.session.getActiveToolNames() }
-                  : undefined,
-              })],
+              }), ...(options.runs
+                ? createSubagentTools({
+                    runs: options.runs,
+                    agentDir: runtimeAgentDir,
+                    flow,
+                    isTrusted: cwd => !hasTrustRequiringProjectResources(cwd) || trustStore.get(cwd) === true,
+                    source: () => managed
+                      ? { cwd: managed.cwd, sessionPath: managed.runtime.session.sessionManager.getSessionFile() ?? null, model: managed.runtime.session.model ? `${managed.runtime.session.model.provider}/${managed.runtime.session.model.id}` : '', thinkingLevel: managed.runtime.session.thinkingLevel, tools: managed.runtime.session.getActiveToolNames() }
+                      : undefined,
+                  })
+                : [])],
         })
         return { ...created, services, diagnostics: services.diagnostics }
       }

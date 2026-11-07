@@ -20,6 +20,8 @@ export function notify() {
 }
 
 export const store: StoreState = {
+  toolFocus: null,
+  toolFocusError: null,
   connected: false,
   connectionState: 'connecting',
   cwd: '',
@@ -88,4 +90,15 @@ export function ensureView(key: string): SessionView {
     error: null,
     tick: 0,
   })
+}
+
+export function requestToolFocus(sessionPath: string, toolCallId: string) {
+  store.toolFocus = { sessionPath, toolCallId }
+  store.toolFocusError = null
+  notify()
+}
+export function finishToolFocus(error: string | null = null) {
+  store.toolFocus = null
+  store.toolFocusError = error
+  notify()
 }

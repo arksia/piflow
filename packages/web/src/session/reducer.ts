@@ -7,6 +7,7 @@ import type {
   SessionStatusRecord,
 } from '@piflow/protocol'
 import type { ToolState } from './state'
+import { receiveRun } from '../features/runs/store'
 import { readSavedActivePath, readSeenFailures, readUnreadSessions, saveActiveSessionFile, saveSeenFailures, saveUnreadSessions } from './persistence'
 import { ensureView, notify, store } from './store'
 
@@ -326,6 +327,10 @@ export function dismissSessionFailure(key: string) {
 
 export function route(message: ServerMessage, restoreSession: (path: string) => void) {
   switch (message.type) {
+    case 'run_updated':
+    case 'run_recording_error':
+      receiveRun(message)
+      break
     case 'hello':
       store.cwd = message.cwd
       notify()

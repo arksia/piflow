@@ -4,12 +4,14 @@ import type { FastifyReply } from 'fastify'
 export interface SseHub {
   open: (reply: FastifyReply) => void
   broadcast: (message: ServerMessage) => void
+  close: () => void
   setStatusSnapshotProvider: (provider: () => SessionStatusRecord[]) => void
   setStateSnapshotProvider: (provider: () => SessionState[]) => void
 }
 
 export function createSseHub(cwd: string): SseHub {
   const clients = new Set<FastifyReply>()
+  let closed = false
   let statusSnapshotProvider: (() => SessionStatusRecord[]) | undefined
   let stateSnapshotProvider: (() => SessionState[]) | undefined
 
@@ -21,6 +23,10 @@ export function createSseHub(cwd: string): SseHub {
 
   return {
     open(reply) {
+      if (closed) {
+        reply.sse.close()
+        return
+      }
       reply.sse.keepAlive()
       clients.add(reply)
       reply.sse.onClose(() => {
@@ -37,6 +43,12 @@ export function createSseHub(cwd: string): SseHub {
     broadcast(message) {
       for (const reply of clients)
         push(reply, message)
+    },
+    close() {
+      closed = true
+      for (const reply of clients)
+        reply.sse.close()
+      clients.clear()
     },
     setStatusSnapshotProvider(provider) {
       statusSnapshotProvider = provider
