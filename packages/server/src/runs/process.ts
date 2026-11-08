@@ -87,7 +87,7 @@ export async function runSubagentProcess(
       '--no-skills',
       '--no-prompt-templates',
       ...(config.delivery ? ['-e', fileURLToPath(new URL('./code-delivery-extension.ts', import.meta.url))] : []),
-      ...(config.reviewAnalysis ? ['-e', fileURLToPath(new URL('../reviews/extension.ts', import.meta.url))] : []),
+      ...(config.reviewAnalysis ? ['--no-context-files', '-e', fileURLToPath(new URL('../reviews/extension.ts', import.meta.url))] : []),
       '--append-system-prompt',
       promptFile,
       '--model',

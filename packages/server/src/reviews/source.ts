@@ -12,9 +12,12 @@ export const digest = (text: string) => createHash('sha256').update(text).digest
 export interface SourceSnapshot {
   id: string
   root: string
+  kind?: 'commit' | 'workspace'
   capturedAt: string
   head: string | null
   files: Record<string, string>
+  inventory?: string[]
+  absent?: string[]
   omitted: {
     path: string
     reason: string
@@ -22,7 +25,9 @@ export interface SourceSnapshot {
   complete: boolean
 }
 export class ReviewError extends Error {
-  constructor(message: string, public statusCode = 400) { super(message) }
+  constructor(message: string, public statusCode = 400) {
+    super(message)
+  }
 }
 export function gitEnvironment() {
   const env = { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0' }
@@ -62,6 +67,8 @@ export async function captureSource(cwd: string, put: (hash: string, text: strin
     : await git(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], abort)
   const rows = [...new Set(listing.split('\0').filter(Boolean))].sort()
   const files: Record<string, string> = Object.create(null)
+  const inventory = rows.map(row => commit ? /^\d+ \w+ [a-f\d]+\t([\s\S]+)$/.exec(row)?.[1] ?? row : row)
+  const absent: string[] = []
   const omitted: SourceSnapshot['omitted'] = []
   let total = 0
   for (let i = 0; i < rows.length; i++) {
@@ -98,16 +105,16 @@ export async function captureSource(cwd: string, put: (hash: string, text: strin
         const segments = path.split('/')
         for (let j = 1; j <= segments.length; j++) {
           const info = await lstat(join(root, ...segments.slice(0, j)))
-          if (info.isSymbolicLink()) {
+          if (info.isSymbolicLink() || (j === segments.length && !info.isFile())) {
             unsafe = true
             break
           }
         }
         if (unsafe || !inside(root, await realpath(absolute))) {
-          omitted.push({ path, reason: '符号链接未采集。' })
+          omitted.push({ path, reason: '符号链接或非普通文件未采集。' })
           continue
         }
-        const file = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW)
+        const file = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
         try {
           const before = await file.stat()
           if (!before.isFile() || before.size > 1024 * 1024 || total + before.size > 20 * 1024 * 1024) {
@@ -141,8 +148,10 @@ export async function captureSource(cwd: string, put: (hash: string, text: strin
     catch (error) {
       if (abort.aborted)
         throw error
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        absent.push(path)
         continue
+      }
       omitted.push({ path, reason: '文件不可读或不是 UTF-8 文本。' })
     }
   }
@@ -151,5 +160,5 @@ export async function captureSource(cwd: string, put: (hash: string, text: strin
     if ([...new Set(after.split('\0').filter(Boolean))].sort().join('\0') !== rows.join('\0'))
       omitted.push({ path: '*', reason: '采集期间文件清单变化，快照可能不一致。' })
   }
-  return { id: crypto.randomUUID(), root, head: pinned, capturedAt: new Date().toISOString(), files, omitted, complete: !omitted.length }
+  return { id: crypto.randomUUID(), root, inventory, absent, kind: commit ? 'commit' : 'workspace', head: pinned, capturedAt: new Date().toISOString(), files, omitted, complete: !omitted.length }
 }

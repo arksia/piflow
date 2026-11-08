@@ -6,6 +6,7 @@ import type { SubagentRuns } from '../runs'
 import { realpath } from 'node:fs/promises'
 import { API_REVIEWS_PATH, API_RUNS_PATH } from '@piflow/protocol'
 import { ReviewError } from '../reviews'
+import { exportReviewIntent, importReviewIntent } from '../reviews/intent'
 import { param, payload, query, send } from '../server/reply'
 
 export const reviewRoutes: FastifyPluginAsync<{ reviews: Reviews, generation: ReviewGeneration, runs: SubagentRuns, isTrusted: (project: string) => boolean }> = async (app, { reviews, generation, runs, isTrusted }) => {
@@ -35,9 +36,34 @@ export const reviewRoutes: FastifyPluginAsync<{ reviews: Reviews, generation: Re
   app.get(`${root}/files/:fileId`, async request => reviews.file(await project(query(request).projectPath), param(request, 'id'), text(query(request).revisionId), param(request, 'fileId')))
   app.get(`${root}/documents/:documentId`, async request => reviews.document(await project(query(request).projectPath), param(request, 'id'), text(query(request).revisionId), param(request, 'documentId')))
   app.get(`${root}/draft`, async request => ({ text: reviews.draft(await project(query(request).projectPath), param(request, 'id'), text(query(request).revisionId)) }))
+  app.post(`${root}/refresh-source`, async (request) => {
+    const b = payload<Record<string, unknown>>(request)
+    return reviews.refreshSource(await project(b.projectPath), param(request, 'id'))
+  })
+  app.post(`${root}/scope`, async (request) => {
+    const b = payload<Record<string, unknown>>(request)
+    reviews.exclude(await project(b.projectPath), param(request, 'id'), text(b.revisionId), b.hunkIds as string[], b.reason as string | null)
+    return { ok: true }
+  })
   app.post(`${root}/decisions`, async (request) => {
     const b = payload<Record<string, unknown>>(request)
     return reviews.decide(await project(b.projectPath), param(request, 'id'), text(b.revisionId), { targetId: text(b.targetId), state: text(b.state) as ReviewDecision['state'], note: typeof b.note === 'string' ? b.note : '' })
+  })
+  app.get(`${root}/intent`, async (request, reply) => {
+    const p = await project(query(request).projectPath)
+    const id = param(request, 'id')
+    const detail = reviews.read(p, id, text(query(request).revisionId))
+    if (!detail.route)
+      throw new ReviewError('尚无可导出的路线。', 409)
+    return reply.header('content-disposition', 'attachment; filename="review-route.json"').send(exportReviewIntent(detail.route.value, reviews.context(p, id, detail.revision.id)))
+  })
+  app.post(`${root}/intent`, async (request) => {
+    const b = payload<Record<string, unknown>>(request)
+    const p = await project(b.projectPath)
+    const id = param(request, 'id')
+    const revision = text(b.revisionId)
+    const route = importReviewIntent(b.intent, reviews.context(p, id, revision))
+    return { version: reviews.saveRoute(p, id, revision, route, 'user') }
   })
   app.post(`${root}/route`, async (request) => {
     const b = payload<Record<string, unknown>>(request)
@@ -63,7 +89,7 @@ export const reviewRoutes: FastifyPluginAsync<{ reviews: Reviews, generation: Re
   app.post(`${root}/remove`, async (request) => {
     const b = payload<Record<string, unknown>>(request)
     const p = await project(b.projectPath)
-    if (reviews.read(p, param(request, 'id')).generation.state === 'running')
+    if (reviews.read(p, param(request, 'id')).revisions.some(revision => reviews.read(p, param(request, 'id'), revision.id).generation.state === 'running'))
       throw new ReviewError('请先取消路线生成。', 409)
     reviews.remove(p, param(request, 'id'))
     return { ok: true }

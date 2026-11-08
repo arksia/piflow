@@ -94,6 +94,12 @@ export interface ReviewRevisionSummary {
   createdAt: string
   sourceRunId?: string
   fileCount: number
+  comparison?: { base: ReviewSourceVersion, target: ReviewSourceVersion }
+}
+export interface ReviewSourceVersion {
+  kind: 'commit' | 'workspace'
+  head: string | null
+  capturedAt: string
 }
 export interface ReviewDetail {
   review: ReviewSummary
@@ -106,6 +112,7 @@ export interface ReviewDetail {
   gaps: ReviewGap[]
   route: { version: number, source: 'agent' | 'user', value: ReviewRoute } | null
   decisions: ReviewDecision[]
+  exclusions?: { hunkId: string, reason: string }[]
   unassignedHunkIds: string[]
   generation: { state: 'idle' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted', runId?: string, error?: string }
 }

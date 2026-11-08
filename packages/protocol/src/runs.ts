@@ -150,6 +150,7 @@ export interface RunResult {
   error?: string
   recordingError?: string
   delivery?: RunDeliverySummary
+  review?: { id: string, revisionId: string, version: number }
 }
 export type RunMessage = {
   type: 'run_updated'

@@ -15,13 +15,15 @@ export default async function reviewExtension(pi: ExtensionAPI) {
     name: REVIEW_READ_TOOL,
     label: 'Read fixed review sources',
     description: 'Read the fixed revision catalog, source diff by file/target id, a document section, or execution evidence. Follow nextCursor until relevant content is read. No live workspace access.',
-    parameters: Type.Object({ kind: Type.Union([Type.Literal('catalog'), Type.Literal('source'), Type.Literal('document'), Type.Literal('evidence')]), id: Type.Optional(Type.String({ maxLength: 200 })), cursor: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
-    async execute(_id, params) { return { content: [{ type: 'text', text: JSON.stringify(readReviewContext(bundle, params)) }], details: {} } },
+    parameters: Type.Object({ kind: Type.Enum(['catalog', 'source', 'document', 'evidence'], { type: 'string', description: 'catalog: identity and IDs; source: fixed file/target; document: any requirement, design or ADR section; evidence: host command facts. Do not use design or adr as kind.' }), id: Type.Optional(Type.String({ maxLength: 200 })), cursor: Type.Optional(Type.String({ maxLength: 2000 })) }, { additionalProperties: false }),
+    async execute(_id, params) {
+      return { content: [{ type: 'text', text: JSON.stringify(readReviewContext(bundle, params)) }], details: {} }
+    },
   }))
   pi.registerTool(defineTool({
     name: REVIEW_SUBMIT_TOOL,
     label: 'Propose feature review route',
-    description: 'Submit a complete requirement-driven reading route for the fixed revision. Use only catalog ids. This records an Agent suggestion, never human approval, test success or runtime-observed calls. The host persists and validates separately.',
+    description: 'Submit a complete requirement-driven reading route for the fixed revision. Use only catalog ids. relations connect steps[].key only, with kind review-order, http, event or data-dependency; use an empty relations array if unnecessary. Document IDs go into step requirementIds/designSectionIds/adrIds. This records an Agent suggestion, never human approval, test success or runtime-observed calls. The host persists and validates separately.',
     parameters: reviewRouteSchema,
     async execute(_id, params) {
       const value = parseReviewRoute(params, bundle.context)

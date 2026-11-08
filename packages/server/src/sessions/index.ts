@@ -18,6 +18,8 @@ import type {
   SessionStatusRecord,
 } from '@piflow/protocol'
 import type { FlowStore } from '../flow/store'
+import type { Reviews } from '../reviews'
+import type { ReviewGeneration } from '../reviews/generation'
 import type { SubagentRuns } from '../runs'
 import { existsSync } from 'node:fs'
 import { readdir, realpath, stat, unlink } from 'node:fs/promises'
@@ -102,6 +104,8 @@ export interface SessionStore {
 
 interface CreateSessionStoreOptions {
   runs?: SubagentRuns
+  reviews?: Reviews
+  reviewGeneration?: ReviewGeneration
   rootCwd: string
   flow: FlowStore
   poolSize: number
@@ -376,6 +380,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
               }), ...(options.runs
                 ? createSubagentTools({
                     runs: options.runs,
+                    reviews: options.reviews,
+                    reviewGeneration: options.reviewGeneration,
                     agentDir: runtimeAgentDir,
                     flow,
                     isTrusted: cwd => !hasTrustRequiringProjectResources(cwd) || trustStore.get(cwd) === true,

@@ -235,7 +235,9 @@ export async function createSubagentRuns(options: {
         delivery = value
         publish({ type: 'run_updated', projectPath, run: summarize(run) })
       }
-      catch (error) { recordFailure(error) }
+      catch (error) {
+        recordFailure(error)
+      }
     }
     function observeConcurrent(otherId: string) {
       if (!delivery || delivery.concurrentRunIds.includes(otherId) || delivery.concurrentRunIdsTruncated)
@@ -483,8 +485,14 @@ export async function createSubagentRuns(options: {
       let output = ''
       let closed = false
       try {
-        if (delivery && options.reviews)
-          await options.reviews.captureBefore(run.id, projectPath, snapshot.configurationSnapshot.cwd, combined, snapshot.configurationSnapshot.reviewId)
+        if (delivery && options.reviews) {
+          try {
+            await options.reviews.captureBefore(run.id, projectPath, snapshot.configurationSnapshot.cwd, combined, snapshot.configurationSnapshot.reviewId)
+          }
+          catch (failure) {
+            console.error('[piflow] review baseline capture failed', failure)
+          }
+        }
         if (delivery) {
           const before = await captureGitSnapshot(snapshot.configurationSnapshot.cwd, combined)
           updateDelivery((value) => {
@@ -565,16 +573,34 @@ export async function createSubagentRuns(options: {
         try {
           await options.reviews.captureAfter(run.id, projectPath, snapshot.configurationSnapshot.cwd, snapshot.task, !!processExit && !recordingError, controller.signal)
         }
-        catch (failure) { console.error('[piflow] review source capture failed', failure) }
+        catch (failure) {
+          console.error('[piflow] review source capture failed', failure)
+        }
       }
       let resultDelivery: RunResult['delivery']
       if (delivery) {
         try {
           resultDelivery = deliverySummary(readDelivery(next))
         }
-        catch (failure) { recordFailure(failure) }
+        catch (failure) {
+          recordFailure(failure)
+        }
+      }
+      let resultReview: RunResult['review']
+      if (delivery && options.reviews) {
+        try {
+          const id = options.reviews.forRun(projectPath, run.id).reviewId
+          if (id) {
+            const detail = options.reviews.read(projectPath, id)
+            resultReview = { id, revisionId: detail.revision.id, version: detail.review.version }
+          }
+        }
+        catch (failure) {
+          console.error('[piflow] review summary unavailable', failure)
+        }
       }
       return {
+        ...(resultReview ? { review: resultReview } : {}),
         runId: run.id,
         status,
         output,

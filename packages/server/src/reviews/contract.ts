@@ -13,7 +13,7 @@ export const reviewRouteSchema = Type.Object({
   revisionToken: text(200),
   summary: text(2000),
   steps: Type.Array(Type.Object({ key: text(100), title: text(200), purpose: text(), requirementIds: ids(), designSectionIds: ids(), adrIds: ids(), targets: Type.Array(Type.Object({ targetId: text(200), reason: text(), reviewFocus: text() }, { additionalProperties: false }), { maxItems: 100 }), evidenceIds: ids() }, { additionalProperties: false }), { minItems: 1, maxItems: 50 }),
-  relations: Type.Array(Type.Object({ from: text(100), to: text(100), kind: Type.Union(['review-order', 'http', 'event', 'data-dependency'].map(value => Type.Literal(value))), explanation: text() }, { additionalProperties: false }), { maxItems: 200 }),
+  relations: Type.Array(Type.Object({ from: Type.String({ minLength: 1, maxLength: 100, description: 'Source review step key from steps[].key, never a document or target ID.' }), to: Type.String({ minLength: 1, maxLength: 100, description: 'Destination review step key from steps[].key.' }), kind: Type.Enum(['review-order', 'http', 'event', 'data-dependency'], { type: 'string', description: 'Exactly review-order, http, event or data-dependency. Relationships connect review steps only; do not use implements/verifies or document-to-code edges.' }), explanation: text() }, { additionalProperties: false }), { maxItems: 200 }),
   gaps: Type.Array(Type.Object({ kind: text(100), referenceIds: ids(), explanation: text() }, { additionalProperties: false }), { maxItems: 100 }),
 }, { additionalProperties: false })
 export function parseReviewRoute(input: unknown, context?: ReviewAnalysisContext): ReviewRoute {
@@ -86,7 +86,7 @@ export function readReviewContext(bundle: ReviewBundle, request: ReviewContextRe
   }
   let body: string
   if (request.kind === 'catalog') {
-    body = JSON.stringify(bundle.context)
+    body = JSON.stringify({ ...bundle.context, contract: { readKinds: ['catalog', 'source', 'document', 'evidence'], documents: 'Use kind=document for requirements, designs and ADRs; id=document.id.', relations: 'Optional step-to-step relationships only. from/to are steps[].key. kind exactly review-order|http|event|data-dependency. Put document and target associations inside each step, never in relations.' } })
   }
   else if (request.kind === 'source') {
     const fileId = bundle.context.targets.find(t => t.id === request.id)?.fileId ?? request.id ?? ''

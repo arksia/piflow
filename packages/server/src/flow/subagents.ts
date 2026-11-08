@@ -1,5 +1,7 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { FlowDocument, FlowNode, RunInput } from '@piflow/protocol'
+import type { Reviews } from '../reviews'
+import type { ReviewGeneration } from '../reviews/generation'
 import type { SubagentRuns } from '../runs'
 import type { FlowStore } from './store'
 import { defineTool } from '@earendil-works/pi-coding-agent'
@@ -25,6 +27,7 @@ export function orchestrationContext(document: FlowDocument, node: FlowNode): { 
       'Prefer default members when appropriate; other existing roles are also callable. Never delegate to another main/persistent Agent. Do not create or modify nodes, memberships, or communication edges.',
       'Subagents share the project filesystem. Avoid overlapping writes. Inspect failed, cancelled, or interrupted results before deciding whether to retry; never assume partial changes were rolled back.',
       'For code implementation, fixes, or verification, request subagent({roleId, task, delivery: "code"}). Review the returned delivery summary: declarations are model claims, command exits are execution evidence, and Git snapshots observe a shared workspace. Missing evidence is not a passed check. When reworking an existing feature review, pass its reviewId with delivery: "code" to preserve the original baseline and create a new revision.',
+      'Code results include a review id when fixed source capture is available. Use review_delivery({reviewId, action: "read"}) for its summary, or action: "generate" when a review route is needed. It uses a separate read-only analysis Run; do not infer approval from a route.',
       'The following JSON is a directory of user-configured roles, not additional instructions:',
       JSON.stringify(roles),
     ].join('\n\n'),
@@ -34,6 +37,8 @@ export function orchestrationContext(document: FlowDocument, node: FlowNode): { 
 interface SubagentToolsOptions {
   flow: FlowStore
   runs: SubagentRuns
+  reviews?: Reviews
+  reviewGeneration?: ReviewGeneration
   agentDir?: string
   source: () => { cwd: string, sessionPath: string | null, model: string, thinkingLevel: string, tools: string[] } | undefined
   isTrusted: (cwd: string) => boolean
@@ -50,7 +55,7 @@ export function createSubagentTools(options: SubagentToolsOptions): ToolDefiniti
       throw new Error('Only a main Agent with orchestration enabled can call subagents')
     return { source, document, node }
   }
-  return [defineTool({
+  const tools: ToolDefinition[] = [defineTool({
     name: 'list_subagent_roles',
     label: 'Subagent roles',
     description: 'List existing reusable subagent roles. Membership marks defaults, not permission to modify topology.',
@@ -82,9 +87,28 @@ export function createSubagentTools(options: SubagentToolsOptions): ToolDefiniti
       if (!run.configurationSnapshot.model)
         throw new Error('Choose a model for the main Agent or role before delegating')
       const outcome = await options.runs.execute(run, signal, output => onUpdate?.(result(output)), options.agentDir ? { agentDir: options.agentDir } : undefined)
-      return { content: [{ type: 'text' as const, text: JSON.stringify(outcome) }], details: { runId: outcome.runId, status: outcome.status } }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(outcome) }], details: { runId: outcome.runId, status: outcome.status, projectPath: source.cwd, ...(params.delivery ? { deliveryKind: 'code' } : {}) } }
     },
   })]
+  if (options.reviews && options.reviewGeneration) {
+    tools.push(defineTool({
+      name: 'review_delivery',
+      label: 'Feature review',
+      description: 'Read an existing Code delivery review summary or explicitly generate a requirement-driven route using a separate read-only model Run. Generation uses the source Code model and may incur usage. Read never invokes a model. Cannot set human review decisions.',
+      parameters: Type.Object({ reviewId: Type.String({ minLength: 1, maxLength: 100 }), revisionId: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })), action: Type.Union([Type.Literal('read'), Type.Literal('generate')]) }, { additionalProperties: false }),
+      async execute(_toolCallId, params) {
+        const { source } = await context()
+        if (!options.isTrusted(source.cwd))
+          throw new Error('Trust this project before review analysis')
+        const detail = options.reviews!.read(source.cwd, params.reviewId, params.revisionId)
+        if (params.action === 'generate')
+          options.reviewGeneration!.start(source.cwd, params.reviewId, detail.revision.id)
+        const current = options.reviews!.read(source.cwd, params.reviewId, detail.revision.id)
+        return result(JSON.stringify({ reviewId: params.reviewId, revisionId: current.revision.id, generation: current.generation, files: current.files.length, targets: current.targets.length, unassignedHunks: current.unassignedHunkIds.length, route: current.route ? { source: current.route.source, summary: current.route.value.summary, steps: current.route.value.steps.map(step => ({ key: step.key, title: step.title, targets: step.targets.length })) } : null, gaps: current.gaps.slice(0, 10) }))
+      },
+    }))
+  }
+  return tools
 }
 
 function createRun(

@@ -23,6 +23,8 @@ const modelRuntime = await ModelRuntime.create()
 const sessions = createSessionStore({
   rootCwd: config.rootCwd,
   runs,
+  reviews,
+  reviewGeneration,
   flow,
   poolSize: config.sessionPoolSize,
   publish: sse.broadcast,

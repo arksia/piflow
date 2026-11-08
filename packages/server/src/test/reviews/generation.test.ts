@@ -8,15 +8,26 @@ import { join } from 'node:path'
 import { it } from 'node:test'
 import { promisify } from 'node:util'
 import Fastify from 'fastify'
+import { createFlowStore } from '../../flow/store'
+import { createSubagentTools } from '../../flow/subagents'
 import { createReviews } from '../../reviews'
 import { parseReviewRoute, readReviewContext } from '../../reviews/contract'
 import { createReviewGeneration } from '../../reviews/generation'
+import { exportReviewIntent, importReviewIntent } from '../../reviews/intent'
 import { reviewRoutes } from '../../routes/reviews'
 import { createSubagentRuns } from '../../runs'
 
 const exec = promisify(execFile)
+async function waitForGeneration(reviews: Awaited<ReturnType<typeof createReviews>>, project: string, id: string) {
+  const deadline = Date.now() + 5000
+  while (reviews.read(project, id).generation.state === 'running') {
+    if (Date.now() > deadline)
+      throw new Error('analysis test timed out')
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+}
 function route(bundle: ReviewBundle): ReviewRoute {
-  return { schemaVersion: 1, revisionToken: bundle.context.revisionToken, summary: '按需求审查', steps: [{ key: 'behavior', title: '确认计算', purpose: '保留零', requirementIds: [], designSectionIds: [], adrIds: [], targets: bundle.context.targets.map(t => ({ targetId: t.id, reason: '计算变更', reviewFocus: '零值' })), evidenceIds: [] }], relations: [], gaps: [] }
+  return { schemaVersion: 1, revisionToken: bundle.context.revisionToken, summary: '按需求审查', steps: [{ key: 'behavior', title: '确认计算', purpose: '保留零', requirementIds: [], designSectionIds: [], adrIds: [], targets: bundle.context.targets.map(t => ({ targetId: t.id, reason: '计算变更', reviewFocus: '零值' })), evidenceIds: bundle.context.evidence.map(e => e.id) }], relations: [], gaps: [] }
 }
 it('runs fixed read-only analysis, validates references, keeps facts scoped and preserves decisions on route edits', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'piflow-route-')))
@@ -28,9 +39,20 @@ it('runs fixed read-only analysis, validates references, keeps facts scoped and 
   let bundlePath = ''
   let bundle: ReviewBundle | undefined
   let invalid = false
+  let providerFailure = false
+  let waitForCancel = false
+  let analysisStarted = () => {}
   const messages: unknown[] = []
-  const runs = await createSubagentRuns({ dataDir: join(root, 'data'), reviews, publish: m => messages.push(m), execute: async (input, _signal, fact) => {
+  const runs = await createSubagentRuns({ dataDir: join(root, 'data'), reviews, publish: m => messages.push(m), execute: async (input, signal, fact) => {
     if (input.configurationSnapshot.reviewAnalysis) {
+      if (providerFailure)
+        throw new Error('Provider unavailable')
+      if (waitForCancel) {
+        analysisStarted()
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+        fact({ type: 'closed', exitCode: null })
+        return { output: '', closed: true, cancelled: true }
+      }
       assert.deepEqual(input.configurationSnapshot.tools, [])
       assert.equal(input.configurationSnapshot.delivery, undefined)
       bundlePath = input.configurationSnapshot.reviewAnalysis.bundlePath
@@ -57,19 +79,55 @@ it('runs fixed read-only analysis, validates references, keeps facts scoped and 
     const id = reviews.forRun(cwd, result.runId).reviewId!
     const initial = reviews.read(cwd, id)
     const rev = initial.revision.id
+    const flow = createFlowStore(join(root, 'data'))
+    const now = new Date().toISOString()
+    await flow.replaceTopology(cwd, { nodes: [{ id: 'main', name: 'Main', kind: 'persistent', sessionPath: '/parent', orchestrationEnabled: true, brief: '', goal: '', createdAt: now, updatedAt: now, position: { x: 0, y: 0 } }], edges: [], memberships: [], viewport: { x: 0, y: 0, zoom: 1 } }, { commitGraph: true })
+    let trusted = false
+    let enabled = true
+    const tools = createSubagentTools({ flow, runs, reviews, reviewGeneration: generation, isTrusted: () => trusted, source: () => ({ cwd, sessionPath: enabled ? '/parent' : '/not-main', model: 'a/b', thinkingLevel: 'off', tools: [] }) })
+    const reviewTool = tools.find(t => t.name === 'review_delivery')!
+    const toolContext = {} as Parameters<typeof reviewTool.execute>[4]
+    await assert.rejects(reviewTool.execute('read', { reviewId: id, action: 'read' }, undefined, undefined, toolContext), /Trust this project/)
+    trusted = true
+    const read = await reviewTool.execute('read', { reviewId: id, action: 'read' }, undefined, undefined, toolContext)
+    assert.match(JSON.stringify(read.content), /reviewId/)
+    assert.equal(reviews.read(cwd, id).generation.state, 'idle')
+    enabled = false
+    await assert.rejects(reviewTool.execute('generate', { reviewId: id, action: 'generate' }, undefined, undefined, toolContext), /Only a main Agent/)
+    enabled = true
+    await reviewTool.execute('generate', { reviewId: id, action: 'generate' }, undefined, undefined, toolContext)
     generation.start(cwd, id, rev)
     generation.start(cwd, id, rev)
     // close waits for the same managed execution; do not cancel this successful run.
-    while (reviews.read(cwd, id).generation.state === 'running') await new Promise(resolve => setTimeout(resolve, 5))
+    await waitForGeneration(reviews, cwd, id)
     const detail = reviews.read(cwd, id)
     assert.equal(detail.generation.state, 'succeeded')
     assert.equal(detail.route?.source, 'agent')
     assert.equal(detail.evidence[0]!.exitCode, 1)
     assert.equal(detail.evidence[0]!.sourceVersion, 'unknown')
+    const evidenceId = detail.route!.value.steps[0]!.evidenceIds[0]!
+    reviews.setEvidence(cwd, id, rev, [])
+    assert.ok(reviews.read(cwd, id).evidence.some(e => e.id === evidenceId))
     await assert.rejects(readFile(bundlePath), /ENOENT/)
     assert.ok(!JSON.stringify(messages).includes('reviewRoute'))
     const target = detail.targets[0]!
     reviews.decide(cwd, id, rev, { targetId: target.id, state: 'seen', note: 'checked' })
+    const portable = exportReviewIntent(detail.route!.value, bundle!.context)
+    assert.ok(!JSON.stringify(portable).includes('revisionToken'))
+    const rebound = importReviewIntent(portable, { ...bundle!.context, revisionToken: 'new-token' })
+    assert.equal(rebound.revisionToken, 'new-token')
+    assert.equal(rebound.steps[0]!.targets[0]!.targetId, target.id)
+    const missing = importReviewIntent(portable, { ...bundle!.context, targets: [] })
+    assert.equal(missing.steps[0]!.targets.length, 0)
+    assert.ok(missing.gaps.some(g => g.kind === 'intent-unresolved'))
+    assert.throws(() => importReviewIntent({ ...portable, decisions: [{ state: 'seen' }] }, bundle!.context), /格式/)
+    reviews.exclude(cwd, id, rev, target.hunkIds, 'Independent change')
+    assert.ok(reviews.read(cwd, id).exclusions?.length)
+    assert.equal(reviews.read(cwd, id).decisions[0]!.state, 'seen')
+    assert.throws(() => reviews.exclude(cwd, id, rev, ['fake-hunk'], 'reason'), /无效/)
+    reviews.exclude(cwd, id, rev, target.hunkIds, null)
+    assert.equal(reviews.read(cwd, id).exclusions?.length, 0)
+
     reviews.saveRoute(cwd, id, rev, detail.route!.value, 'user')
     assert.equal(reviews.read(cwd, id).decisions[0]!.state, 'seen')
     assert.throws(() => parseReviewRoute({ ...detail.route!.value, revisionToken: 'stale' }, bundle!.context), /其他修订/)
@@ -82,9 +140,28 @@ it('runs fixed read-only analysis, validates references, keeps facts scoped and 
     assert.equal((await app.inject({ method: 'POST', url: `/api/reviews/${id}/decisions`, payload: { projectPath: cwd, revisionId: rev, targetId: 'fake', state: 'seen' } })).statusCode, 400)
     invalid = true
     generation.start(cwd, id, rev)
-    while (reviews.read(cwd, id).generation.state === 'running') await new Promise(resolve => setTimeout(resolve, 5))
+    await waitForGeneration(reviews, cwd, id)
     assert.equal(reviews.read(cwd, id).generation.state, 'failed')
     assert.equal(reviews.read(cwd, id).route?.source, 'user')
+    invalid = false
+    providerFailure = true
+    generation.start(cwd, id, rev)
+    await waitForGeneration(reviews, cwd, id)
+    assert.equal(reviews.read(cwd, id).generation.state, 'failed')
+    assert.match(reviews.read(cwd, id).generation.error!, /Provider unavailable/)
+    assert.equal(reviews.read(cwd, id).route?.source, 'user')
+    providerFailure = false
+    waitForCancel = true
+    const started = new Promise<void>((resolve) => {
+      analysisStarted = resolve
+    })
+    generation.start(cwd, id, rev)
+    await started
+    generation.cancel(cwd, id, rev)
+    await waitForGeneration(reviews, cwd, id)
+    assert.equal(reviews.read(cwd, id).generation.state, 'cancelled')
+    assert.equal(reviews.read(cwd, id).route?.source, 'user')
+    assert.equal(reviews.read(cwd, id).decisions[0]!.state, 'seen')
   }
   finally {
     await generation.close()
@@ -131,6 +208,41 @@ it('loads only the two fixed tools, isolates pagination cursors and restricts th
       delete process.env.PIFLOW_REVIEW_BUNDLE
     else process.env.PIFLOW_REVIEW_BUNDLE = old
     await runs.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('keeps Code execution and its recorded result available when review storage fails', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'piflow-review-failure-')))
+  const reviews = await createReviews({ dataDir: join(root, 'data') })
+  const unavailable = new Proxy(reviews, {
+    get(target, key) {
+      if (key === 'captureBefore' || key === 'captureAfter' || key === 'forRun') {
+        return () => {
+          throw new Error('Review storage unavailable')
+        }
+      }
+      return Reflect.get(target, key)
+    },
+  })
+  let executed = false
+  const runs = await createSubagentRuns({ dataDir: join(root, 'data'), reviews: unavailable, execute: async (_input, _signal, fact) => {
+    executed = true
+    fact({ type: 'closed', exitCode: 0 })
+    return { output: 'Code result retained', closed: true, cancelled: false }
+  } })
+  try {
+    const result = await runs.execute({ projectPath: root, orchestratorId: 'main', orchestratorName: 'Main', roleId: 'code', roleName: 'Code', parentSessionPath: '/p', parentToolCallId: 't', task: 'Code', configurationSnapshot: { roleName: 'Code', cwd: root, effectivePrompt: '', model: 'a/b', thinkingLevel: 'off', tools: [], memberRoleIds: [], delivery: { kind: 'code', version: 1 } } })
+    assert.equal(executed, true)
+    assert.equal(result.status, 'succeeded')
+    assert.equal(result.output, 'Code result retained')
+    assert.equal(result.recordingError, undefined)
+    assert.equal(result.review, undefined)
+    assert.equal((await runs.read(root, result.runId)).status, 'succeeded')
+  }
+  finally {
+    await runs.close()
+    reviews.close()
     await rm(root, { recursive: true, force: true })
   }
 })

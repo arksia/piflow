@@ -9,10 +9,13 @@ interface SymbolRange {
   start: number
   end: number
 }
-function symbols(path: string, text: string): SymbolRange[] {
+function symbols(path: string, text: string, deadline: number): SymbolRange[] {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const found: SymbolRange[] = []
+  let nodes = 0
   function visit(node: ts.Node, containers: string[]) {
+    if (++nodes > 20000 || found.length > 500 || containers.length > 100 || performance.now() > deadline)
+      throw new Error('符号分析预算已耗尽')
     const named = node as ts.NamedDeclaration
     const name = named.name?.getText(source)
     const owner = name ? [...containers, name] : containers
@@ -52,15 +55,25 @@ export function compareSources(before: SourceSnapshot, after: SourceSnapshot, ge
     if (!gaps.some(gap => gap.id === id))
       gaps.push({ id, kind: 'source-not-captured', path: entry.path, explanation: entry.reason, source: 'host' })
   }
+  const beforeInventory = before.inventory ? new Set(before.inventory) : null
+  const afterInventory = after.inventory ? new Set(after.inventory) : null
+  function unknownMissing(snapshot: SourceSnapshot, inventory: Set<string> | null, path: string) {
+    return !snapshot.files[path] && (inventory ? inventory.has(path) && !snapshot.absent?.includes(path) : !snapshot.complete)
+  }
   let diffBudget = 0
+  const deadline = performance.now() + 3000
   for (const path of [...new Set([...Object.keys(before.files), ...Object.keys(after.files)])].sort()) {
     const oldHash = before.files[path]
     const newHash = after.files[path]
     if (oldHash === newHash || omit.has(path))
       continue
+    if (unknownMissing(before, beforeInventory, path) || unknownMissing(after, afterInventory, path)) {
+      gaps.push({ id: digest(`missing:${path}`).slice(0, 24), kind: 'comparison-unavailable', path, explanation: '一侧正文未采集，不能据此推断文件新增或删除。', source: 'host' })
+      continue
+    }
     const oldText = oldHash ? get(oldHash) : ''
     const newText = newHash ? get(newHash) : ''
-    const patch = diffBudget < 8 * 1024 * 1024 ? structuredPatch(path, path, oldText, newText, undefined, undefined, { context: 3, timeout: 100, maxEditLength: 20000 }) : undefined
+    const patch = performance.now() < deadline && diffBudget < 8 * 1024 * 1024 ? structuredPatch(path, path, oldText, newText, undefined, undefined, { context: 3, timeout: 100, maxEditLength: 20000 }) : undefined
     if (!patch) {
       gaps.push({ id: digest(path).slice(0, 24), kind: 'diff-budget', path, explanation: 'Diff 超出计算或正文预算。', source: 'host' })
       continue
@@ -69,8 +82,19 @@ export function compareSources(before: SourceSnapshot, after: SourceSnapshot, ge
     const fileId = digest(`${before.id}:${after.id}:${path}`).slice(0, 24)
     const rows: ReviewHunk[] = patch.hunks.map((hunk, i) => ({ id: `${fileId}:${i}`, oldStart: hunk.oldStart, oldLines: hunk.oldLines, newStart: hunk.newStart, newLines: hunk.newLines, lines: hunk.lines }))
     const supported = /\.[cm]?[jt]sx?$/i.test(path)
-    const oldSymbols = supported ? symbols(path, oldText) : []
-    const newSymbols = supported ? symbols(path, newText) : []
+    let oldSymbols: SymbolRange[] = []
+    let newSymbols: SymbolRange[] = []
+    if (supported) {
+      try {
+        oldSymbols = symbols(path, oldText, deadline)
+        newSymbols = symbols(path, newText, deadline)
+      }
+      catch {
+        oldSymbols = []
+        newSymbols = []
+        gaps.push({ id: `${fileId}:symbols`, kind: 'symbol-budget', path, explanation: '函数解析未完成，保留为文件级变更。', source: 'host' })
+      }
+    }
     const fileTargets: ReviewTarget[] = []
     for (const side of ['old', 'new'] as const) {
       for (const symbol of side === 'old' ? oldSymbols : newSymbols) {
@@ -97,25 +121,36 @@ export function compareSources(before: SourceSnapshot, after: SourceSnapshot, ge
     const fileLevel = rows.filter(row => (['old', 'new'] as const).some(side => changedLines(row, side).some(line => !(side === 'old' ? oldSymbols : newSymbols).some(symbol => line >= symbol.start && line <= symbol.end))))
     if (fileLevel.length || !fileTargets.length)
       fileTargets.push({ id: `${fileId}:file`, fileId, name: supported ? '文件级变更' : '文件变更', kind: 'file', hunkIds: (fileLevel.length ? fileLevel : rows).map(row => row.id) })
+    if (targets.length + fileTargets.length > 5000) {
+      fileTargets.splice(0, fileTargets.length, { id: `${fileId}:file`, fileId, name: '文件变更', kind: 'file', hunkIds: rows.map(row => row.id) })
+      gaps.push({ id: `${fileId}:target-budget`, kind: 'target-budget', path, explanation: '函数对象超出总量预算，保留为文件级变更。', source: 'host' })
+    }
     targets.push(...fileTargets)
     hunks[fileId] = rows
     files.push({ id: fileId, path, status: !oldHash ? 'added' : !newHash ? 'deleted' : 'modified', beforeDigest: oldHash, afterDigest: newHash, added: rows.reduce((n, h) => n + h.lines.filter(l => l.startsWith('+')).length, 0), removed: rows.reduce((n, h) => n + h.lines.filter(l => l.startsWith('-')).length, 0), hunkIds: rows.map(h => h.id), targetIds: fileTargets.map(t => t.id), languageSupported: supported })
   }
   return { files, targets, hunks, gaps }
 }
-export function sourceDocuments(snapshot: SourceSnapshot, get: (hash: string) => string) {
+export function sourceDocuments(snapshot: SourceSnapshot, get: (hash: string) => string, onLimit?: () => void) {
   const documents: ReviewDocument[] = []
+  const anchors = new Map<string, ReviewDocument>()
   for (const [path, hash] of Object.entries(snapshot.files)) {
     const kind = /^docs\/adr\/.*\.md$/i.test(path) ? 'adr' : /^docs\/design\/.*\.md$/i.test(path) ? 'design' : /^docs\/(?:requirements\/.*|PRD)\.md$/i.test(path) ? 'requirement' : null
     if (!kind)
       continue
     const text = get(hash)
     const lines = text.split('\n')
-    let fenced = false
+    let fence: { marker: string, size: number } | null = null
     for (let i = 0; i < lines.length; i++) {
-      if (/^\s*(?:```|~~~)/.test(lines[i]!))
-        fenced = !fenced
-      if (fenced)
+      const marker = /^ {0,3}(`{3,}|~{3,})/.exec(lines[i]!)?.[1]
+      if (marker) {
+        if (!fence)
+          fence = { marker: marker[0]!, size: marker.length }
+        else if (marker[0] === fence.marker && marker.length >= fence.size)
+          fence = null
+        continue
+      }
+      if (fence)
         continue
       const heading = /^#{1,6}[^\S\n]+(\S.*)$/.exec(lines[i]!)
       if (!heading)
@@ -123,12 +158,22 @@ export function sourceDocuments(snapshot: SourceSnapshot, get: (hash: string) =>
       const title = heading[1]!.trim().replace(/#+$/, '').trim()
       const explicit = /\{#([\w-]+)\}$/.exec(title)?.[1] ?? /^(?:REQ|AC|DESIGN)-[\w-]+/.exec(title)?.[0]
       const anchor = explicit ?? title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '')
+      if (documents.length >= 2000) {
+        onLimit?.()
+        return documents
+      }
       documents.push({ id: digest(`${snapshot.id}:${path}:${i}`).slice(0, 24), path, anchor, title: title.replace(/\s*\{#[\w-]+\}$/, ''), kind, digest: hash, startLine: i + 1, stableAnchor: !!explicit })
+      const doc = documents.at(-1)!
+      const key = JSON.stringify([doc.path, doc.anchor])
+      const previous = anchors.get(key)
+      if (previous) {
+        previous.stableAnchor = false
+        doc.stableAnchor = false
+      }
+      else {
+        anchors.set(key, doc)
+      }
     }
-  }
-  for (const doc of documents) {
-    if (documents.filter(d => d.path === doc.path && d.anchor === doc.anchor).length > 1)
-      doc.stableAnchor = false
   }
   return documents
 }
