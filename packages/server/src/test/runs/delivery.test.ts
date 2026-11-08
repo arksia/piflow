@@ -142,3 +142,100 @@ it('creates delivery records atomically and does not replace a valid declaration
     await rm(root, { recursive: true, force: true })
   }
 })
+it('observes concurrent runs in one Git workspace without attributing their changes', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const exec = promisify(execFile)
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'piflow-delivery-shared-')))
+  const project = join(root, 'project')
+  await mkdir(project)
+  await exec('git', ['-C', project, 'init', '-b', 'main'])
+  await writeFile(join(project, 'baseline.txt'), 'pre-existing')
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let ready!: () => void
+  const started = new Promise<void>((resolve) => {
+    ready = resolve
+  })
+  let count = 0
+  const runs = await createSubagentRuns({ dataDir: join(root, 'data'), execute: async (input, _signal, fact) => {
+    await writeFile(join(project, `${input.task}.txt`), input.task)
+    if (++count === 2)
+      ready()
+    await gate
+    fact({ type: 'closed', exitCode: 0 })
+    return { output: 'done', cancelled: false, closed: true }
+  } })
+  try {
+    const one = runs.execute({ ...codeInput(project), task: 'one' })
+    const two = runs.execute({ ...codeInput(project), task: 'two' })
+    await started
+    release()
+    const results = await Promise.all([one, two])
+    for (const result of results) {
+      const detail = await runs.delivery(project, result.runId)
+      assert.equal(detail.record?.before.state, 'recorded')
+      assert.equal(detail.record?.after.state, 'recorded')
+      assert.deepEqual(detail.record?.concurrentRunIds, results.filter(item => item.runId !== result.runId).map(item => item.runId))
+      const before = detail.record!.before
+      assert.ok(before.state === 'recorded' && before.files.some(file => file.path === 'baseline.txt'))
+      const after = detail.record!.after
+      assert.ok(after.state === 'recorded' && after.files.some(file => file.path === 'one.txt') && after.files.some(file => file.path === 'two.txt'))
+      assert.equal(detail.processExit?.exitCode, 0)
+    }
+    const controller = new AbortController()
+    controller.abort()
+    const cancelled = await runs.execute(codeInput(project), controller.signal)
+    assert.equal(cancelled.status, 'cancelled')
+    assert.equal(count, 2)
+    assert.equal((await runs.delivery(project, cancelled.runId)).record?.after.state, 'not-captured')
+  }
+  finally {
+    release()
+    await runs.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+it('keeps confirmed close facts when restart interrupts final delivery persistence', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'piflow-delivery-recovery-')))
+  const dataDir = join(root, 'data')
+  let db: DatabaseSync
+  const runs = await createSubagentRuns({ dataDir, execute: async (_input, _signal, fact) => {
+    fact({ type: 'closed', exitCode: 0 })
+    db.exec(`CREATE TRIGGER reject_final BEFORE UPDATE ON runs WHEN NEW.status='succeeded' BEGIN SELECT RAISE(FAIL,'final fault'); END`)
+    return { output: 'done', cancelled: false, closed: true }
+  } })
+  db = new DatabaseSync(join(dataDir, 'runs.sqlite'))
+  let runId = ''
+  let completedAt: string | undefined
+  try {
+    const result = await runs.execute(codeInput(root))
+    runId = result.runId
+    assert.equal(result.status, 'succeeded')
+    assert.match(result.recordingError!, /final fault/)
+    const last = await runs.read(root, runId)
+    assert.equal(last.status, 'running')
+    assert.equal(last.progress?.phase, 'collecting')
+    completedAt = last.completedAt
+    assert.ok(completedAt)
+    db.exec('DROP TRIGGER reject_final')
+  }
+  finally {
+    db.close()
+    await runs.close()
+  }
+  const again = await createSubagentRuns({ dataDir })
+  try {
+    const recovered = await again.read(root, runId)
+    assert.equal(recovered.status, 'interrupted')
+    assert.equal(recovered.completedAt, completedAt)
+    assert.equal(recovered.processExit?.exitCode, 0)
+    assert.equal((await again.delivery(root, runId)).record?.after.state, 'not-captured')
+  }
+  finally {
+    await again.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

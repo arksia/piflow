@@ -36,7 +36,7 @@ export interface RunSummary {
   completedAt?: string
   interruptedAt?: string
   durationMs?: number
-  progress?: { phase: 'thinking' | 'responding' | 'tool', toolName?: string }
+  progress?: { phase: 'thinking' | 'responding' | 'tool' | 'collecting', toolName?: string }
   toolCount: number
   failedToolCount: number
   revision: number
@@ -217,6 +217,7 @@ export interface RunDeliveryRecord {
   before: GitWorkspaceSnapshot
   after: GitWorkspaceSnapshot
   concurrentRunIds: string[]
+  concurrentRunIdsTruncated?: boolean
 }
 export interface RunCheckReference {
   toolCallId: string
@@ -232,6 +233,7 @@ export interface RunDeliveryDetail {
   record?: RunDeliveryRecord
   commands: RunCommandCounts
   checkReferences: RunCheckReference[]
+  processExit?: RunProcessExit
 }
 export interface RunDeliverySummary {
   declaration: 'submitted' | 'missing'

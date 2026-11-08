@@ -14,7 +14,9 @@ import type {
 import type { ProcessFact } from './process'
 import { Buffer } from 'node:buffer'
 import { realpath } from 'node:fs/promises'
+import { isAbsolute, relative } from 'node:path'
 import { CODE_DELIVERY_TOOL, deliveryDetail, deliverySummary, parseCodeDelivery } from './delivery'
+import { captureGitSnapshot } from './git-snapshot'
 import { runSubagentProcess } from './process'
 import { openRunStore, RunError, summarize, toolSummary } from './store'
 
@@ -80,6 +82,9 @@ export async function createSubagentRuns(options: {
       controller: AbortController
       done: Promise<RunResult>
       closed: boolean
+      cwd: string
+      workspaceKey?: string
+      observeConcurrent: (runId: string) => void
     }
   >()
   const recordingErrors = new Map<string, string>()
@@ -118,7 +123,7 @@ export async function createSubagentRuns(options: {
     const counts = store.commandCounts(run.id)
     if (!record)
       return { availability: run.deliveryKind ? 'not-captured' : 'not-requested', runId: run.id, projectPath: run.projectPath, revision: run.deliveryRevision ?? 0, commands: counts, checkReferences: [] }
-    return deliveryDetail(record, counts, (toolId) => {
+    const detail = deliveryDetail(record, counts, (toolId) => {
       try {
         return store.tool(run.projectPath, run.id, toolId)
       }
@@ -128,6 +133,7 @@ export async function createSubagentRuns(options: {
         throw error
       }
     })
+    return { ...detail, processExit: run.processExit }
   }
   async function execute(
     input: RunInput,
@@ -154,8 +160,10 @@ export async function createSubagentRuns(options: {
       parentSessionPath: input.parentSessionPath,
       parentToolCallId: input.parentToolCallId,
       task: input.task,
-      configurationSnapshot: input.configurationSnapshot,
+      configurationSnapshot: { ...input.configurationSnapshot, cwd: await realpath(input.configurationSnapshot.cwd) },
     })
+    if (closing)
+      throw new RunError('运行管理正在关闭', 503)
     let run: RunDetail = {
       ...snapshot,
       id: crypto.randomUUID(),
@@ -176,8 +184,8 @@ export async function createSubagentRuns(options: {
           runId: run.id,
           projectPath,
           revision: 1,
-          before: { state: 'not-captured' },
-          after: { state: 'not-captured' },
+          before: { state: 'pending' },
+          after: { state: 'pending' },
           concurrentRunIds: [],
         }
       : undefined
@@ -192,8 +200,10 @@ export async function createSubagentRuns(options: {
     const began = performance.now()
     let processExit: RunProcessExit | undefined
     let closedDuration: number | undefined
+    let interruptedByRecording = false
     function recordFailure(error: unknown) {
       recordingError ??= error instanceof Error ? error.message : String(error)
+      interruptedByRecording ||= !processExit
       recordingErrors.set(run.id, recordingError)
       controller.abort()
       publish({
@@ -203,6 +213,43 @@ export async function createSubagentRuns(options: {
         error: `运行记录保存失败：${recordingError}`,
       })
     }
+    function updateDelivery(update: (value: RunDeliveryRecord) => void, state: Partial<RunDetail> = {}) {
+      if (!delivery || recordingError)
+        return
+      const value = structuredClone(delivery)
+      update(value)
+      value.revision++
+      const next = { ...run, ...state, revision: run.revision + 1, deliveryRevision: value.revision }
+      try {
+        store.save(next, [], undefined, value)
+        run = next
+        delivery = value
+        publish({ type: 'run_updated', projectPath, run: summarize(run) })
+      }
+      catch (error) { recordFailure(error) }
+    }
+    function observeConcurrent(otherId: string) {
+      if (!delivery || delivery.concurrentRunIds.includes(otherId) || delivery.concurrentRunIdsTruncated)
+        return
+      updateDelivery((value) => {
+        if (value.concurrentRunIds.length < 200)
+          value.concurrentRunIds.push(otherId)
+        else value.concurrentRunIdsTruncated = true
+      })
+    }
+    function overlaps(root: string, cwd: string) {
+      const path = relative(root, cwd)
+      return path === '' || (!isAbsolute(path) && path !== '..' && !path.startsWith('../') && !path.startsWith('..\\'))
+    }
+    function connectWorkspace() {
+      const self = active.get(run.id)!
+      for (const [otherId, other] of active) {
+        if (otherId !== run.id && ((self.workspaceKey && (self.workspaceKey === other.workspaceKey || overlaps(self.workspaceKey, other.cwd))) || (other.workspaceKey && overlaps(other.workspaceKey, self.cwd)))) {
+          observeConcurrent(otherId)
+          other.observeConcurrent(run.id)
+        }
+      }
+    }
     function fact(event: ProcessFact) {
       if (event.type === 'closed') {
         const entry = active.get(run.id)
@@ -210,6 +257,7 @@ export async function createSubagentRuns(options: {
           entry.closed = true
         processExit = { closedAt: new Date().toISOString(), exitCode: event.exitCode ?? null, signal: event.signal ?? null }
         closedDuration = Math.max(0, performance.now() - began)
+        updateDelivery(() => {}, { processExit, completedAt: processExit.closedAt, durationMs: closedDuration, lastObservedAt: processExit.closedAt, progress: { phase: 'collecting' } })
         return
       }
       if (recordingError)
@@ -415,17 +463,27 @@ export async function createSubagentRuns(options: {
       let output = ''
       let closed = false
       try {
-        const outcome = await (options.execute ?? runSubagentProcess)(
-          snapshot,
-          combined,
-          fact,
-          { ...options, ...context },
-        )
+        if (delivery) {
+          const before = await captureGitSnapshot(snapshot.configurationSnapshot.cwd, combined)
+          updateDelivery((value) => {
+            value.before = before
+          })
+          active.get(run.id)!.workspaceKey = before.state === 'recorded' ? before.root : snapshot.configurationSnapshot.cwd
+          connectWorkspace()
+        }
+        const outcome = combined.aborted
+          ? { output: '', cancelled: true, closed: false }
+          : await (options.execute ?? runSubagentProcess)(
+              snapshot,
+              combined,
+              fact,
+              { ...options, ...context },
+            )
         output = outcome.output
         error = outcome.error
         closed = outcome.closed
         status
-          = recordingError || closing
+          = interruptedByRecording || closing
             ? 'interrupted'
             : outcome.cancelled
               ? 'cancelled'
@@ -442,6 +500,12 @@ export async function createSubagentRuns(options: {
               ? 'cancelled'
               : 'failed'
       }
+      if (delivery) {
+        const after = processExit && !recordingError
+          ? await captureGitSnapshot(snapshot.configurationSnapshot.cwd, controller.signal)
+          : { state: 'not-captured' as const, reason: '未可靠观察到进程关闭或记录已失效。' }
+        delivery = { ...delivery, revision: delivery.revision + 1, after }
+      }
       const next: RunDetail = {
         ...run,
         status,
@@ -455,6 +519,7 @@ export async function createSubagentRuns(options: {
           ? { interruptedAt: new Date().toISOString() }
           : {}),
         ...(recordingError ? { recordingError } : {}),
+        ...(delivery ? { deliveryRevision: delivery.revision } : {}),
       }
       const unfinished = [...runningTools.values()].map(tool => ({
         ...tool,
@@ -463,7 +528,7 @@ export async function createSubagentRuns(options: {
         updatedRevision: next.revision,
       }))
       try {
-        store.save(next, unfinished)
+        store.save(next, unfinished, undefined, delivery)
         publish({
           type: 'run_updated',
           projectPath,
@@ -492,7 +557,8 @@ export async function createSubagentRuns(options: {
     }
     // Publish only after registering cancellation, including for immediate listeners.
     const done = Promise.resolve().then(perform)
-    active.set(run.id, { projectPath, controller, done, closed: false })
+    active.set(run.id, { projectPath, controller, done, closed: false, cwd: snapshot.configurationSnapshot.cwd, observeConcurrent })
+    connectWorkspace()
     publish({ type: 'run_updated', projectPath, run: summarize(run) })
     try {
       return await done

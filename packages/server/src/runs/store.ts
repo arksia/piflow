@@ -527,11 +527,22 @@ export async function openRunStore(dataDir: string) {
         const run = JSON.parse(String(row.metadata)) as RunDetail
         run.status = 'interrupted'
         run.interruptedAt = new Date().toISOString()
-        run.completedAt = undefined
+        run.completedAt = run.processExit?.closedAt
         run.progress = undefined
         run.revision++
-        run.error
-          = '服务重启，执行观察已中断；请检查工作区后再决定是否重新委派。'
+        run.error = run.processExit
+          ? '进程已确认关闭，但服务重启中断了交付整理；请检查已保存的执行证据。'
+          : '服务重启，执行观察已中断；请检查工作区后再决定是否重新委派。'
+        const record = delivery(run.projectPath, run.id)
+        if (record) {
+          if (record.before.state === 'pending')
+            record.before = { state: 'not-captured', reason: '服务重启中断采集。' }
+          if (record.after.state === 'pending')
+            record.after = { state: 'not-captured', reason: '服务重启中断采集。' }
+          record.revision++
+          run.deliveryRevision = record.revision
+          saveDelivery(record)
+        }
         const changed = toolsAll(run.id, 'running').map(tool => ({
           ...tool,
           status: 'interrupted' as const,
