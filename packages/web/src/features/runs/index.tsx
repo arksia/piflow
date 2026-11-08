@@ -1,10 +1,7 @@
 import type {
   RunDetail,
-  RunOutputChunk,
   RunSummary,
-  RunToolDetail,
   RunToolsPage,
-  RunToolSummary,
 } from '@piflow/protocol'
 import type { RunFilter } from './store'
 import {
@@ -18,7 +15,8 @@ import Dialog from '../../components/Dialog'
 import { openSession } from '../../session/actions'
 import { api, post } from '../../session/api'
 import { requestToolFocus } from '../../session/store'
-import { mergeOutput } from './cache'
+import RunDeliveryView from './delivery'
+import RunOutput from './output'
 import {
   acceptRunDetail,
   acceptTools,
@@ -30,6 +28,7 @@ import {
 import styles from './styles.module.css'
 import { formatDuration, runOrder } from './time'
 import RunTimeline from './timeline'
+import ToolStep from './tool-step'
 import { useRunProject } from './use-runs'
 
 function time(value: string | number) {
@@ -324,24 +323,23 @@ function RunInspector({
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
-  const [output, setOutput] = useState<RunOutputChunk | null>(null)
-  const outputRef = useRef<RunOutputChunk | null>(null)
-  const outputRequestRef = useRef({ busy: false, pending: false })
+  const [tab, setTab] = useState<'delivery' | 'steps' | 'output'>(() => run.deliveryKind === 'code' ? 'delivery' : 'steps')
+  const tabs = run.deliveryKind === 'code' ? ['delivery', 'steps', 'output'] as const : ['steps', 'output'] as const
   const [toolId, setToolId] = useState<string | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [loadingTools, setLoadingTools] = useState(false)
   const cursorRef = useRef<string | null>(null)
   const cursorsRef = useRef<(string | undefined)[]>([undefined])
-  const toolsRequestRef = useRef(0)
+  const toolsRequestRef = useRef({ generation: 0 })
   const currentRef = useRef(true)
   const [retry, setRetry] = useState(0)
   const suffix = `/${encodeURIComponent(run.id)}`
   useEffect(() => {
     currentRef.current = true
-    const requests = toolsRequestRef
+    const requests = toolsRequestRef.current
     return () => {
       currentRef.current = false
-      requests.current++
+      requests.generation++
     }
   }, [])
   useEffect(() => {
@@ -349,7 +347,8 @@ function RunInspector({
     void api<RunDetail>(buildRunsPath(run.projectPath, suffix))
       .then((value) => {
         if (!cancelled) {
-          setDetail(value)
+          setDetail(current => current && current.revision > value.revision ? current : value)
+          setError(null)
           acceptRunDetail(value)
         }
       })
@@ -366,11 +365,12 @@ function RunInspector({
     run.status,
     run.toolCount,
     run.failedToolCount,
+    run.completedAt,
     connectionVersion,
     retry,
   ])
   const loadTools = useCallback(async (more: boolean) => {
-    const request = ++toolsRequestRef.current
+    const request = ++toolsRequestRef.current.generation
     setLoadingTools(true)
     try {
       const queryCursors = more && cursorRef.current ? [cursorRef.current] : cursorsRef.current
@@ -381,8 +381,9 @@ function RunInspector({
           ),
         ),
       )
-      if (!currentRef.current || request !== toolsRequestRef.current)
+      if (!currentRef.current || request !== toolsRequestRef.current.generation)
         return
+      setError(null)
       acceptTools(
         run.projectPath,
         run.id,
@@ -394,51 +395,23 @@ function RunInspector({
       setCursor(cursorRef.current)
     }
     catch (reason) {
-      if (currentRef.current && request === toolsRequestRef.current)
+      if (currentRef.current && request === toolsRequestRef.current.generation)
         setError(String(reason))
     }
     finally {
-      if (currentRef.current && request === toolsRequestRef.current)
+      if (currentRef.current && request === toolsRequestRef.current.generation)
         setLoadingTools(false)
     }
   }, [run.projectPath, run.id, suffix])
   useEffect(() => {
-    void loadTools(false)
-  }, [loadTools, connectionVersion, retry])
-  useEffect(() => {
-    const request = outputRequestRef.current
-    request.pending = true
-    if (request.busy)
+    if (tab !== 'steps')
       return
-    request.busy = true
-    async function readOutput() {
-      try {
-        while (currentRef.current && request.pending) {
-          request.pending = false
-          const previous = outputRef.current
-          const value = await api<RunOutputChunk>(
-            buildRunsPath(run.projectPath, `${suffix}/output`, {
-              version: previous?.version,
-              after: previous?.endOffset,
-            }),
-          )
-          if (!currentRef.current)
-            return
-          const merged = mergeOutput(outputRef.current, value)
-          outputRef.current = merged
-          setOutput(merged)
-        }
-      }
-      catch (reason) {
-        if (currentRef.current)
-          setError(String(reason))
-      }
-      finally {
-        request.busy = false
-      }
+    const request = toolsRequestRef.current
+    void loadTools(false)
+    return () => {
+      request.generation++
     }
-    void readOutput()
-  }, [run.projectPath, suffix, run.outputRevision, connectionVersion, retry])
+  }, [tab, loadTools, connectionVersion, retry])
   const tools = Object.values(project.tools[run.id] ?? {}).sort(
     (a, b) => a.sequence - b.sequence,
   )
@@ -463,7 +436,7 @@ function RunInspector({
       <header className={styles.detailHeader}>
         <strong>{run.roleName}</strong>
         <span className={styles[run.status]}>
-          {RUN_STATUS_LABELS[run.status]}
+          {run.progress?.phase === 'collecting' ? '整理交付证据' : RUN_STATUS_LABELS[run.status]}
         </span>
         <button
           type="button"
@@ -477,14 +450,14 @@ function RunInspector({
         <button type="button" className={styles.action} onClick={onDismiss} aria-label="收起运行详情"><X size={14} /></button>
       </header>
       <p className={styles.task}>{detail?.task ?? run.taskPreview}</p>
-      {run.status === 'running' && run.progress ? <p className={styles.muted}>{run.progress.phase === 'tool' ? `正在执行 ${run.progress.toolName ?? '工具'}` : run.progress.phase === 'thinking' ? '正在思考' : '正在生成回复'}</p> : null}
+      {run.status === 'running' && run.progress ? <p className={styles.muted}>{run.progress.phase === 'tool' ? `正在执行 ${run.progress.toolName ?? '工具'}` : run.progress.phase === 'thinking' ? '正在思考' : run.progress.phase === 'collecting' ? '进程已结束，正在整理交付证据' : '正在生成回复'}</p> : null}
       <p className={styles.muted}>
         {run.id}
         <br />
         {time(run.createdAt)}
         {' '}
         ·
-        {formatDuration(run.status === 'running' ? Math.max(0, now - Date.parse(run.createdAt)) : run.durationMs)}
+        {formatDuration(run.status === 'running' && !run.completedAt ? Math.max(0, now - Date.parse(run.createdAt)) : run.durationMs)}
         {run.interruptedAt
           ? ` · ${time(run.interruptedAt)} 发现中断，最后观察于 ${time(run.lastObservedAt)}`
           : ''}
@@ -504,7 +477,7 @@ function RunInspector({
             </p>
           )
         : null}
-      {run.status === 'running'
+      {run.status === 'running' && !run.completedAt
         ? (
             <button
               type="button"
@@ -545,53 +518,84 @@ function RunInspector({
           {message}
         </p>
       ))}
-      <h3>
-        工具步骤
-        <small>{run.toolCount}</small>
-      </h3>
-      {detail?.historyAvailability === 'legacy'
-        ? (
-            <p className={styles.muted}>旧版本未保存工具历史。</p>
-          )
-        : !tools.length
-            ? (
-                <p className={styles.muted}>
-                  {loadingTools ? '正在加载…' : '尚无工具步骤。'}
-                </p>
-              )
-            : null}
-      {tools.map(tool => (
-        <ToolStep
-          key={tool.toolCallId}
-          tool={tool}
-          projectPath={run.projectPath}
-          runId={run.id}
-          open={toolId === tool.toolCallId}
-          onToggle={() =>
-            setToolId(toolId === tool.toolCallId ? null : tool.toolCallId)}
-          connectionVersion={connectionVersion + retry}
-          now={now}
-        />
-      ))}
-      {cursor
-        ? (
-            <button
-              className={styles.more}
-              type="button"
-              disabled={loadingTools}
-              onClick={() => void loadTools(true)}
-            >
-              {loadingTools ? '加载中…' : '加载后续步骤'}
-            </button>
-          )
+      <div className={styles.detailTabs} role="tablist" aria-label="运行详情视图">
+        {tabs.map((view, index) => (
+          <button
+            type="button"
+            role="tab"
+            key={view}
+            id={`${id}-tab-${view}`}
+            aria-selected={tab === view}
+            aria-controls={`${id}-view-${view}`}
+            tabIndex={tab === view ? 0 : -1}
+            onClick={() => setTab(view)}
+            onKeyDown={(event) => {
+              const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
+              if (next !== null) {
+                event.preventDefault()
+                setTab(tabs[next]!)
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus()
+              }
+            }}
+          >
+            {{ delivery: '交付', steps: '步骤', output: '输出' }[view]}
+          </button>
+        ))}
+      </div>
+      {run.deliveryKind === 'code'
+        ? <section id={`${id}-view-delivery`} role="tabpanel" tabIndex={0} aria-labelledby={`${id}-tab-delivery`} hidden={tab !== 'delivery'}>{tab === 'delivery' ? <RunDeliveryView key={run.id} run={run} connectionVersion={connectionVersion} now={now} /> : null}</section>
         : null}
-      <h3>执行输出</h3>
-      {output?.truncated
-        ? (
-            <p className={styles.warning}>输出较长，仅保留最近 160000 字符。</p>
-          )
-        : null}
-      <pre className={styles.output}>{output?.text || '暂无文本输出。'}</pre>
+      <section id={`${id}-view-steps`} role="tabpanel" tabIndex={0} aria-labelledby={`${id}-tab-steps`} hidden={tab !== 'steps'}>
+        {tab === 'steps'
+          ? (
+              <>
+                <h3>
+                  工具步骤
+                  <small>{run.toolCount}</small>
+                </h3>
+                {detail?.historyAvailability === 'legacy'
+                  ? (
+                      <p className={styles.muted}>旧版本未保存工具历史。</p>
+                    )
+                  : !tools.length
+                      ? (
+                          <p className={styles.muted}>
+                            {loadingTools ? '正在加载…' : '尚无工具步骤。'}
+                          </p>
+                        )
+                      : null}
+                {tools.map(tool => (
+                  <ToolStep
+                    key={tool.toolCallId}
+                    tool={tool}
+                    projectPath={run.projectPath}
+                    runId={run.id}
+                    open={toolId === tool.toolCallId}
+                    onToggle={() =>
+                      setToolId(toolId === tool.toolCallId ? null : tool.toolCallId)}
+                    connectionVersion={connectionVersion + retry}
+                    now={now}
+                  />
+                ))}
+                {cursor
+                  ? (
+                      <button
+                        className={styles.more}
+                        type="button"
+                        disabled={loadingTools}
+                        onClick={() => void loadTools(true)}
+                      >
+                        {loadingTools ? '加载中…' : '加载后续步骤'}
+                      </button>
+                    )
+                  : null}
+              </>
+            )
+          : null}
+      </section>
+      <section id={`${id}-view-output`} role="tabpanel" tabIndex={0} aria-labelledby={`${id}-tab-output`} hidden={tab !== 'output'}>
+        {tab === 'output' ? <RunOutput run={run} connectionVersion={connectionVersion + retry} /> : null}
+      </section>
       {detail
         ? (
             <details className={styles.configuration}>
@@ -601,136 +605,5 @@ function RunInspector({
           )
         : null}
     </aside>
-  )
-}
-function ToolStep({
-  tool,
-  projectPath,
-  runId,
-  open,
-  onToggle,
-  connectionVersion,
-  now,
-}: {
-  tool: RunToolSummary
-  projectPath: string
-  runId: string
-  open: boolean
-  onToggle: () => void
-  connectionVersion: number
-  now: number
-}) {
-  const [detail, setDetail] = useState<RunToolDetail | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [retry, setRetry] = useState(0)
-  useEffect(() => {
-    if (!open)
-      return
-    let cancelled = false
-    void api<RunToolDetail>(
-      buildRunsPath(
-        projectPath,
-        `/${encodeURIComponent(runId)}/tools/${encodeURIComponent(tool.toolCallId)}`,
-      ),
-    )
-      .then((value) => {
-        if (!cancelled)
-          setDetail(value)
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled)
-          setError(String(reason))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [
-    projectPath,
-    runId,
-    tool.toolCallId,
-    tool.updatedRevision,
-    open,
-    connectionVersion,
-    retry,
-  ])
-  const label
-    = tool.status === 'running'
-      ? '执行中'
-      : tool.status === 'failed'
-        ? '失败'
-        : tool.status === 'interrupted'
-          ? '未确认结束'
-          : '完成'
-  return (
-    <section className={styles.step}>
-      <button
-        className={styles.stepHead}
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
-        <span>
-          {tool.sequence}
-          .
-          {tool.toolName}
-        </span>
-        <span className={styles[tool.status]}>{label}</span>
-        <small>{formatDuration(tool.status === 'running' && tool.startedAt ? Math.max(0, now - Date.parse(tool.startedAt)) : tool.durationMs)}</small>
-      </button>
-      {open
-        ? (
-            <div className={styles.stepBody}>
-              {tool.incomplete
-                ? (
-                    <p className={styles.warning}>
-                      步骤记录不完整，缺少开始或结束事实。
-                    </p>
-                  )
-                : null}
-              {tool.evidenceIncomplete
-                ? (
-                    <p className={styles.warning}>部分证据预览不可用。</p>
-                  )
-                : null}
-              {error
-                ? (
-                    <p className={styles.error}>
-                      {error}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setError(null)
-                          setRetry(value => value + 1)
-                        }}
-                      >
-                        重试
-                      </button>
-                    </p>
-                  )
-                : detail
-                  ? (
-                      <>
-                        <h4>
-                          输入
-                          {detail.inputTruncated ? ' · 已截断' : ''}
-                        </h4>
-                        <pre>{detail.inputPreview || '无输入预览'}</pre>
-                        <h4>
-                          输出
-                          {detail.outputTruncated ? ' · 已截断' : ''}
-                        </h4>
-                        <pre>
-                          {detail.outputPreview
-                            || (tool.status === 'running' ? '等待结束记录…' : '无文本输出')}
-                        </pre>
-                      </>
-                    )
-                  : (
-                      <p>正在读取…</p>
-                    )}
-            </div>
-          )
-        : null}
-    </section>
   )
 }

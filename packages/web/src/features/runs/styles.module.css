@@ -11,7 +11,7 @@
 }
 
 .has-detail {
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
 }
 
 .list {
@@ -500,6 +500,7 @@
 }
 
 .step-head small {
+  flex: none;
   margin-left: auto;
 }
 
@@ -668,4 +669,45 @@
     padding-right: 14px;
     padding-left: 14px;
   }
+}
+
+.detail-tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid var(--c-line);
+  margin-top: 20px;
+}
+
+.detail-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 9px 1px;
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.detail-tabs button[aria-selected='true'] {
+  border-bottom-color: var(--c-ink);
+  color: var(--c-ink);
+}
+
+.detail-tabs button:focus-visible {
+  outline: 2px solid var(--c-signal);
+  outline-offset: 2px;
+}
+
+.step-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-status {
+  flex: none;
+  font-size: 10px;
 }

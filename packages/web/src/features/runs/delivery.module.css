@@ -1,0 +1,144 @@
+.delivery {
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.delivery-section + .delivery-section {
+  border-top: 1px solid var(--c-line);
+  padding-top: 4px;
+  margin-top: 24px;
+}
+
+.declaration-outcome {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 2px 7px;
+  background: var(--c-press);
+  color: var(--c-body);
+  font-size: 10px;
+}
+
+.delivery-summary,
+.delivery-items {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.delivery-summary {
+  margin: 10px 0;
+  color: var(--c-ink);
+}
+
+.delivery-items {
+  padding-left: 18px;
+  color: var(--c-body);
+}
+
+.file-states {
+  padding: 0;
+  list-style: none;
+}
+
+.file-states li {
+  display: flex;
+  gap: 10px;
+  margin: 7px 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.file-status {
+  flex: none;
+  color: var(--c-muted);
+}
+
+.file-states code {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.delivery-items li + li {
+  margin-top: 6px;
+}
+
+.delivery-items code,
+.workspace-root {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.unresolved {
+  border-left: 2px solid var(--c-line-strong);
+  padding-left: 10px;
+  margin: 16px 0;
+  color: var(--c-body);
+}
+
+.unresolved strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.unresolved ul {
+  margin-bottom: 0;
+}
+
+.command-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin: 12px 0;
+  color: var(--c-muted);
+  font-size: 10px;
+}
+
+.check-claim > span {
+  margin-left: 10px;
+  color: var(--c-muted);
+  font-size: 10px;
+}
+
+.evidence-disclosure {
+  border-top: 1px solid var(--c-line);
+  margin-top: 10px;
+}
+
+.evidence-disclosure > summary {
+  padding: 10px 0;
+  color: var(--c-body);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.evidence-disclosure > summary > span {
+  margin-left: 12px;
+  color: var(--c-muted);
+  font-size: 10px;
+}
+
+.evidence-disclosure h4 {
+  color: var(--c-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.process-exit {
+  margin-top: 16px;
+  color: var(--c-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.check-claim {
+  border-bottom: 1px solid var(--c-line);
+  padding: 10px 0;
+  font-size: 11px;
+}
+
+.check-claim > small {
+  display: block;
+  color: var(--c-muted);
+  overflow-wrap: anywhere;
+}
