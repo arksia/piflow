@@ -477,6 +477,7 @@
   border-left: 1px solid var(--c-line);
   padding: 16px;
   overflow: auto;
+  overflow-anchor: none;
   overscroll-behavior: contain;
 }
 
@@ -672,10 +673,14 @@
 }
 
 .detail-tabs {
+  position: sticky;
+  z-index: 2;
+  top: 0;
   display: flex;
   gap: 20px;
   border-bottom: 1px solid var(--c-line);
   margin-top: 20px;
+  background: var(--c-raise);
 }
 
 .detail-tabs button {
@@ -710,4 +715,17 @@
 .step-status {
   flex: none;
   font-size: 10px;
+}
+
+.expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.expanded .list {
+  display: none;
+}
+
+.expanded .inspector {
+  max-height: 70vh;
+  border-left: 0;
 }

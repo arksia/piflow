@@ -85,6 +85,9 @@ export default function ToolCallCard({ call, state, plain = false }: Props) {
                 {status === 'error' ? <span className="pf-shrink-0 pf-ml-auto pf-text-danger">失败</span> : null}
               </div>
             )}
+        {details?.deliveryKind === 'code' && typeof details.runId === 'string' && typeof details.projectPath === 'string'
+          ? <button type="button" className={styles.action} onClick={() => window.dispatchEvent(new CustomEvent('piflow:review-delivery', { detail: { projectPath: details.projectPath, runId: details.runId } }))}>审查交付</button>
+          : null}
         {path
           ? (
               <button type="button" className={`${styles.action} pf-shrink-0 pf-p-[0_4px] pf-rounded-control`} onClick={() => void navigator.clipboard.writeText(path)}>

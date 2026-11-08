@@ -2,6 +2,7 @@ import type { GitWorkspaceSnapshot, RunSummary } from '@piflow/protocol'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { createDeliveryReader } from './delivery-reader'
 import deliveryStyles from './delivery.module.css'
+import DeliveryReview from './review'
 import baseStyles from './styles.module.css'
 import ToolStep from './tool-step'
 
@@ -12,7 +13,7 @@ function distinct<T>(items: T[]) {
 }
 const outcomeLabels = { completed: '声明完成', partial: '部分完成', blocked: '遇到阻塞' }
 const claimLabels = { 'passed': '声明通过', 'failed': '声明失败', 'not-run': '声明未执行', 'unknown': '尚不确定' }
-export default function RunDeliveryView({ run, connectionVersion, now }: { run: RunSummary, connectionVersion: number, now: number }) {
+export default function RunDeliveryView({ run, connectionVersion, now, expanded, onExpand, onDraft, onEvidence }: { run: RunSummary, connectionVersion: number, now: number, expanded: boolean, onExpand: () => void, onDraft: (text: string) => Promise<void>, onEvidence: (runId: string, toolCallId: string) => void }) {
   const [reader] = useState(() => createDeliveryReader(run.projectPath, run.id))
   const state = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
   const [openTool, setOpenTool] = useState<string | null>(null)
@@ -40,73 +41,78 @@ export default function RunDeliveryView({ run, connectionVersion, now }: { run: 
       {!state.detail && !state.error ? <p className={styles.muted}>正在读取交付证据…</p> : null}
       {state.detail && state.detail.availability !== 'recorded' ? <p className={styles.muted}>此运行未采集 Code 交付证据。</p> : null}
       <section className={styles.deliverySection}>
-        <h3>
-          交付说明
-          <small>Agent 声明</small>
-        </h3>
         {report
           ? (
               <>
-                <span className={styles.declarationOutcome}>{outcomeLabels[report.value.outcome]}</span>
-                <p className={styles.deliverySummary}>{report.value.summary}</p>
-                {report.value.changes.length
-                  ? <ul className={styles.deliveryItems}>{distinct(report.value.changes).map(([key, change]) => <li key={key}>{change}</li>)}</ul>
-                  : null}
-                {report.value.unresolved.length
-                  ? (
-                      <div className={styles.unresolved}>
-                        <strong>未解决事项</strong>
-                        <ul className={styles.deliveryItems}>{distinct(report.value.unresolved).map(([key, issue]) => <li key={key}>{issue}</li>)}</ul>
-                      </div>
-                    )
-                  : <p className={styles.muted}>Agent 未列出未解决事项。</p>}
-                {report.value.artifacts.length
-                  ? (
-                      <details className={styles.evidenceDisclosure}>
-                        <summary>
-                          声明的产物 ·
-                          {report.value.artifacts.length}
-                        </summary>
-                        <p className={styles.muted}>路径由 Agent 提供，尚未核验文件。</p>
-                        <ul className={styles.deliveryItems}>
-                          {distinct(report.value.artifacts).map(([key, artifact]) => (
-                            <li key={key}>
-                              <code>{artifact.path}</code>
-                              <br />
-                              {artifact.description}
-                            </li>
+                <p className={styles.deliverySummary}>
+                  <small className={styles.muted}>Agent 声明 · </small>
+                  {report.value.summary}
+                </p>
+                <details className={styles.evidenceDisclosure}>
+                  <summary>Agent 交付说明与产物</summary>
+                  <span className={styles.declarationOutcome}>{outcomeLabels[report.value.outcome]}</span>
+
+                  {report.value.changes.length
+                    ? <ul className={styles.deliveryItems}>{distinct(report.value.changes).map(([key, change]) => <li key={key}>{change}</li>)}</ul>
+                    : null}
+                  {report.value.unresolved.length
+                    ? (
+                        <div className={styles.unresolved}>
+                          <strong>未解决事项</strong>
+                          <ul className={styles.deliveryItems}>{distinct(report.value.unresolved).map(([key, issue]) => <li key={key}>{issue}</li>)}</ul>
+                        </div>
+                      )
+                    : <p className={styles.muted}>Agent 未列出未解决事项。</p>}
+                  {report.value.artifacts.length
+                    ? (
+                        <details className={styles.evidenceDisclosure}>
+                          <summary>
+                            声明的产物 ·
+                            {report.value.artifacts.length}
+                          </summary>
+                          <p className={styles.muted}>路径由 Agent 提供，尚未核验文件。</p>
+                          <ul className={styles.deliveryItems}>
+                            {distinct(report.value.artifacts).map(([key, artifact]) => (
+                              <li key={key}>
+                                <code>{artifact.path}</code>
+                                <br />
+                                {artifact.description}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )
+                    : null}
+                  {report.subsequentToolActivity ? <p className={styles.warning}>交付声明提交后仍有工具活动，请结合后续记录判断。</p> : null}
+                  {report.value.checks.length
+                    ? (
+                        <details className={styles.evidenceDisclosure}>
+                          <summary>检查说明 · Agent 声明</summary>
+                          {distinct(report.value.checks).map(([key, check]) => (
+                            <div className={styles.checkClaim} key={key}>
+                              <strong>{check.name}</strong>
+                              <span>{claimLabels[check.claimedStatus]}</span>
+                              {check.note ? <p>{check.note}</p> : null}
+                              {!check.toolCallIds.length
+                                ? <small>未关联执行证据</small>
+                                : [...new Set(check.toolCallIds)].map((id) => {
+                                    const reference = state.detail?.checkReferences.find(reference => reference.toolCallId === id)
+                                    return <small key={id}>{reference?.linked ? `${id} · ${reference.exitCode === null ? '退出码未知' : `退出 ${reference.exitCode}`}` : `${id} · 未关联本次 bash 证据`}</small>
+                                  })}
+                            </div>
                           ))}
-                        </ul>
-                      </details>
-                    )
-                  : null}
-                {report.subsequentToolActivity ? <p className={styles.warning}>交付声明提交后仍有工具活动，请结合后续记录判断。</p> : null}
-                {report.value.checks.length
-                  ? (
-                      <details className={styles.evidenceDisclosure}>
-                        <summary>检查说明 · Agent 声明</summary>
-                        {distinct(report.value.checks).map(([key, check]) => (
-                          <div className={styles.checkClaim} key={key}>
-                            <strong>{check.name}</strong>
-                            <span>{claimLabels[check.claimedStatus]}</span>
-                            {check.note ? <p>{check.note}</p> : null}
-                            {!check.toolCallIds.length
-                              ? <small>未关联执行证据</small>
-                              : [...new Set(check.toolCallIds)].map((id) => {
-                                  const reference = state.detail?.checkReferences.find(reference => reference.toolCallId === id)
-                                  return <small key={id}>{reference?.linked ? `${id} · ${reference.exitCode === null ? '退出码未知' : `退出 ${reference.exitCode}`}` : `${id} · 未关联本次 bash 证据`}</small>
-                                })}
-                          </div>
-                        ))}
-                      </details>
-                    )
-                  : null}
+                        </details>
+                      )
+                    : null}
+                </details>
               </>
             )
           : state.detail ? <p className={styles.muted}>{run.status === 'running' ? '尚未提交交付说明。' : '未提交结构化交付说明；执行完成不代表交付已核验。'}</p> : null}
         {record?.lastDeclarationError ? <p className={styles.warning}>{record.lastDeclarationError}</p> : null}
       </section>
-      <section className={styles.deliverySection}>
+      <DeliveryReview run={run} connectionVersion={connectionVersion} expanded={expanded} onExpand={onExpand} onDraft={onDraft} onEvidence={onEvidence} />
+      <details className={styles.deliverySection}>
+        <summary>执行证据与检查声明</summary>
         <h3>
           实际执行记录
           <small>宿主记录</small>
@@ -166,8 +172,9 @@ export default function RunDeliveryView({ run, connectionVersion, now }: { run: 
               </p>
             )
           : null}
-      </section>
-      <section className={styles.deliverySection}>
+      </details>
+      <details className={styles.deliverySection}>
+        <summary>Git 来源与采样范围</summary>
         <h3>
           工作区观察
           <small>宿主 Git 采样</small>
@@ -193,7 +200,7 @@ export default function RunDeliveryView({ run, connectionVersion, now }: { run: 
               </>
             )
           : null}
-      </section>
+      </details>
     </div>
   )
 }

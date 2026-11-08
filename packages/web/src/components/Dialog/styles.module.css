@@ -24,6 +24,7 @@
 }
 
 .surface {
+  overflow: clip;
   text-align: left;
 }
 

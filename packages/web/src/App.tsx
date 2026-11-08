@@ -8,11 +8,22 @@ import { readFlowProject, saveFlowProject } from './features/flow/workspace'
 import { setSidebarOpen, setWorkspaceView as setStoreWorkspaceView } from './session/store'
 import { useStore } from './session/use-store'
 
+const LazyRunPanel = lazy(() => import('./features/runs'))
 const LazyFlowView = lazy(() => import('./features/flow'))
 type Theme = 'dark' | 'light'
 
 export default function App() {
   const store = useStore()
+  const [delivery, setDelivery] = useState<{ projectPath: string, runId: string } | null>(null)
+  useEffect(() => {
+    function open(event: Event) {
+      const value = (event as CustomEvent<{ projectPath: string, runId: string }>).detail
+      if (value && typeof value.projectPath === 'string' && typeof value.runId === 'string')
+        setDelivery(value)
+    }
+    window.addEventListener('piflow:review-delivery', open)
+    return () => window.removeEventListener('piflow:review-delivery', open)
+  }, [])
   const [flowProject, setFlowProject] = useState(readFlowProject)
   const [flowFocusRequest, setFlowFocusRequest] = useState<{ id: string, request: number } | null>(null)
   const [selectedFlowNodeId, setSelectedFlowNodeId] = useState<string | null>(null)
@@ -117,6 +128,7 @@ export default function App() {
             )
           : null}
       </main>
+      {delivery ? <Suspense fallback={null}><LazyRunPanel key={`${delivery.projectPath}:${delivery.runId}`} projectPath={delivery.projectPath} initialRunId={delivery.runId} onClose={() => setDelivery(null)} onShowChat={onShowChat} /></Suspense> : null}
       <ExtensionDialog />
     </div>
   )

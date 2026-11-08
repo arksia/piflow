@@ -1,6 +1,7 @@
 import type {
   RunDetail,
   RunSummary,
+  RunToolDetail,
   RunToolsPage,
 } from '@piflow/protocol'
 import type { RunFilter } from './store'
@@ -10,10 +11,11 @@ import {
   RUN_STATUS_LABELS,
 } from '@piflow/protocol'
 import { ArrowUpRight, RefreshCw, SlidersHorizontal, X } from 'lucide-react'
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import Dialog from '../../components/Dialog'
 import { openSession } from '../../session/actions'
 import { api, post } from '../../session/api'
+import { readDraft, saveDraftText } from '../../session/persistence'
 import { requestToolFocus } from '../../session/store'
 import RunDeliveryView from './delivery'
 import RunOutput from './output'
@@ -41,11 +43,13 @@ function time(value: string | number) {
 export default function RunPanel({
   projectPath,
   initialFilter = {},
+  initialRunId,
   onClose,
   onShowChat,
 }: {
   projectPath: string
   initialFilter?: RunFilter
+  initialRunId?: string
   onClose: () => void
   onShowChat: () => void
 }) {
@@ -55,7 +59,8 @@ export default function RunPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const [owner, setOwner] = useState(initialFilter.orchestratorId ?? '')
   const [role, setRole] = useState(initialFilter.roleId ?? '')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialRunId ?? null)
+  const [expanded, setExpanded] = useState(Boolean(initialRunId))
   const filter: RunFilter = {
     ...(owner ? { orchestratorId: owner } : {}),
     ...(role ? { roleId: role } : {}),
@@ -78,6 +83,18 @@ export default function RunPanel({
     }
     setSelectedId(id)
   }
+  useEffect(() => {
+    if (!initialRunId)
+      return
+    let current = true
+    void api<RunDetail>(buildRunsPath(projectPath, `/${encodeURIComponent(initialRunId)}`)).then((value) => {
+      if (current)
+        acceptRunDetail(value)
+    }).catch(() => {})
+    return () => {
+      current = false
+    }
+  }, [initialRunId, projectPath])
   const key = JSON.stringify(filter)
   useEffect(() => {
     void loadRunWindow(projectPath, JSON.parse(key) as RunFilter)
@@ -259,7 +276,7 @@ export default function RunPanel({
             )
           : null}
         <div
-          className={`${styles.workspace} ${selected ? styles.hasDetail : ''}`}
+          className={`${styles.workspace} ${selected ? styles.hasDetail : ''} ${selected && expanded ? styles.expanded : ''}`}
         >
           <section className={styles.list} aria-label="运行时间线">
             {rows.length
@@ -286,6 +303,17 @@ export default function RunPanel({
                   run={selected}
                   connectionVersion={connection.version}
                   now={frozenNowRef.current}
+                  expanded={expanded}
+                  onExpand={() => setExpanded(value => !value)}
+                  onDraft={async (text) => {
+                    const session = await openSession(selected.parentSessionPath)
+                    const existing = readDraft(session.key).text
+                    const next = existing.trim() ? `${existing}\n\n${text}` : text
+                    saveDraftText(session.key, next)
+                    globalThis.window.dispatchEvent(new CustomEvent('piflow:set-editor-text', { detail: { session: session.key, text: next } }))
+                    onClose()
+                    onShowChat()
+                  }}
                   onDismiss={() => selectRun(null)}
                   onParent={async () => {
                     await openSession(selected.parentSessionPath)
@@ -311,6 +339,9 @@ function RunInspector({
   onParent,
   onDismiss,
   now,
+  expanded,
+  onExpand,
+  onDraft,
 }: {
   id: string
   run: RunSummary
@@ -318,13 +349,29 @@ function RunInspector({
   onParent: () => Promise<void>
   onDismiss: () => void
   now: number
+  expanded: boolean
+  onExpand: () => void
+  onDraft: (text: string) => Promise<void>
 }) {
   const project = runProject(run.projectPath)
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
   const [tab, setTab] = useState<'delivery' | 'steps' | 'output'>(() => run.deliveryKind === 'code' ? 'delivery' : 'steps')
+  const inspectorRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef({ delivery: 0, steps: 0, output: 0 })
+  function selectTab(next: typeof tab) {
+    scrollRef.current[tab] = inspectorRef.current?.scrollTop ?? 0
+    setTab(next)
+  }
+  useLayoutEffect(() => {
+    const inspector = inspectorRef.current
+    if (!inspector)
+      return
+    inspector.scrollTop = scrollRef.current[tab]
+  }, [tab])
   const tabs = run.deliveryKind === 'code' ? ['delivery', 'steps', 'output'] as const : ['steps', 'output'] as const
+  const [evidence, setEvidence] = useState<{ runId: string, tool: RunToolDetail } | null>(null)
   const [toolId, setToolId] = useState<string | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [loadingTools, setLoadingTools] = useState(false)
@@ -432,7 +479,7 @@ function RunInspector({
     }
   }
   return (
-    <aside id={id} className={styles.inspector} aria-label="运行详情">
+    <aside ref={inspectorRef} id={id} className={styles.inspector} aria-label="运行详情">
       <header className={styles.detailHeader}>
         <strong>{run.roleName}</strong>
         <span className={styles[run.status]}>
@@ -452,8 +499,6 @@ function RunInspector({
       <p className={styles.task}>{detail?.task ?? run.taskPreview}</p>
       {run.status === 'running' && run.progress ? <p className={styles.muted}>{run.progress.phase === 'tool' ? `正在执行 ${run.progress.toolName ?? '工具'}` : run.progress.phase === 'thinking' ? '正在思考' : run.progress.phase === 'collecting' ? '进程已结束，正在整理交付证据' : '正在生成回复'}</p> : null}
       <p className={styles.muted}>
-        {run.id}
-        <br />
         {time(run.createdAt)}
         {' '}
         ·
@@ -528,13 +573,18 @@ function RunInspector({
             aria-selected={tab === view}
             aria-controls={`${id}-view-${view}`}
             tabIndex={tab === view ? 0 : -1}
-            onClick={() => setTab(view)}
+            onMouseDown={(event) => {
+              // Focusing a sticky tab must not scroll its reading pane first.
+              event.preventDefault()
+              event.currentTarget.focus({ preventScroll: true })
+            }}
+            onClick={() => selectTab(view)}
             onKeyDown={(event) => {
               const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
               if (next !== null) {
                 event.preventDefault()
-                setTab(tabs[next]!)
-                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus()
+                selectTab(tabs[next]!)
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus({ preventScroll: true })
               }
             }}
           >
@@ -543,12 +593,48 @@ function RunInspector({
         ))}
       </div>
       {run.deliveryKind === 'code'
-        ? <section id={`${id}-view-delivery`} role="tabpanel" tabIndex={0} aria-labelledby={`${id}-tab-delivery`} hidden={tab !== 'delivery'}>{tab === 'delivery' ? <RunDeliveryView key={run.id} run={run} connectionVersion={connectionVersion} now={now} /> : null}</section>
+        ? (
+            <section id={`${id}-view-delivery`} role="tabpanel" tabIndex={0} aria-labelledby={`${id}-tab-delivery`} hidden={tab !== 'delivery'}>
+              <RunDeliveryView
+                key={run.id}
+                run={run}
+                connectionVersion={connectionVersion}
+                now={now}
+                expanded={expanded}
+                onExpand={onExpand}
+                onDraft={onDraft}
+                onEvidence={(runId, toolCallId) => {
+                  void api<RunToolDetail>(buildRunsPath(run.projectPath, `/${encodeURIComponent(runId)}/tools/${encodeURIComponent(toolCallId)}`)).then((tool) => {
+                    if (!currentRef.current)
+                      return
+                    setEvidence({ runId, tool })
+                    setToolId(toolCallId)
+                    selectTab('steps')
+                  }).catch((reason) => {
+                    if (currentRef.current)
+                      setError(String(reason))
+                  })
+                }}
+              />
+            </section>
+          )
         : null}
       <section id={`${id}-view-steps`} role="tabpanel" tabIndex={0} aria-labelledby={`${id}-tab-steps`} hidden={tab !== 'steps'}>
         {tab === 'steps'
           ? (
               <>
+                {evidence
+                  ? (
+                      <div>
+                        <p className={styles.muted}>
+                          来自审查路线 ·
+                          {evidence.runId}
+                        </p>
+                        <ToolStep tool={evidence.tool} projectPath={run.projectPath} runId={evidence.runId} open={toolId === evidence.tool.toolCallId} onToggle={() => setToolId(toolId ? null : evidence.tool.toolCallId)} connectionVersion={connectionVersion} now={now} />
+                        <button type="button" className={styles.action} onClick={() => selectTab('delivery')}>返回原审查位置</button>
+                      </div>
+                    )
+                  : null}
                 <h3>
                   工具步骤
                   <small>{run.toolCount}</small>
@@ -564,7 +650,7 @@ function RunInspector({
                           </p>
                         )
                       : null}
-                {tools.map(tool => (
+                {tools.filter(tool => !(evidence?.runId === run.id && evidence.tool.toolCallId === tool.toolCallId)).map(tool => (
                   <ToolStep
                     key={tool.toolCallId}
                     tool={tool}

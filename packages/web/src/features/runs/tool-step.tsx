@@ -67,8 +67,9 @@ export default function ToolStep({
         : tool.status === 'interrupted'
           ? '未确认结束'
           : '完成'
+  const commandExitCode = (detail?.command ?? (tool as Partial<RunToolDetail>).command)?.exitCode ?? tool.commandExitCode
   const statusClass = tool.toolName === 'bash' && tool.status !== 'running'
-    ? tool.commandExitCode == null ? styles.muted : tool.commandExitCode !== 0 ? styles.failed : styles.succeeded
+    ? commandExitCode == null ? styles.muted : commandExitCode !== 0 ? styles.failed : styles.succeeded
     : styles[tool.status]
   return (
     <section className={styles.step}>
@@ -83,7 +84,7 @@ export default function ToolStep({
           .
           {commandLabel ?? tool.toolName}
         </span>
-        <span className={`${styles.stepStatus} ${statusClass}`}>{tool.toolName === 'bash' && tool.status !== 'running' ? tool.commandExitCode == null ? '退出码未知' : `退出 ${tool.commandExitCode}` : label}</span>
+        <span className={`${styles.stepStatus} ${statusClass}`}>{tool.toolName === 'bash' && tool.status !== 'running' ? commandExitCode == null ? '退出码未知' : `退出 ${commandExitCode}` : label}</span>
         <small>{formatDuration(tool.status === 'running' && tool.startedAt ? Math.max(0, now - Date.parse(tool.startedAt)) : tool.durationMs)}</small>
       </button>
       {open
