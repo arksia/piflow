@@ -30,6 +30,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Button from '../../components/Button'
 import IconButton from '../../components/IconButton'
 import NewSessionDialog from '../../components/NewSessionDialog'
+import { configuredModel, providerBrand } from '../../components/ProviderLogo/brand'
 import Select from '../../components/Select'
 import SidebarToggle from '../../components/SidebarToggle'
 import Textarea from '../../components/Textarea'
@@ -49,6 +50,7 @@ import FlowMessageEdge from './components/FlowMessageEdge'
 import FlowNodeForm from './components/FlowNodeForm'
 import FlowSessionNode from './components/FlowSessionNode'
 import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from './edges'
+import { NODE_HEIGHT, NODE_WIDTH, nodeGeometry } from './geometry'
 import { memberPlacements } from './members'
 import { addDraftNode, configureNode } from './node-forms'
 import { routeGraphEdges } from './routes'
@@ -59,8 +61,6 @@ import '@xyflow/react/dist/style.css'
 const nodeTypes = { session: FlowSessionNode }
 const edgeTypes = { message: FlowMessageEdge }
 
-const NODE_WIDTH = 172
-const NODE_HEIGHT = 128
 const NODE_MARGIN = 32
 
 function rectsOverlap(a: { x: number, y: number, w: number, h: number }, b: { x: number, y: number, w: number, h: number }) {
@@ -726,7 +726,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     if (!document)
       return
     // eslint-disable-next-line react/set-state-in-effect -- derived user edges and live message activity
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, instance, subagentCallEdges(runs, activities, projectedNodes)))
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, subagentCallEdges(runs, activities, projectedNodes)))
   }, [document, runs, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active])
 
   async function delegateTask(event: React.FormEvent<HTMLFormElement>) {
@@ -768,29 +768,35 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   }
 
   // The store is mutable and keeps a stable identity, so derive status on every notified render.
-  const visibleNodes = projectedNodes.map(node => ({
-    ...node,
-    data: {
-      ...node.data,
-      memberSummary: node.data.orchestrationEnabled
-        ? (() => {
-            const members = (document?.memberships ?? []).filter(item => item.orchestratorId === node.id)
-            const ownedRuns = runs.filter(run => run.orchestratorId === node.id)
-            return { total: members.length, running: ownedRuns.filter(run => run.status === 'running').length, failed: ownedRuns.filter(run => run.status === 'failed' || run.status === 'interrupted').length }
-          })()
-        : undefined,
-      membersExpanded: expandedAgents.has(node.id),
-      onToggleMembers: () => toggleMembers(node.id),
-      modelName: node.data.kind === 'subagent-role' ? node.data.roleModel || '继承调用者模型' : viewForSession(store.views, node.data.sessionPath)?.model?.id,
-      status: node.data.kind === 'subagent-role' ? roleStatus(runs, node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
-      needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
-      unread: store.unreadSessions.has(node.data.sessionPath),
-      isCurrent: (node.data.agentId ?? node.id) === selectedNodeId,
-      isAnchor: connectMode?.sourceId === node.id,
-      isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
-      isDimmed: Boolean(selectedNodeId && (node.data.agentId ?? node.id) !== selectedNodeId && !selectedNeighbors?.has(node.data.agentId ?? node.id) && !(expandedAgents.has(selectedNodeId) && document?.memberships?.some(item => item.orchestratorId === selectedNodeId && item.memberId === (node.data.agentId ?? node.id)))),
-    },
-  }))
+  const visibleNodes = projectedNodes.map((node) => {
+    const model = node.data.kind === 'subagent-role'
+      ? configuredModel(node.data.roleModel, store.models)
+      : viewForSession(store.views, node.data.sessionPath)?.model ?? configuredModel(node.data.roleModel, store.models)
+    return ({
+      ...node,
+      data: {
+        ...node.data,
+        memberSummary: node.data.orchestrationEnabled
+          ? (() => {
+              const members = (document?.memberships ?? []).filter(item => item.orchestratorId === node.id)
+              const ownedRuns = runs.filter(run => run.orchestratorId === node.id)
+              return { total: members.length, running: ownedRuns.filter(run => run.status === 'running').length, failed: ownedRuns.filter(run => run.status === 'failed' || run.status === 'interrupted').length }
+            })()
+          : undefined,
+        membersExpanded: expandedAgents.has(node.id),
+        onToggleMembers: () => toggleMembers(node.id),
+        modelName: model?.id ?? (node.data.kind === 'subagent-role' ? node.data.roleModel || '继承调用者模型' : undefined),
+        provider: model?.provider,
+        brand: providerBrand(model?.provider),
+        status: node.data.kind === 'subagent-role' ? roleStatus(runs, node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
+        needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
+        unread: store.unreadSessions.has(node.data.sessionPath),
+        isAnchor: connectMode?.sourceId === node.id,
+        isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
+        isDimmed: Boolean(selectedNodeId && (node.data.agentId ?? node.id) !== selectedNodeId && !selectedNeighbors?.has(node.data.agentId ?? node.id) && !(expandedAgents.has(selectedNodeId) && document?.memberships?.some(item => item.orchestratorId === selectedNodeId && item.memberId === (node.data.agentId ?? node.id)))),
+      },
+    })
+  })
   const attentionItems = flowAttentionItems(document?.nodes ?? [], store.statuses)
 
   function reviewAttention() {
@@ -928,7 +934,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                   deleteKeyCode={['Backspace', 'Delete']}
                   colorMode="dark"
                 >
-                  <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#292929" />
+                  <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--flow-grid)" />
                   <Controls showInteractive={false} />
                   <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
                 </ReactFlow>
@@ -1123,21 +1129,10 @@ function toCanvasEdges(
   reducedMotion: boolean,
   selectedNodeId?: string,
   nodes: FlowCanvasNode[] = [],
-  instance: ReactFlowInstance<FlowCanvasNode, Edge> | null = null,
   calls: { id: string, source: string, target: string }[] = [],
 ): Edge[] {
   const allEdges = [...edges, ...calls]
-  const routes = routeGraphEdges(allEdges, nodes.map((node) => {
-    const internal = instance?.getInternalNode(node.id)
-    const handle = internal?.internals.handleBounds?.source?.[0]
-    const position = node.position
-    return {
-      id: node.id,
-      x: position.x + (handle ? handle.x + handle.width / 2 : (node.measured?.width ?? NODE_WIDTH) / 2),
-      y: position.y + (handle ? handle.y + handle.height / 2 : (node.measured?.height ?? NODE_HEIGHT) / 2),
-      size: 51,
-    }
-  }))
+  const routes = routeGraphEdges(allEdges, nodes.map(nodeGeometry))
   return allEdges.map((edge) => {
     const transient = calls.some(call => call.id === edge.id)
     const selected = selectedEdgeIds.has(edge.id)

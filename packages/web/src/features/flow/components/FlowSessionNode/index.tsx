@@ -1,6 +1,11 @@
 import type { Node, NodeProps } from '@xyflow/react'
+import type { CSSProperties } from 'react'
+import type { ProviderBrand } from '../../../../components/ProviderLogo/brand'
 import { Handle, Position } from '@xyflow/react'
-import { Bot, ChevronDown, ChevronUp, Network } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleAlert, Clock3, GitBranch, Link2, Network } from 'lucide-react'
+import ProviderLogo from '../../../../components/ProviderLogo'
+import { brandStyle } from '../../../../components/ProviderLogo/brand'
+import { iconSize, NODE_HEIGHT, NODE_PADDING, NODE_WIDTH } from '../../geometry'
 import styles from './styles.module.css'
 
 export type FlowSessionNodeData = Record<string, unknown> & {
@@ -15,19 +20,22 @@ export type FlowSessionNodeData = Record<string, unknown> & {
   sessionPath: string
   name: string
   modelName?: string
+  provider?: string
+  brand?: ProviderBrand
   orchestrationEnabled?: boolean
   goal: string
   brief?: string
   status: 'idle' | 'running' | 'failed'
   needsInput: boolean
   unread?: boolean
-  isCurrent?: boolean
   isAnchor?: boolean
   isDimmed?: boolean
   isStreaming?: boolean
+  summaryOpen?: boolean
+  onHover?: (id: string | null) => void
+  onActivate?: (displayId: string) => void
   onOpen: () => void
 }
-
 export type FlowCanvasNode = Node<FlowSessionNodeData, 'session'>
 
 function nodeAttention(data: FlowSessionNodeData) {
@@ -38,53 +46,61 @@ function nodeAttention(data: FlowSessionNodeData) {
   if (data.status === 'running')
     return { kind: 'running' as const, label: '运行中' }
   if (data.unread)
-    return { kind: 'unread' as const, label: '已完成' }
+    return { kind: 'unread' as const, label: '未读完成' }
   return null
 }
 
-export default function FlowSessionNode({ data, selected }: NodeProps<FlowCanvasNode>) {
+export default function FlowSessionNode({ id, data, selected }: NodeProps<FlowCanvasNode>) {
   const attention = nodeAttention(data)
-  const modelName = data.modelName || '模型未加载'
-  const statusKind = attention?.kind ?? 'idle'
-
+  const size = iconSize(data)
+  const identity = data.orchestrationEnabled ? '编排者' : data.kind === 'subagent-role' ? '角色' : 'Agent'
   return (
-    <div className="pf-relative pf-w-[172px]">
+    <div className={`${styles.root} ${data.isDimmed ? styles.dimmed : ''}`} style={{ ...brandStyle(data.brand ?? 'unknown'), '--node-width': `${NODE_WIDTH}px`, '--node-height': `${NODE_HEIGHT}px`, '--node-padding': `${NODE_PADDING}px`, '--icon-size': `${size}px` } as CSSProperties}>
       <button
         type="button"
-        className={[
-          `${styles.node} pf-relative pf-grid pf-min-h-[128px] pf-gap-[8px] pf-p-[8px_7px] pf-text-center`,
-          `pf-cursor-pointer ${selected ? styles.selected : ''} ${data.isCurrent ? styles.current : ''}`,
-          `${data.isAnchor ? styles.anchor : ''} ${data.isDimmed ? styles.dimmed : ''}`,
-        ].join(' ')}
-        data-status={statusKind}
-        aria-label={`${data.name}，${modelName}，${attention?.label ?? (data.isCurrent ? '当前会话' : '空闲')}`}
-        aria-expanded={Boolean(selected)}
+        className={`${styles.node} ${selected ? styles.selected : ''} ${data.isAnchor ? styles.anchor : ''}`}
+        data-status={attention?.kind ?? 'idle'}
+        data-flow-node={id}
+        aria-label={[data.name, identity, data.provider, data.modelName, attention?.label ?? '空闲'].filter(Boolean).join('，')}
+        aria-expanded={Boolean(data.summaryOpen)}
+        onPointerEnter={event => event.pointerType === 'mouse' && data.onHover?.(id)}
+        onPointerLeave={() => data.onHover?.(null)}
+        onFocus={() => data.onHover?.(id)}
+        onBlur={() => data.onHover?.(null)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            event.stopPropagation()
+            data.onActivate?.(id)
+          }
+        }}
       >
-        <div className={`${styles.agentIcon} pf-relative pf-grid pf-w-[51px] pf-h-[51px] pf-place-items-center pf-bg-surface`} aria-hidden="true">
+        <span className={styles.agentIcon} aria-hidden="true">
           <Handle className={styles.hiddenHandle} type="target" position={Position.Top} isConnectable={false} />
           <Handle className={styles.hiddenHandle} type="source" position={Position.Top} isConnectable={false} />
-          {data.orchestrationEnabled ? <Network size={23} strokeWidth={1.8} /> : <Bot size={23} strokeWidth={1.8} />}
-          {attention
-            ? <span className={`${styles.statusMark} pf-absolute pf-right-[-4px] pf-bottom-[-4px] pf-w-[12px] pf-h-[12px] pf-rounded-[50%] ${styles[attention.kind]}`} />
+          <ProviderLogo brand={data.brand ?? 'unknown'} name={data.name} size={size * 0.52} />
+          {data.orchestrationEnabled ? <span className={styles.identityMark}><Network size={10} /></span> : data.kind === 'subagent-role' ? <span className={styles.identityMark}><GitBranch size={10} /></span> : null}
+          {attention ? <span className={`${styles.statusMark} ${styles[attention.kind]}`}>{attention.kind === 'failed' ? <CircleAlert size={12} /> : attention.kind === 'needsInput' ? <Clock3 size={12} /> : null}</span> : null}
+        </span>
+        <span className={styles.identity}>
+          <span className={styles.name} title={data.name}>{data.name}</span>
+          {data.modelName ? <span className={styles.model} title={data.modelName}>{data.modelName}</span> : null}
+          {attention ? <span className={`${styles.status} ${styles[attention.kind]}`}>{attention.label}</span> : null}
+          {data.referenceLabel
+            ? (
+                <span className={styles.reference}>
+                  <Link2 size={10} />
+                  {data.referenceLabel}
+                </span>
+              )
             : null}
-        </div>
-        <div className={`${styles.identity} pf-flex pf-w-full pf-min-w-0 pf-flex-col pf-items-center pf-gap-0.5`}>
-          <h2 className="pf-m-0 pf-max-w-full pf-overflow-hidden pf-text-ellipsis pf-whitespace-nowrap pf-text-[0.86rem] pf-font-semibold pf-leading-[1.35] pf-text-[var(--c-ink)]" title={data.name}>{data.name}</h2>
-          <p title={modelName}>{modelName}</p>
-          {attention
-            ? <span className={`${styles.status} pf-w-max pf-max-w-full pf-overflow-hidden pf-text-[0.68rem] pf-leading-[1.2] pf-text-ellipsis pf-whitespace-nowrap ${styles[statusKind]}`}>{attention.label}</span>
-            : data.isCurrent
-              ? <span className={`${styles.status} pf-w-max pf-max-w-full pf-overflow-hidden pf-text-[0.68rem] pf-leading-[1.2] pf-text-ellipsis pf-whitespace-nowrap ${styles.currentStatus}`}>当前会话</span>
-              : null}
-        </div>
+        </span>
       </button>
-      {data.referenceLabel ? <span className="pf-block pf-text-muted pf-text-[0.63rem] pf-text-center">{data.referenceLabel}</span> : null}
-      {data.memberSummary
+      {data.memberSummary?.total
         ? (
             <button
               type="button"
-              className={`${styles.members} pf-flex pf-w-full pf-justify-center pf-items-center pf-gap-[3px] pf-p-[3px] pf-rounded-[5px] pf-bg-surface pf-text-muted pf-text-[0.63rem] nodrag nopan`}
-              disabled={!data.memberSummary.total}
+              className={`${styles.members} nodrag nopan`}
               aria-expanded={Boolean(data.membersExpanded)}
               aria-label={`${data.membersExpanded ? '折叠' : '展开'} ${data.name} 的成员`}
               onClick={(event) => {
@@ -92,16 +108,12 @@ export default function FlowSessionNode({ data, selected }: NodeProps<FlowCanvas
                 data.onToggleMembers?.()
               }}
             >
-              {data.membersExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {data.membersExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               {data.memberSummary.total}
               {' '}
-              成员 ·
-              {data.memberSummary.running}
-              {' '}
-              运行 ·
-              {data.memberSummary.failed}
-              {' '}
-              失败
+              成员
+              {data.memberSummary.running ? ` · ${data.memberSummary.running} 运行` : ''}
+              {data.memberSummary.failed ? ` · ${data.memberSummary.failed} 失败` : ''}
             </button>
           )
         : null}

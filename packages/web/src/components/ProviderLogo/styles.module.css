@@ -1,0 +1,12 @@
+.logo {
+  display: block;
+  object-fit: contain;
+}
+
+.monochrome { filter: invert(1); }
+
+.initials {
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}

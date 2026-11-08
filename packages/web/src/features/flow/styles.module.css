@@ -28,6 +28,10 @@
 }
 
 .workspace {
+  --flow-edge: rgb(255 255 255 / 14%);
+  --flow-edge-selected: rgb(255 255 255 / 45%);
+  --flow-grid: rgb(255 255 255 / 3%);
+
   container-type: inline-size;
   background: var(--c-canvas);
 }
@@ -362,9 +366,8 @@
   background: var(--c-press);
 }
 
-.workspace :global(.react-flow__edge.selected path) {
-  stroke: var(--c-mid) !important;
-  stroke-width: 2;
+.workspace :global(.react-flow__edge.selected .react-flow__edge-path) {
+  stroke: var(--flow-edge-selected);
 }
 
 /* React Flow renders the interaction path with stroke-width: 20 but no stroke color,

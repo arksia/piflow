@@ -47,7 +47,7 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
         id={id}
         path={path}
         style={{
-          stroke: selected ? 'var(--c-mid)' : 'var(--c-muted)',
+          stroke: selected ? 'var(--flow-edge-selected)' : 'var(--flow-edge)',
           strokeWidth: 1.5,
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
