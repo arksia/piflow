@@ -27,9 +27,7 @@ export default function FlowNodeSummary({ node, ownerName, activity, onClose, on
   const dockRevealRef = useRef('')
   const closeRef = useRef<HTMLButtonElement>(null)
   const [summaryHeight, setSummaryHeight] = useState(240)
-  const { bounds } = nodeGeometry(node)
-  const anchor = { x: bounds.x * viewport.zoom + viewport.x, y: bounds.y * viewport.zoom + viewport.y, width: bounds.width * viewport.zoom, height: bounds.height * viewport.zoom }
-  const placement = summaryPlacement(anchor, { width, height }, summaryHeight)
+  const placement = summaryPlacement(nodeGeometry(node), viewport, { width, height }, summaryHeight)
   const { docked } = placement
   const data = node.data
   const status = data.needsInput ? '待回答' : data.status === 'running' ? '运行中' : data.status === 'failed' ? '失败' : data.unread ? '未读完成' : '空闲'
@@ -38,6 +36,8 @@ export default function FlowNodeSummary({ node, ownerName, activity, onClose, on
     const root = rootRef.current
     if (!root)
       return
+    // Center using the measured card before its first paint.
+    setSummaryHeight(root.getBoundingClientRect().height)
     const observer = new ResizeObserver(() => setSummaryHeight(root.getBoundingClientRect().height))
     observer.observe(root)
     return () => observer.disconnect()
