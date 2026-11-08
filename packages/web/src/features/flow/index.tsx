@@ -21,7 +21,6 @@ import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   ReactFlow,
 } from '@xyflow/react'
@@ -46,11 +45,13 @@ import { useRunProject } from '../runs/use-runs'
 import { acceptConductor, loadFlow, saveFlow } from './api'
 import { flowAttentionItems } from './attention'
 import FlowAgentForm from './components/FlowAgentForm'
+import FlowCanvasTools from './components/FlowCanvasTools'
 import FlowMessageEdge from './components/FlowMessageEdge'
 import FlowNodeForm from './components/FlowNodeForm'
 import FlowSessionNode from './components/FlowSessionNode'
 import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from './edges'
 import { NODE_HEIGHT, NODE_WIDTH, nodeGeometry } from './geometry'
+import { arrangeNodes, layoutFingerprint } from './layout'
 import { memberPlacements } from './members'
 import { addDraftNode, configureNode } from './node-forms'
 import { routeGraphEdges } from './routes'
@@ -106,6 +107,14 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => new Set())
   const [movedAgents, setMovedAgents] = useState<Set<string>>(() => new Set())
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
+  const [zoom, setZoom] = useState(1)
+  const [minimap, setMinimap] = useState(() => {
+    try {
+      return localStorage.getItem('piflow.flow-minimap') === 'true'
+    }
+    catch { return false }
+  })
+  const [layoutUndo, setLayoutUndo] = useState<{ fingerprint: string, positions: Map<string, { x: number, y: number }> } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const focusTargetRef = useRef<string[]>([])
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
@@ -392,6 +401,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
         catch (error) {
           if (commit)
             commitGraphRef.current = true
+          if (replaceNodes)
+            graphChangedRef.current = true
           throw error
         }
         if (rev !== saveRevRef.current) {
@@ -406,7 +417,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       }
     }
     catch (reason) {
-      setError(String(reason))
+      setError(`保存失败，当前画布尚未保存：${String(reason)}`)
       return false
     }
     finally {
@@ -631,6 +642,29 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       throw new Error('保存失败，请重试；草稿已保留。')
   }
 
+  async function arrangeLayout() {
+    const current = editableDocument()
+    const positions = arrangeNodes(current.nodes.map(node => ({ ...node, measured: nodes.find(item => item.id === node.id)?.measured })), [
+      ...current.edges,
+      ...(current.memberships ?? []).map(item => ({ source: item.orchestratorId, target: item.memberId })),
+    ])
+    const next = { ...current, nodes: current.nodes.map(node => ({ ...node, position: positions.get(node.id)! })) }
+    setLayoutUndo({ fingerprint: layoutFingerprint(next), positions: new Map(current.nodes.map(node => [node.id, { ...node.position }])) })
+    setExpandedAgents(new Set())
+    setMovedAgents(new Set())
+    if (await persist(next, true))
+      focusCanvas(next.nodes.map(node => node.id), 0.2, 1)
+  }
+
+  async function undoLayout() {
+    const current = editableDocument()
+    if (!layoutUndo || layoutUndo.fingerprint !== layoutFingerprint(current))
+      return
+    const next = { ...current, nodes: current.nodes.map(node => ({ ...node, position: layoutUndo.positions.get(node.id) ?? node.position })) }
+    if (await persist(next, true))
+      setLayoutUndo(null)
+  }
+
   function deleteSelection() {
     if (!document)
       return
@@ -722,12 +756,19 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     return [...originals, ...references]
   }, [nodes, document?.memberships, expandedAgents, movedAgents])
 
+  const callEdges = useMemo(() => subagentCallEdges(runs, activities, projectedNodes), [runs, activities, projectedNodes])
+  const routeInput = JSON.stringify({ edges: [...document?.edges ?? [], ...callEdges].map(({ id, source, target }) => ({ id, source, target })), nodes: projectedNodes.map(nodeGeometry) })
+  const graphRoutes = useMemo(() => {
+    const input = JSON.parse(routeInput) as { edges: Array<{ id: string, source: string, target: string }>, nodes: ReturnType<typeof nodeGeometry>[] }
+    return routeGraphEdges(input.edges, input.nodes)
+  }, [routeInput])
+
   useEffect(() => {
     if (!document)
       return
     // eslint-disable-next-line react/set-state-in-effect -- derived user edges and live message activity
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, subagentCallEdges(runs, activities, projectedNodes)))
-  }, [document, runs, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active])
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, callEdges, graphRoutes))
+  }, [document, runs, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active, callEdges, graphRoutes])
 
   async function delegateTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -930,13 +971,36 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                   onEdgesChange={onEdgesChange}
                   onEdgesDelete={onEdgesDelete}
                   onMoveEnd={onMoveEnd}
+                  onMove={(_event, viewport) => setZoom(viewport.zoom)}
                   onSelectionChange={onSelectionChange}
                   deleteKeyCode={['Backspace', 'Delete']}
                   colorMode="dark"
                 >
                   <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--flow-grid)" />
-                  <Controls showInteractive={false} />
-                  <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
+                  <FlowCanvasTools
+                    zoom={zoom}
+                    canLocate={selection.nodes.length === 1}
+                    canArrange={!saving && Boolean(document.nodes.length)}
+                    canUndo={!saving && Boolean(layoutUndo && layoutUndo.fingerprint === layoutFingerprint(document))}
+                    minimap={minimap}
+                    onZoomOut={() => void instance?.zoomOut()}
+                    onZoomIn={() => void instance?.zoomIn()}
+                    onOverview={() => {
+                      focusTargetRef.current = []
+                      void instance?.fitView({ padding: 0.12, duration: reducedMotion ? 0 : 180 })
+                    }}
+                    onLocate={() => focusCanvas(selection.nodes)}
+                    onArrange={() => void arrangeLayout().catch(reason => setError(String(reason)))}
+                    onUndo={() => void undoLayout().catch(reason => setError(String(reason)))}
+                    onMinimap={() => {
+                      setMinimap(value => !value)
+                      try {
+                        localStorage.setItem('piflow.flow-minimap', String(!minimap))
+                      }
+                      catch { /* Device preference is optional. */ }
+                    }}
+                  />
+                  {minimap ? <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" /> : null}
                 </ReactFlow>
               )}
 
@@ -1130,9 +1194,9 @@ function toCanvasEdges(
   selectedNodeId?: string,
   nodes: FlowCanvasNode[] = [],
   calls: { id: string, source: string, target: string }[] = [],
+  routes: Map<string, import('./routes').FlowRoutePoint[]> = new Map(),
 ): Edge[] {
   const allEdges = [...edges, ...calls]
-  const routes = routeGraphEdges(allEdges, nodes.map(nodeGeometry))
   return allEdges.map((edge) => {
     const transient = calls.some(call => call.id === edge.id)
     const selected = selectedEdgeIds.has(edge.id)

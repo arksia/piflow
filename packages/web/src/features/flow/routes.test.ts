@@ -1,52 +1,35 @@
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { it } from 'node:test'
 import { roundedOrthogonalPath, routeGraphEdges } from './routes'
 
-const edges = [{ id: 'ab', source: 'a', target: 'b' }]
-const nodes = [{ id: 'a', x: 0, y: 0, size: 51 }, { id: 'b', x: 200, y: 100, size: 51 }]
+it('routes around full labels with multiple rounded corners and reversible geometry', () => {
+  const nodes = [
+    { id: 'a', x: 50, y: 30, size: 46, bounds: { x: 0, y: 0, width: 100, height: 150 } },
+    { id: 'b', x: 450, y: 30, size: 46, bounds: { x: 400, y: 0, width: 100, height: 150 } },
+    { id: 'label', x: 250, y: -60, size: 40, bounds: { x: 180, y: -90, width: 140, height: 240 } },
+  ]
+  const route = routeGraphEdges([{ id: 'edge', source: 'a', target: 'b' }], nodes).get('edge')!
+  assert.ok(route.length > 3)
+  for (let i = 1; i < route.length; i++) {
+    const a = route[i - 1]!
+    const b = route[i]!
+    assert.ok(a.x === b.x || a.y === b.y)
+    assert.ok(!(Math.min(a.x, b.x) < 320 && Math.max(a.x, b.x) > 180 && Math.min(a.y, b.y) < 150 && Math.max(a.y, b.y) > -90))
+  }
+  assert.deepEqual(routeGraphEdges([{ id: 'edge', source: 'b', target: 'a' }], nodes).get('edge'), [...route].reverse())
+  assert.ok((roundedOrthogonalPath(route).match(/Q/g) ?? []).length > 1)
+})
 
-describe('Agent Graph peer routing', () => {
-  it('matches the bundle single-elbow path and 8px corner', () => {
-    const points = routeGraphEdges(edges, nodes).get('ab')!
-    assert.equal(roundedOrthogonalPath(points), 'M0 0L192 0Q200 0 200 8L200 100')
-  })
-
-  it('switches elbow direction when the other option intersects fewer icons', () => {
-    const points = routeGraphEdges(edges, [...nodes, { id: 'c', x: 100, y: 0, size: 51 }]).get('ab')!
-    assert.equal(roundedOrthogonalPath(points), 'M0 0L0 92Q0 100 8 100L200 100')
-  })
-
-  it('fans shared-side edges into ordered lanes inside the icon', () => {
-    const routes = routeGraphEdges([...edges, { id: 'ac', source: 'a', target: 'c' }], [...nodes, { id: 'c', x: 300, y: 200, size: 51 }])
-    assert.deepEqual(routes.get('ab')![0], { x: 0, y: 4 })
-    assert.deepEqual(routes.get('ac')![0], { x: 0, y: -4 })
-    assert.equal(roundedOrthogonalPath(routes.get('ab')!), 'M0 4L192 4Q200 4 200 12L200 100')
-  })
-
-  it('preserves path geometry when the stored edge direction is reversed', () => {
-    const forwards = routeGraphEdges(edges, nodes).get('ab')!
-    const backwards = routeGraphEdges([{ id: 'ba', source: 'b', target: 'a' }], nodes).get('ba')!
-    assert.deepEqual(backwards, [...forwards].reverse())
-  })
-
-  it('keeps near-aligned endpoints straight and avoids tiny corners', () => {
-    const points = routeGraphEdges(edges, [nodes[0]!, { id: 'b', x: 0.4, y: 100, size: 51 }]).get('ab')!
-    assert.equal(roundedOrthogonalPath(points), 'M0 0L0 100')
-  })
-
-  it('compresses crowded lanes to the icon width without changing saved nodes', () => {
-    const targets = Array.from({ length: 12 }, (_, i) => ({ id: `b${i}`, x: 200 + i * 100, y: 100 + i * 100, size: 51 }))
-    const graphNodes = [nodes[0]!, ...targets]
-    const original = structuredClone(graphNodes)
-    const routes = routeGraphEdges(targets.map(node => ({ id: node.id, source: 'a', target: node.id })), graphNodes)
-    for (const points of routes.values()) {
-      assert.ok(points.length <= 3)
-      assert.ok(Math.hypot(points[0]!.x, points[0]!.y) <= 51 * 0.3 + 0.001)
-    }
-    assert.deepEqual(graphNodes, original)
-  })
-
-  it('skips missing endpoints without creating any topology', () => {
-    assert.equal(routeGraphEdges(edges, [nodes[0]!]).size, 0)
-  })
+it('fans crowded ports within icon edges and skips missing endpoints', () => {
+  const nodes = [{ id: 'a', x: 0, y: 0, size: 46 }, ...Array.from({ length: 12 }, (_, i) => ({ id: `b${i}`, x: 200 + i * 100, y: 100 + i * 150, size: 40 }))]
+  const before = structuredClone(nodes)
+  const routes = routeGraphEdges(nodes.slice(1).map(node => ({ id: node.id, source: 'a', target: node.id })), nodes)
+  for (const route of routes.values()) {
+    assert.equal(route[0]!.x, 23)
+    assert.ok(Math.abs(route[0]!.y) <= 46 / 4)
+  }
+  assert.deepEqual(nodes, before)
+  assert.equal(routeGraphEdges([{ id: 'bad', source: 'a', target: 'missing' }], nodes).size, 0)
+  assert.equal(roundedOrthogonalPath([]), '')
+  assert.equal(roundedOrthogonalPath([{ x: 0, y: 0 }, { x: 100, y: 0 }]), 'M0 0L100 0')
 })

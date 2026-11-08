@@ -1,136 +1,136 @@
-export interface FlowRoutePoint {
-  x: number
-  y: number
+import type { CanvasRect } from './viewport'
+
+export interface FlowRoutePoint { x: number, y: number }
+export interface FlowRouteNode extends FlowRoutePoint { id: string, size: number, bounds?: CanvasRect }
+interface RouteEdge { id: string, source: string, target: string }
+
+function obstacle(node: FlowRouteNode): CanvasRect {
+  const rect = node.bounds ?? { x: node.x - node.size / 2, y: node.y - node.size / 2, width: node.size, height: node.size }
+  return { x: rect.x - 10, y: rect.y - 10, width: rect.width + 20, height: rect.height + 20 }
+}
+function clear(a: FlowRoutePoint, b: FlowRoutePoint, blocks: CanvasRect[]) {
+  return !blocks.some(rect => a.x === b.x
+    ? a.x > rect.x && a.x < rect.x + rect.width && Math.max(a.y, b.y) > rect.y && Math.min(a.y, b.y) < rect.y + rect.height
+    : a.y > rect.y && a.y < rect.y + rect.height && Math.max(a.x, b.x) > rect.x && Math.min(a.x, b.x) < rect.x + rect.width)
+}
+function simplify(points: FlowRoutePoint[]): FlowRoutePoint[] {
+  const output: FlowRoutePoint[] = []
+  for (const point of points) {
+    const last = output.at(-1)
+    if (last?.x === point.x && last.y === point.y)
+      continue
+    const before = output.at(-2)
+    if (before && last && ((before.x === last.x && last.x === point.x) || (before.y === last.y && last.y === point.y)))
+      output.pop()
+    output.push(point)
+  }
+  return output
 }
 
-export interface FlowRouteNode extends FlowRoutePoint {
-  id: string
-  size: number
+/** Search finite obstacle-side channels. Edge crossings are allowed; label crossings are avoided. */
+function channelPath(start: FlowRoutePoint, end: FlowRoutePoint, blocks: CanvasRect[]): FlowRoutePoint[] {
+  const direct = [start, { x: end.x, y: start.y }, end]
+  if (direct.slice(1).every((point, i) => clear(direct[i]!, point, blocks)))
+    return simplify(direct)
+  const xs = [...new Set([start.x, end.x, ...blocks.flatMap(rect => [rect.x, rect.x + rect.width])])].sort((a, b) => a - b)
+  const ys = [...new Set([start.y, end.y, ...blocks.flatMap(rect => [rect.y, rect.y + rect.height])])].sort((a, b) => a - b)
+  const index = (x: number, y: number) => y * xs.length + x
+  const point = (id: number) => ({ x: xs[id % xs.length]!, y: ys[Math.floor(id / xs.length)]! })
+  const first = index(xs.indexOf(start.x), ys.indexOf(start.y))
+  const target = index(xs.indexOf(end.x), ys.indexOf(end.y))
+  const costs = new Map([[first, 0]])
+  const parents = new Map<number, number>()
+  const open = new Set([first])
+  const closed = new Set<number>()
+  while (open.size) {
+    let best = -1
+    let score = Infinity
+    for (const id of open) {
+      const p = point(id)
+      const candidate = costs.get(id)! + Math.abs(p.x - end.x) + Math.abs(p.y - end.y)
+      if (candidate < score) {
+        best = id
+        score = candidate
+      }
+    }
+    if (best === target) {
+      const result = [end]
+      for (let id = target; parents.has(id);) {
+        id = parents.get(id)!
+        result.unshift(point(id))
+      }
+      return simplify(result)
+    }
+    open.delete(best)
+    closed.add(best)
+    const x = best % xs.length
+    const y = Math.floor(best / xs.length)
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      if (nx! < 0 || ny! < 0 || nx! >= xs.length || ny! >= ys.length)
+        continue
+      const next = index(nx!, ny!)
+      if (closed.has(next) || !clear(point(best), point(next), blocks))
+        continue
+      const p = point(best)
+      const q = point(next)
+      const cost = costs.get(best)! + Math.abs(q.x - p.x) + Math.abs(q.y - p.y)
+      if (cost < (costs.get(next) ?? Infinity)) {
+        costs.set(next, cost)
+        parents.set(next, best)
+        open.add(next)
+      }
+    }
+  }
+  // ponytail: overlapping authored rectangles can enclose ports; preserve topology and mask labels.
+  return simplify(direct)
 }
 
-interface RouteEdge {
-  id: string
-  source: string
-  target: string
-}
-
-type Turn = 'h' | 'v' | 'hv' | 'vh'
-
-interface RoutePlan {
-  edge: RouteEdge
-  from: FlowRouteNode
-  to: FlowRouteNode
-  turn: Turn
-  fromOffset: number
-  toOffset: number
-}
-
-/**
- * Route free-layout nodes with short elbows and shared-side lanes.
- */
 export function routeGraphEdges(edges: RouteEdge[], nodes: FlowRouteNode[], laneGap = 8): Map<string, FlowRoutePoint[]> {
   const byId = new Map(nodes.map(node => [node.id, node]))
-  const groups = new Map<string, Array<{ plan: RoutePlan, end: 'from' | 'to', order: number }>>()
-  const plans: RoutePlan[] = []
-  function addLane(node: FlowRouteNode, side: string, plan: RoutePlan, end: 'from' | 'to', order: number) {
-    const key = JSON.stringify([node.id, side])
-    const lanes = groups.get(key) ?? []
-    lanes.push({ plan, end, order })
-    groups.set(key, lanes)
-  }
-  for (const edge of edges) {
-    // All piflow nodes are peers; canonical order makes routing independent of message direction.
+  const blocks = nodes.map(obstacle)
+  const slots = new Map<string, string[]>()
+  const plans = edges.flatMap((edge) => {
     const from = byId.get(edge.source < edge.target ? edge.source : edge.target)
     const to = byId.get(edge.source < edge.target ? edge.target : edge.source)
-    if (!from || !to)
-      continue
-    let turn: Turn = 'hv'
-    if (Math.abs(to.x - from.x) < 1)
-      turn = 'v'
-    else if (Math.abs(to.y - from.y) < 1)
-      turn = 'h'
-    else if (collisionCount(elbow(from, to, 'vh'), nodes, from.id, to.id) < collisionCount(elbow(from, to, 'hv'), nodes, from.id, to.id))
-      turn = 'vh'
-    const plan: RoutePlan = { edge, from, to, turn, fromOffset: 0, toOffset: 0 }
-    plans.push(plan)
-    const startVertical = turn === 'v' || turn === 'vh'
-    const endVertical = turn === 'v' || turn === 'hv'
-    const firstLength = Math.abs(startVertical ? to.y - from.y : to.x - from.x)
-    const secondLength = Math.abs(startVertical ? to.x - from.x : to.y - from.y)
-    const straight = turn === 'v' || turn === 'h'
-    const startOrder = straight ? 0 : Math.sign(startVertical ? to.x - from.x : to.y - from.y)
-    const endOrder = straight ? 0 : Math.sign(endVertical ? from.x - to.x : from.y - to.y)
-    addLane(from, startVertical ? (to.y > from.y ? 'bottom' : 'top') : (to.x > from.x ? 'right' : 'left'), plan, 'from', startOrder * (100_000 - firstLength))
-    addLane(to, endVertical ? (from.y > to.y ? 'bottom' : 'top') : (from.x > to.x ? 'right' : 'left'), plan, 'to', endOrder * (100_000 - secondLength))
-  }
-  for (const lanes of groups.values()) {
-    if (lanes.length < 2)
-      continue
-    const first = lanes[0]!
-    const size = first.end === 'from' ? first.plan.from.size : first.plan.to.size
-    const gap = Math.min(laneGap, size * 0.6 / (lanes.length - 1))
-    lanes.sort((a, b) => a.order - b.order)
-    lanes.forEach((lane, index) => {
-      const offset = (index - (lanes.length - 1) / 2) * gap
-      if (lane.end === 'from')
-        lane.plan.fromOffset = offset
-      else
-        lane.plan.toOffset = offset
-    })
-  }
-  return new Map(plans.map(({ edge, from, to, turn, fromOffset, toOffset }) => {
-    let points: FlowRoutePoint[]
-    if (turn === 'v') {
-      const x = from.x + (fromOffset || toOffset)
-      points = [{ x, y: from.y }, { x, y: to.y }]
+    if (!from || !to || from.id === to.id)
+      return []
+    const fromSide = to.x >= from.x ? 1 : -1
+    const toSide = from.x >= to.x ? 1 : -1
+    for (const [node, side] of [[from, fromSide], [to, toSide]] as const) {
+      const key = `${node.id}:${side}`
+      slots.set(key, [...slots.get(key) ?? [], edge.id].sort())
     }
-    else if (turn === 'h') {
-      const y = from.y + (fromOffset || toOffset)
-      points = [{ x: from.x, y }, { x: to.x, y }]
+    return [{ edge, from, to, fromSide, toSide }]
+  })
+  return new Map(plans.map(({ edge, from, to, fromSide, toSide }) => {
+    const port = (node: FlowRouteNode, side: number) => {
+      const group = slots.get(`${node.id}:${side}`)!
+      const offset = (group.indexOf(edge.id) - (group.length - 1) / 2) * Math.min(laneGap, node.size * 0.5 / Math.max(1, group.length - 1))
+      const rect = obstacle(node)
+      const p = { x: node.x + side * node.size / 2, y: node.y + offset }
+      return [p, { x: side > 0 ? rect.x + rect.width : rect.x, y: p.y }]
     }
-    else {
-      const start = { x: from.x + (turn === 'vh' ? fromOffset : 0), y: from.y + (turn === 'hv' ? fromOffset : 0) }
-      const end = { x: to.x + (turn === 'hv' ? toOffset : 0), y: to.y + (turn === 'vh' ? toOffset : 0) }
-      points = elbow(start, end, turn)
-    }
-    return [edge.id, edge.source === from.id ? points : points.reverse()]
+    const [a, start] = port(from, fromSide) as [FlowRoutePoint, FlowRoutePoint]
+    const [b, end] = port(to, toSide) as [FlowRoutePoint, FlowRoutePoint]
+    const path = simplify([a, ...channelPath(start, end, blocks), b])
+    return [edge.id, edge.source === from.id ? path : path.reverse()]
   }))
-}
-
-function elbow(from: FlowRoutePoint, to: FlowRoutePoint, turn: 'vh' | 'hv'): FlowRoutePoint[] {
-  return [from, turn === 'vh' ? { x: from.x, y: to.y } : { x: to.x, y: from.y }, to]
-}
-
-function collisionCount(points: FlowRoutePoint[], nodes: FlowRouteNode[], fromId: string, toId: string) {
-  let count = 0
-  for (const node of nodes) {
-    if (node.id === fromId || node.id === toId)
-      continue
-    const padding = node.size / 2 + 6
-    for (let index = 1; index < points.length; index++) {
-      const from = points[index - 1]!
-      const to = points[index]!
-      if (Math.min(from.x, to.x) - padding < node.x && node.x < Math.max(from.x, to.x) + padding && Math.min(from.y, to.y) - padding < node.y && node.y < Math.max(from.y, to.y) + padding)
-        count++
-    }
-  }
-  return count
 }
 
 export function roundedOrthogonalPath(points: FlowRoutePoint[], radius = 8): string {
   const first = points[0]
-  const last = points.at(-1)
-  if (!first || !last || points.length < 2)
+  if (!first || points.length < 2)
     return ''
-  const round = (value: number) => Math.round(value * 10) / 10
-  const position = (point: FlowRoutePoint) => `${round(point.x)} ${round(point.y)}`
-  if (points.length === 2 || Math.abs(last.x - first.x) < 1 || Math.abs(last.y - first.y) < 1)
-    return `M${position(first)}L${position(last)}`
-  const corner = points[1]!
-  const offset = Math.min(radius, Math.abs(last.x - first.x), Math.abs(last.y - first.y))
-  if (offset < 0.5)
-    return `M${position(first)}L${position(last)}`
-  const before = { x: corner.x + Math.sign(first.x - corner.x) * offset, y: corner.y + Math.sign(first.y - corner.y) * offset }
-  const after = { x: corner.x + Math.sign(last.x - corner.x) * offset, y: corner.y + Math.sign(last.y - corner.y) * offset }
-  return `M${position(first)}L${position(before)}Q${position(corner)} ${position(after)}L${position(last)}`
+  const position = (point: FlowRoutePoint) => `${Math.round(point.x * 10) / 10} ${Math.round(point.y * 10) / 10}`
+  let path = `M${position(first)}`
+  for (let i = 1; i < points.length - 1; i++) {
+    const before = points[i - 1]!
+    const corner = points[i]!
+    const after = points[i + 1]!
+    const distance = Math.min(radius, Math.hypot(corner.x - before.x, corner.y - before.y) / 2, Math.hypot(after.x - corner.x, after.y - corner.y) / 2)
+    const p = { x: corner.x + Math.sign(before.x - corner.x) * distance, y: corner.y + Math.sign(before.y - corner.y) * distance }
+    const q = { x: corner.x + Math.sign(after.x - corner.x) * distance, y: corner.y + Math.sign(after.y - corner.y) * distance }
+    path += `L${position(p)}Q${position(corner)} ${position(q)}`
+  }
+  return `${path}L${position(points.at(-1)!)}`
 }

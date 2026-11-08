@@ -1,0 +1,66 @@
+
+.canvas-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--c-line);
+  border-radius: 9px;
+  background: var(--c-surface);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 12%);
+}
+
+.canvas-tools button,
+.tool-menu summary {
+  display: grid;
+  min-width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 4px;
+  border-radius: 5px;
+  color: var(--c-muted);
+  cursor: pointer;
+}
+
+.canvas-tools > span {
+  min-width: 38px;
+  text-align: center;
+  color: var(--c-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.tool-menu { position: relative; }
+.tool-menu summary { list-style: none; }
+
+.tool-menu > div {
+  position: absolute;
+  z-index: 10;
+  bottom: 38px;
+  left: 0;
+  display: grid;
+  width: 160px;
+  padding: 5px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  background: var(--c-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+.tool-menu > div > button {
+  justify-content: start;
+  height: 32px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.canvas-tools button:hover,
+.tool-menu summary:hover {
+  background: var(--c-press);
+  color: var(--c-ink);
+}
+
+.canvas-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
