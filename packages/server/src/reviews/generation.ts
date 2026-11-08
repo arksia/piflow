@@ -1,4 +1,4 @@
-import type { RunInput } from '@piflow/protocol'
+import type { ReviewDetail, RunInput } from '@piflow/protocol'
 import type { SubagentRuns } from '../runs'
 import type { ReviewBundle } from './contract'
 import type { Reviews } from './index'
@@ -24,8 +24,9 @@ export function createReviewGeneration(reviews: Reviews, runs: SubagentRuns) {
   function key(project: string, review: string, revision: string) {
     return JSON.stringify([project, review, revision])
   }
-  async function perform(project: string, reviewId: string, revisionId: string, controller: AbortController) {
+  async function perform(project: string, reviewId: string, revisionId: string, controller: AbortController, finished: () => void) {
     let directory: string | undefined
+    let outcome: ReviewDetail['generation'] = { state: 'failed', error: '路线生成未完成。' }
     try {
       const detail = reviews.read(project, reviewId, revisionId)
       const sourceId = detail.revision.sourceRunId ?? detail.review.runIds.at(-1)
@@ -71,7 +72,7 @@ export function createReviewGeneration(reviews: Reviews, runs: SubagentRuns) {
       if (timeout.aborted && !controller.signal.aborted)
         throw new ReviewError('路线分析超过 5 分钟预算；固定 diff 与已保存的审查意见仍可使用。')
       if (controller.signal.aborted || result.status === 'cancelled') {
-        reviews.setGeneration(project, reviewId, revisionId, { state: 'cancelled', runId: result.runId })
+        outcome = { state: 'cancelled', runId: result.runId }
         return
       }
       if (result.status !== 'succeeded' || result.recordingError)
@@ -93,16 +94,22 @@ export function createReviewGeneration(reviews: Reviews, runs: SubagentRuns) {
       } while (cursor)
       if (!submitted)
         throw new ReviewError('模型没有提交有效路线；文件审查仍可使用。')
-      await rm(directory, { recursive: true, force: true })
-      directory = undefined
-      reviews.setGeneration(project, reviewId, revisionId, { state: 'succeeded', runId: result.runId })
+      outcome = { state: 'succeeded', runId: result.runId }
     }
     catch (error) {
-      reviews.setGeneration(project, reviewId, revisionId, { state: controller.signal.aborted ? 'cancelled' : 'failed', error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) })
+      outcome = { state: controller.signal.aborted ? 'cancelled' : 'failed', error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) }
     }
     finally {
-      if (directory)
-        await rm(directory, { recursive: true, force: true })
+      try {
+        if (directory)
+          await rm(directory, { recursive: true, force: true })
+      }
+      catch (error) {
+        console.error('[piflow] review analysis cleanup failed', error)
+      }
+      // Publish terminal state only when a new request can actually start.
+      finished()
+      reviews.setGeneration(project, reviewId, revisionId, outcome)
     }
   }
   return {
@@ -115,7 +122,7 @@ export function createReviewGeneration(reviews: Reviews, runs: SubagentRuns) {
         return
       reviews.setGeneration(project, review, revision, { state: 'running' })
       const controller = new AbortController()
-      const done = Promise.resolve().then(() => perform(project, review, revision, controller)).catch(error => console.error('[piflow] review analysis failed', error)).finally(() => active.delete(id))
+      const done = Promise.resolve().then(() => perform(project, review, revision, controller, () => active.delete(id))).catch(error => console.error('[piflow] review analysis failed', error))
       active.set(id, { controller, done })
     },
     cancel(project: string, review: string, revision: string) {
