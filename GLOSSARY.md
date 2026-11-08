@@ -97,3 +97,33 @@ _Avoid_: Chat History Message, Reply
 **Reply**:
 The one answer a Node submits for an A2A delivery, addressed by that delivery's id.
 _Avoid_: Chat History Message, Message
+
+## 交付审查
+
+**Review（功能审查）**:
+围绕同一项代码交付组织需求依据、变更和人工意见的审查过程，可跨越多次返工运行。
+_Avoid_: Subagent Run, 合并批准
+
+**Review Revision（审查修订）**:
+一次固定的源码与文档比较范围；不同修订分别保留人工意见。
+_Avoid_: 路线版本, 当前工作区
+
+**Review Route（审查路线）**:
+按需求组织变更阅读顺序、依据和关注点的建议。
+_Avoid_: 运行调用链, 测试证明
+
+**Review Step（审查步骤）**:
+路线中具有共同审查目的的一组变更及其需求、设计、决策或执行证据引用。
+_Avoid_: 工具执行步骤, 步骤审批
+
+**Change Target（变更对象）**:
+固定修订中可独立留下审查意见的函数相关变更或文件级变更，可被多个步骤共同引用。
+_Avoid_: 模型声明产物, 运行事件
+
+**Review Decision（人工审查记录）**:
+用户针对某一修订的变更对象留下的待审、已看、需修改或略过状态及意见。
+_Avoid_: Agent 建议, 可合并证明
+
+**Scope Exclusion（范围排除）**:
+用户附理由将某些变更排除于当前路线范围的决定；被排除的变更仍可回看。
+_Avoid_: 已略过, 已看, 删除变更
