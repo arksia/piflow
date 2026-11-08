@@ -32,7 +32,7 @@
   --flow-edge-selected: rgb(255 255 255 / 45%);
   --flow-grid: rgb(255 255 255 / 3%);
 
-  container-type: inline-size;
+  container-type: size;
   background: var(--c-canvas);
 }
 
@@ -182,8 +182,11 @@
 }
 
 .conductor {
-  top: var(--chrome-h);
-  width: min(440px, 100%);
+  position: relative;
+  flex: 0 0 380px;
+  min-width: 0;
+  min-height: 0;
+  width: 380px;
   border-left: 1px solid var(--c-line);
 }
 
@@ -462,11 +465,24 @@
 @container (width < 860px) {
   .canvas-layout { flex-direction: column; }
 
-  .runtime-panel {
+  .runtime-panel,
+  .conductor {
+    overflow: auto;
     flex: 0 1 55%;
     width: 100%;
     max-height: 55%;
     border-top: 1px solid var(--c-line);
     border-left: 0;
+  }
+}
+
+@container (width < 860px) and (height < 480px) {
+  .canvas-layout:has(> .runtime-panel) .canvas,
+  .canvas-layout:has(> .conductor) .canvas { display: none; }
+
+  .runtime-panel,
+  .conductor {
+    flex: 1;
+    max-height: none;
   }
 }

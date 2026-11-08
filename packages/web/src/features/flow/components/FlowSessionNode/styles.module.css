@@ -25,6 +25,7 @@
 
 .agent-icon {
   position: relative;
+  isolation: isolate;
   display: grid;
   width: var(--icon-size);
   height: var(--icon-size);
@@ -98,6 +99,8 @@
   justify-items: center;
   gap: 3px;
   max-width: 100%;
+  border-radius: 3px;
+  background: var(--c-canvas);
 }
 
 .name {

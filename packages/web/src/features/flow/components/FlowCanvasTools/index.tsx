@@ -1,10 +1,9 @@
-import { Panel } from '@xyflow/react'
+import { Panel, useViewport } from '@xyflow/react'
 import { Ellipsis, Maximize, Minus, Plus, Scan } from 'lucide-react'
 import { useRef } from 'react'
 import styles from './styles.module.css'
 
 interface Props {
-  zoom: number
   canLocate: boolean
   canArrange: boolean
   canUndo: boolean
@@ -19,6 +18,7 @@ interface Props {
 }
 
 export default function FlowCanvasTools(props: Props) {
+  const { zoom } = useViewport()
   const menuRef = useRef<HTMLDetailsElement>(null)
   function action(callback: () => void) {
     if (menuRef.current) {
@@ -42,7 +42,7 @@ export default function FlowCanvasTools(props: Props) {
     >
       <button type="button" aria-label="缩小" onClick={props.onZoomOut}><Minus size={14} /></button>
       <span>
-        {Math.round(props.zoom * 100)}
+        {Math.round(zoom * 100)}
         %
       </span>
       <button type="button" aria-label="放大" onClick={props.onZoomIn}><Plus size={14} /></button>

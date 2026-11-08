@@ -9,6 +9,7 @@ export interface FlowMessageEdgeData extends Record<string, unknown> {
   activities: FlowEdgeActivity[]
   reducedMotion: boolean
   dimmed: boolean
+  highlighted?: boolean
   route?: FlowRoutePoint[]
   transient?: boolean
 }
@@ -47,7 +48,7 @@ export default function FlowMessageEdge({ id, source, sourceX, sourceY, targetX,
         id={id}
         path={path}
         style={{
-          stroke: selected ? 'var(--flow-edge-selected)' : 'var(--flow-edge)',
+          stroke: selected || data?.highlighted ? 'var(--flow-edge-selected)' : 'var(--flow-edge)',
           strokeWidth: 1.5,
           strokeLinecap: 'round',
           strokeLinejoin: 'round',

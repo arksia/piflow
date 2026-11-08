@@ -33,7 +33,6 @@ import { configuredModel, providerBrand } from '../../components/ProviderLogo/br
 import Select from '../../components/Select'
 import SidebarToggle from '../../components/SidebarToggle'
 import Textarea from '../../components/Textarea'
-import { shortenPath } from '../../path'
 import { openBackgroundSession, openSession, requestModels, requestProjectTrust, sendFlowConductorPrompt, sendFlowNodePrompt, sendPrompt } from '../../session/actions'
 import { sessionNeedsInputFor, sessionStatusFor } from '../../session/attention'
 import { clearSessionUnread } from '../../session/reducer'
@@ -48,6 +47,7 @@ import FlowAgentForm from './components/FlowAgentForm'
 import FlowCanvasTools from './components/FlowCanvasTools'
 import FlowMessageEdge from './components/FlowMessageEdge'
 import FlowNodeForm from './components/FlowNodeForm'
+import FlowNodeSummary from './components/FlowNodeSummary'
 import FlowSessionNode from './components/FlowSessionNode'
 import { changedDeliveryActivities, changedRunActivities, sameDeliveryState, subagentCallEdges } from './edges'
 import { NODE_HEIGHT, NODE_WIDTH, nodeGeometry } from './geometry'
@@ -107,7 +107,6 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => new Set())
   const [movedAgents, setMovedAgents] = useState<Set<string>>(() => new Set())
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
-  const [zoom, setZoom] = useState(1)
   const [minimap, setMinimap] = useState(() => {
     try {
       return localStorage.getItem('piflow.flow-minimap') === 'true'
@@ -117,6 +116,12 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const [layoutUndo, setLayoutUndo] = useState<{ fingerprint: string, positions: Map<string, { x: number, y: number }> } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const focusTargetRef = useRef<string[]>([])
+  const focusPendingRef = useRef(false)
+  const [summaryDisplayId, setSummaryDisplayId] = useState<string | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [hoveredDisplayId, setHoveredDisplayId] = useState<string | null>(null)
+  const activeDisplayRef = useRef<string | null>(null)
+  const detailRef = useRef<HTMLElement>(null)
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
   const [activities, setActivities] = useState<FlowEdgeActivity[]>([])
   const previousMessagesRef = useRef<FlowDocument['messages'] | null>(null)
@@ -133,7 +138,6 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const openingRef = useRef(new Set<string>())
   const persistRef = useRef<(next: FlowDocument, commitGraph?: boolean) => Promise<boolean>>(async () => false)
   const [conductorOpen, setConductorOpen] = useState(false)
-  const openingNodeRef = useRef(new Set<string>())
   const [panelOpen, setPanelOpen] = useState(false)
   const [configurationId, setConfigurationId] = useState<string | null>(null)
   const [runOwnerFilter, setRunOwnerFilter] = useState('')
@@ -169,8 +173,11 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
 
   if (store.conductorNonce !== seenConductorRef.current) {
     seenConductorRef.current = store.conductorNonce
-    if (store.conductorNonce > 0)
+    if (store.conductorNonce > 0) {
       setConductorOpen(true)
+      setDetailOpen(false)
+      setSummaryDisplayId(null)
+    }
   }
 
   useEffect(() => {
@@ -191,19 +198,6 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       cancelled = true
     }
   }, [focusSession, projectPath])
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || (event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable="true"]')))
-        return
-      if (connectMode)
-        setConnectMode(null)
-      else if (selection.nodes.length === 1)
-        closeRuntimePanel()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [connectMode, selection.nodes])
 
   // Honor prefers-reduced-motion for animated message arrows.
   useEffect(() => {
@@ -325,14 +319,22 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
 
   const focusCanvas = useCallback((ids: string[], minZoom = 0.85, maxZoom = 1.1) => {
     focusTargetRef.current = ids
-    requestAnimationFrame(() => {
+    focusPendingRef.current = true
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const canvas = canvasRef.current
       const targets = instance?.getNodes().filter(node => ids.includes(node.id)) ?? []
-      if (!canvas || !instance || !targets.length || focusTargetRef.current !== ids)
+      if (focusTargetRef.current !== ids)
         return
+      if (!canvas || !instance || !targets.length || !canvas.clientWidth || !canvas.clientHeight) {
+        focusPendingRef.current = false
+        return
+      }
       const bounds = instance.getNodesBounds(targets)
-      void instance.setViewport(focusViewport(bounds, canvas.getBoundingClientRect(), minZoom, maxZoom), { duration: reducedMotion ? 0 : 180 })
-    })
+      void instance.setViewport(focusViewport(bounds, canvas.getBoundingClientRect(), minZoom, maxZoom), { duration: reducedMotion ? 0 : 180 }).finally(() => {
+        if (focusTargetRef.current === ids)
+          focusPendingRef.current = false
+      })
+    }))
   }, [instance, reducedMotion])
 
   useLayoutEffect(() => {
@@ -340,6 +342,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     if (!canvas || !instance)
       return
     const observer = new ResizeObserver(() => {
+      if (focusPendingRef.current || !canvas.clientWidth || !canvas.clientHeight)
+        return
       const targets = instance.getNodes().filter(node => focusTargetRef.current.includes(node.id))
       if (targets.length) {
         const next = revealViewport(instance.getNodesBounds(targets), canvas.getBoundingClientRect(), instance.getViewport())
@@ -362,6 +366,15 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     setNodes(current => current.map(item => ({ ...item, selected: item.id === node.id })))
     // eslint-disable-next-line react/set-state-in-effect -- keeps the selected node panel in sync with sidebar navigation.
     setSelection({ nodes: [node.id], edges: [] })
+    // eslint-disable-next-line react/set-state-in-effect -- explicit sidebar navigation opens the full detail.
+    setDetailOpen(true)
+    // eslint-disable-next-line react/set-state-in-effect -- sidebar navigation replaces the lightweight summary.
+    setSummaryDisplayId(null)
+    // eslint-disable-next-line react/set-state-in-effect -- sidebar navigation takes precedence over conductor.
+    setConductorOpen(false)
+    // eslint-disable-next-line react/set-state-in-effect -- direct sidebar navigation shows all callers.
+    setRunOwnerFilter('')
+    activeDisplayRef.current = node.id
     focusCanvas([node.id])
   }, [focusRequest, instance, nodes, focusCanvas])
 
@@ -460,30 +473,57 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     setNodes(current => applyNodeChanges(changes, current))
   }
 
-  const onNodeClick: NodeMouseHandler<FlowCanvasNode> = (_event, node) => {
-    if (!connectMode) {
-      setRunOwnerFilter(node.data.kind === 'subagent-role' ? node.data.displayOwnerId ?? '' : '')
-      if (node.data.agentId) {
-        const id = node.data.agentId
-        setNodes(current => current.map(item => ({ ...item, selected: item.id === id })))
-        setSelection({ nodes: [id], edges: [] })
-      }
+  function activateNode(node: FlowCanvasNode) {
+    const id = node.data.agentId ?? node.id
+    if (connectMode) {
+      connectNodes(connectMode.sourceId, id)
       return
     }
-    const agentId = node.data.agentId ?? node.id
-    if (agentId === connectMode.sourceId)
-      return
-    connectNodes(connectMode.sourceId, agentId)
+    activeDisplayRef.current = node.id
+    setDetailOpen(false)
+    setConductorOpen(false)
+    setRunOwnerFilter(node.data.kind === 'subagent-role' ? node.data.displayOwnerId ?? '' : '')
+    setNodes(current => current.map(item => ({ ...item, selected: item.id === id })))
+    setSelection({ nodes: [id], edges: [] })
+    setSummaryDisplayId(current => current === node.id ? null : node.id)
+  }
+
+  const onNodeClick: NodeMouseHandler<FlowCanvasNode> = (event, node) => {
+    if (!event.shiftKey && !event.metaKey && !event.ctrlKey)
+      activateNode(node)
+  }
+
+  function restoreNodeFocus() {
+    const id = activeDisplayRef.current
+    requestAnimationFrame(() => {
+      const button = [...(canvasRef.current?.querySelectorAll<HTMLElement>('[data-flow-node]') ?? [])].find(item => item.dataset.flowNode === id)
+      button?.focus({ preventScroll: true })
+    })
+  }
+
+  function closeSummary() {
+    setSummaryDisplayId(null)
+    restoreNodeFocus()
+  }
+
+  function openRuntimePanel() {
+    setSummaryDisplayId(null)
+    setDetailOpen(true)
+    setConductorOpen(false)
+    focusCanvas([activeDisplayRef.current ?? selection.nodes[0]!])
   }
 
   function onPaneClick() {
     setConnectMode(null)
+    setSummaryDisplayId(null)
   }
 
   function closeRuntimePanel() {
     focusTargetRef.current = []
-    setSelection({ nodes: [], edges: [] })
-    setNodes(current => current.map(node => node.selected ? { ...node, selected: false } : node))
+    focusPendingRef.current = false
+    setDetailOpen(false)
+    setSummaryDisplayId(null)
+    restoreNodeFocus()
   }
 
   function onNodeDragStop(_event: MouseEvent | TouchEvent, node: FlowCanvasNode) {
@@ -544,6 +584,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
 
   async function showConductor() {
     setConductorOpen(true)
+    setSummaryDisplayId(null)
+    setDetailOpen(false)
     const path = documentRef.current?.conductorPath
     if (!path)
       return
@@ -661,8 +703,10 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     if (!layoutUndo || layoutUndo.fingerprint !== layoutFingerprint(current))
       return
     const next = { ...current, nodes: current.nodes.map(node => ({ ...node, position: layoutUndo.positions.get(node.id) ?? node.position })) }
-    if (await persist(next, true))
+    if (await persist(next, true)) {
       setLayoutUndo(null)
+      focusCanvas(next.nodes.map(node => node.id), 0.2, 1)
+    }
   }
 
   function deleteSelection() {
@@ -686,63 +730,6 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       setConnectMode({ sourceId: selection.nodes[0]! })
   }, [selection])
 
-  const configurationNode = document?.nodes.find(node => node.id === configurationId)
-  const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
-  const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
-  const selectedRuns = runs.filter(run => selectedNode?.kind === 'subagent-role'
-    ? run.roleId === selectedNodeId && (!runOwnerFilter || run.orchestratorId === runOwnerFilter)
-    : run.orchestratorId === selectedNodeId)
-  const rolePanelState = selectedRuns.some(run => run.status === 'running') ? 'running' : selectedRuns[0]?.status
-  const rolePanelKind = rolePanelState === 'running' ? 'Running' : rolePanelState === 'failed' || rolePanelState === 'interrupted' ? 'Failed' : 'Idle'
-  const selectedNodeView = selectedNode ? (viewForSession(store.views, selectedNode.sessionPath) ?? null) : null
-  const selectedNeighbors = selectedNodeId
-    ? new Set([
-        ...(document?.edges.flatMap(edge => edge.source === selectedNodeId ? [edge.target] : edge.target === selectedNodeId ? [edge.source] : []) ?? []),
-        ...(document?.memberships?.flatMap(item => item.orchestratorId === selectedNodeId ? [item.memberId] : item.memberId === selectedNodeId ? [item.orchestratorId] : []) ?? []),
-        ...runs.filter(run => run.status === 'running').flatMap(run => run.orchestratorId === selectedNodeId ? [run.roleId] : run.roleId === selectedNodeId ? [run.orchestratorId] : []),
-      ])
-    : null
-  const recentMessages = selectedNodeId
-    ? (document?.messages.filter(message => message.source === selectedNodeId || message.target === selectedNodeId).slice(-5).reverse() ?? [])
-    : []
-
-  // Open the node's binding session in the background as soon as it is selected
-  // so the composer has a live view (queue, model, abort, steer behavior).
-  useEffect(() => {
-    if (!selectedNodeId)
-      return
-    if (openingNodeRef.current.has(selectedNodeId))
-      return
-    const id = selectedNodeId
-    let cancelled = false
-    async function run() {
-      openingNodeRef.current.add(id)
-      try {
-        const path = documentRef.current?.nodes.find(node => node.id === id)?.sessionPath || null
-        if (!path || cancelled)
-          return
-        const opened = await openBackgroundSession(path)
-        await requestModels(opened.key)
-      }
-      catch (reason) {
-        if (!cancelled)
-          setError(String(reason))
-      }
-      finally {
-        openingNodeRef.current.delete(id)
-      }
-    }
-    run()
-    return () => {
-      cancelled = true
-    }
-  }, [selectedNodeId])
-
-  const conductorPath = document?.conductorPath
-  const conductorView = viewForSession(store.views, conductorPath)
-  const conductorStreaming = Boolean(conductorView?.isStreaming || (conductorPath && store.statuses[conductorPath]?.status === 'running'))
-  const draftMessage = latestDraftMessage(conductorView)
-  const conductorReady = conductorDraftReady(parseConductorDraft(draftMessage ? messageText(draftMessage) : '')) && !conductorStreaming
   const projectedNodes = useMemo(() => {
     const placements = memberPlacements(nodes, document?.memberships ?? [], expandedAgents, movedAgents)
     const primary = new Map(placements.filter(item => !item.reference).map(item => [item.agentId, item]))
@@ -756,6 +743,63 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     return [...originals, ...references]
   }, [nodes, document?.memberships, expandedAgents, movedAgents])
 
+  const configurationNode = document?.nodes.find(node => node.id === configurationId)
+  const selectedNodeId = selection.nodes.length === 1 ? selection.nodes[0] : undefined
+  const selectedNode = selectedNodeId ? document?.nodes.find(node => node.id === selectedNodeId) : undefined
+  const selectedRuns = runs.filter(run => selectedNode?.kind === 'subagent-role'
+    ? run.roleId === selectedNodeId && (!runOwnerFilter || run.orchestratorId === runOwnerFilter)
+    : run.orchestratorId === selectedNodeId)
+  const rolePanelState = selectedRuns.some(run => run.status === 'running') ? 'running' : selectedRuns[0]?.status
+  const rolePanelKind = rolePanelState === 'running' ? 'Running' : rolePanelState === 'failed' || rolePanelState === 'interrupted' ? 'Failed' : 'Idle'
+  useLayoutEffect(() => {
+    if (detailOpen)
+      detailRef.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+  }, [detailOpen, selectedNodeId])
+  const selectedNodeView = selectedNode ? (viewForSession(store.views, selectedNode.sessionPath) ?? null) : null
+  const neighborhoodId = projectedNodes.find(node => node.id === hoveredDisplayId)?.data.agentId
+    ?? (hoveredDisplayId && projectedNodes.some(node => node.id === hoveredDisplayId) ? hoveredDisplayId : selectedNodeId)
+  const selectedNeighbors = neighborhoodId
+    ? new Set([
+        ...(document?.edges.flatMap(edge => edge.source === neighborhoodId ? [edge.target] : edge.target === neighborhoodId ? [edge.source] : []) ?? []),
+        ...(document?.memberships?.flatMap(item => item.orchestratorId === neighborhoodId ? [item.memberId] : item.memberId === neighborhoodId ? [item.orchestratorId] : []) ?? []),
+        ...runs.filter(run => run.status === 'running').flatMap(run => run.orchestratorId === neighborhoodId ? [run.roleId] : run.roleId === neighborhoodId ? [run.orchestratorId] : []),
+      ])
+    : null
+  const recentMessages = selectedNodeId
+    ? (document?.messages.filter(message => message.source === selectedNodeId || message.target === selectedNodeId).slice(-5).reverse() ?? [])
+    : []
+
+  // Lightweight inspection uses existing facts only. Load the composer on explicit detail access.
+  useEffect(() => {
+    if (!selectedNodeId || !detailOpen || conductorOpen)
+      return
+    const id = selectedNodeId
+    let cancelled = false
+    async function run() {
+      try {
+        const path = documentRef.current?.nodes.find(node => node.id === id)?.sessionPath || null
+        if (!path || cancelled)
+          return
+        const opened = await openBackgroundSession(path)
+        if (!cancelled)
+          await requestModels(opened.key)
+      }
+      catch (reason) {
+        if (!cancelled)
+          setError(String(reason))
+      }
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedNodeId, detailOpen, conductorOpen])
+
+  const conductorPath = document?.conductorPath
+  const conductorView = viewForSession(store.views, conductorPath)
+  const conductorStreaming = Boolean(conductorView?.isStreaming || (conductorPath && store.statuses[conductorPath]?.status === 'running'))
+  const draftMessage = latestDraftMessage(conductorView)
+  const conductorReady = conductorDraftReady(parseConductorDraft(draftMessage ? messageText(draftMessage) : '')) && !conductorStreaming
   const callEdges = useMemo(() => subagentCallEdges(runs, activities, projectedNodes), [runs, activities, projectedNodes])
   const routeInput = JSON.stringify({ edges: [...document?.edges ?? [], ...callEdges].map(({ id, source, target }) => ({ id, source, target })), nodes: projectedNodes.map(nodeGeometry) })
   const graphRoutes = useMemo(() => {
@@ -767,8 +811,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     if (!document)
       return
     // eslint-disable-next-line react/set-state-in-effect -- derived user edges and live message activity
-    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, selection.nodes[0], projectedNodes, callEdges, graphRoutes))
-  }, [document, runs, activities, selection.edges, selection.nodes, reducedMotion, projectedNodes, instance, active, callEdges, graphRoutes])
+    setEdges(toCanvasEdges(document.edges, activities, new Set(selection.edges), reducedMotion || !active, neighborhoodId, projectedNodes, callEdges, graphRoutes))
+  }, [document, activities, selection.edges, neighborhoodId, reducedMotion, projectedNodes, active, callEdges, graphRoutes])
 
   async function delegateTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -821,7 +865,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
           ? (() => {
               const members = (document?.memberships ?? []).filter(item => item.orchestratorId === node.id)
               const ownedRuns = runs.filter(run => run.orchestratorId === node.id)
-              return { total: members.length, running: ownedRuns.filter(run => run.status === 'running').length, failed: ownedRuns.filter(run => run.status === 'failed' || run.status === 'interrupted').length }
+              return { total: members.length, running: members.filter(item => roleStatus(ownedRuns, item.memberId) === 'running').length, failed: members.filter(item => roleStatus(ownedRuns, item.memberId) === 'failed').length }
             })()
           : undefined,
         membersExpanded: expandedAgents.has(node.id),
@@ -829,12 +873,15 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
         modelName: model?.id ?? (node.data.kind === 'subagent-role' ? node.data.roleModel || '继承调用者模型' : undefined),
         provider: model?.provider,
         brand: providerBrand(model?.provider),
-        status: node.data.kind === 'subagent-role' ? roleStatus(runs, node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
+        status: node.data.kind === 'subagent-role' ? roleStatus(node.data.displayOwnerId ? runs.filter(run => run.orchestratorId === node.data.displayOwnerId) : runs, node.data.agentId ?? node.id) : sessionStatusFor(node.data.sessionPath, store.statuses),
         needsInput: sessionNeedsInputFor(node.data.sessionPath, store.statuses),
         unread: store.unreadSessions.has(node.data.sessionPath),
         isAnchor: connectMode?.sourceId === node.id,
         isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
-        isDimmed: Boolean(selectedNodeId && (node.data.agentId ?? node.id) !== selectedNodeId && !selectedNeighbors?.has(node.data.agentId ?? node.id) && !(expandedAgents.has(selectedNodeId) && document?.memberships?.some(item => item.orchestratorId === selectedNodeId && item.memberId === (node.data.agentId ?? node.id)))),
+        summaryOpen: summaryDisplayId === node.id,
+        onActivate: () => activateNode(node),
+        onHover: setHoveredDisplayId,
+        isDimmed: Boolean(neighborhoodId && (node.data.agentId ?? node.id) !== neighborhoodId && !selectedNeighbors?.has(node.data.agentId ?? node.id)),
       },
     })
   })
@@ -847,19 +894,47 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       return
     setNodes(current => current.map(node => ({ ...node, selected: node.id === target.id })))
     setSelection({ nodes: [target.id], edges: [] })
+    activeDisplayRef.current = target.id
+    setSummaryDisplayId(null)
+    setDetailOpen(true)
+    setConductorOpen(false)
     if (instance)
       focusCanvas([target.id])
   }
 
+  const summaryNode = visibleNodes.find(node => node.id === summaryDisplayId && (node.data.agentId ?? node.id) === selectedNodeId)
+  const summaryRuns = summaryNode?.data.kind === 'subagent-role'
+    ? selectedRuns
+    : runs.filter(run => run.orchestratorId === selectedNodeId)
+  const summaryActivity = summaryRuns[0]?.taskPreview ?? recentMessages[0]?.preview
   const sourceNode = connectMode ? document?.nodes.find(node => node.id === connectMode.sourceId) : undefined
 
   return (
-    <div className={`${styles.workspace} pf-relative pf-flex pf-flex-1 pf-min-h-0 pf-flex-col`}>
+    <div
+      className={`${styles.workspace} pf-relative pf-flex pf-flex-1 pf-min-h-0 pf-flex-col`}
+      onKeyDown={(event) => {
+        if (event.defaultPrevented || (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"], [aria-modal="true"]')))
+          return
+        if (event.key === 'Escape') {
+          if (connectMode)
+            setConnectMode(null)
+          else if (conductorOpen)
+            setConductorOpen(false)
+          else if (detailOpen)
+            closeRuntimePanel()
+          else if (summaryDisplayId)
+            closeSummary()
+          else
+            return
+          event.stopPropagation()
+        }
+      }}
+    >
       <header className={`${styles.bar} pf-bg-canvas pf-z-4 pf-flex pf-items-center pf-gap-2 pf-px-2`}>
         <SidebarToggle collapsed={sidebarCollapsed} onToggle={onToggleSidebar} />
         <div className={`${styles.heading} pf-flex pf-min-w-0 pf-flex-1 pf-items-center pf-gap-2`}>
           <strong>Flow</strong>
-          <button type="button" title={projectPath} onClick={() => setProjectPickerOpen(true)}>{shortenPath(projectPath) || '选择工程'}</button>
+          <button type="button" title={projectPath} onClick={() => setProjectPickerOpen(true)}>{projectPath.split('/').filter(Boolean).at(-1) || '选择工程'}</button>
         </div>
         {saving ? <span className="pf-text-muted pf-text-[0.74rem] pf-whitespace-nowrap"><span className="t-shimmer" data-text="保存中…">保存中…</span></span> : null}
         {(selection.nodes.length > 1 || selection.edges.length) && !connectMode
@@ -922,26 +997,6 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
 
       {error ? <div className={`${styles.error} pf-absolute pf-z-8 pf-right-[16px] pf-bottom-[64px] pf-p-[9px_12px] pf-rounded-[6px] pf-text-danger pf-text-[0.78rem] pf-leading-[1.5]`}>{error}</div> : null}
       <button type="button" className={`${styles.conductorButton} pf-absolute pf-z-5 pf-right-[16px] pf-bottom-[16px] pf-h-[36px] pf-p-[0_14px] pf-border pf-border-solid pf-border-line-strong pf-rounded-[999px] pf-text-ink pf-text-[0.82rem]`} disabled={!document} onClick={() => void showConductor()}>编排</button>
-      {conductorOpen
-        ? (
-            <aside className={`${styles.conductor} pf-right-0 pf-bottom-0 pf-bg-canvas pf-absolute pf-z-7 pf-flex pf-flex-col`} aria-label="编排">
-              <header className={`${styles.conductorBar} pf-p-[10px_12px] pf-flex pf-items-center pf-justify-between pf-gap-2`}>
-                <strong>编排</strong>
-                <button type="button" onClick={() => setConductorOpen(false)}>关闭</button>
-              </header>
-              <div className={`${styles.conductorChat} pf-min-h-0 pf-overflow-hidden`}>
-                {conductorView
-                  ? (
-                      <ChatView
-                        sessionKey={conductorView.key}
-                        messageExtra={message => draftCard(message, draftMessage, conductorReady, saving, () => void acceptDraft())}
-                      />
-                    )
-                  : <FlowFirstPrompt busy={saving} onSend={sendFirstConductorMessage} />}
-              </div>
-            </aside>
-          )
-        : null}
       <div className={styles.canvasLayout}>
         <div ref={canvasRef} className={styles.canvas}>
           {!document
@@ -961,6 +1016,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                   onNodesChange={onNodesChange}
                   onNodeClick={onNodeClick}
                   onNodeDragStart={(_event, node) => {
+                    setSummaryDisplayId(null)
+                    setLayoutUndo(null)
                     setNodes(current => current.map(item => item.id === node.id ? { ...item, position: node.position } : item))
                     setMovedAgents(current => new Set([...current, node.id]))
                   }}
@@ -971,14 +1028,12 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                   onEdgesChange={onEdgesChange}
                   onEdgesDelete={onEdgesDelete}
                   onMoveEnd={onMoveEnd}
-                  onMove={(_event, viewport) => setZoom(viewport.zoom)}
                   onSelectionChange={onSelectionChange}
                   deleteKeyCode={['Backspace', 'Delete']}
                   colorMode="dark"
                 >
                   <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--flow-grid)" />
                   <FlowCanvasTools
-                    zoom={zoom}
                     canLocate={selection.nodes.length === 1}
                     canArrange={!saving && Boolean(document.nodes.length)}
                     canUndo={!saving && Boolean(layoutUndo && layoutUndo.fingerprint === layoutFingerprint(document))}
@@ -987,6 +1042,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                     onZoomIn={() => void instance?.zoomIn()}
                     onOverview={() => {
                       focusTargetRef.current = []
+                      focusPendingRef.current = false
                       void instance?.fitView({ padding: 0.12, duration: reducedMotion ? 0 : 180 })
                     }}
                     onLocate={() => focusCanvas(selection.nodes)}
@@ -1000,14 +1056,45 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                       catch { /* Device preference is optional. */ }
                     }}
                   />
+                  {summaryNode && !connectMode && !configurationNode && !panelOpen && !detailOpen && !conductorOpen
+                    ? <FlowNodeSummary key={summaryNode.id} node={summaryNode} ownerName={document.nodes.find(node => node.id === summaryNode.data.displayOwnerId)?.name} activity={summaryActivity} onClose={closeSummary} onDetails={openRuntimePanel} onRuns={() => setRunPanel(summaryNode.data.kind === 'subagent-role' ? { roleId: selectedNodeId, ...(runOwnerFilter ? { orchestratorId: runOwnerFilter } : {}) } : { orchestratorId: selectedNodeId })} />
+                    : null}
                   {minimap ? <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" /> : null}
                 </ReactFlow>
               )}
 
         </div>
-        {selectedNode && !connectMode && !configurationNode && !panelOpen
+        {conductorOpen
           ? (
-              <aside className={`${styles.runtimePanel} pf-z-6 pf-flex pf-flex-col`} aria-label={`会话运行面板：${selectedNode.name}`}>
+              <aside className={`${styles.conductor} pf-bg-canvas pf-z-7 pf-flex pf-flex-col`} aria-label="编排">
+                <header className={`${styles.conductorBar} pf-p-[10px_12px] pf-flex pf-items-center pf-justify-between pf-gap-2`}>
+                  <strong>编排</strong>
+                  <button type="button" onClick={() => setConductorOpen(false)}>关闭</button>
+                </header>
+                <div className={`${styles.conductorChat} pf-min-h-0 pf-overflow-hidden`}>
+                  {conductorView
+                    ? (
+                        <ChatView
+                          sessionKey={conductorView.key}
+                          messageExtra={message => draftCard(message, draftMessage, conductorReady, saving, () => void acceptDraft())}
+                        />
+                      )
+                    : <FlowFirstPrompt busy={saving} onSend={sendFirstConductorMessage} />}
+                </div>
+              </aside>
+            )
+          : null}
+        {detailOpen && !conductorOpen && selectedNode && !connectMode && !configurationNode && !panelOpen
+          ? (
+              <aside
+                ref={detailRef}
+                onKeyDown={(event) => {
+                  if (event.key === 'Delete' || event.key === 'Backspace')
+                    event.stopPropagation()
+                }}
+                className={`${styles.runtimePanel} pf-z-6 pf-flex pf-flex-col`}
+                aria-label={`会话运行面板：${selectedNode.name}`}
+              >
                 <header className={`${styles.runtimeHeader} pf-p-[4px_8px_4px_12px] pf-flex pf-items-center pf-gap-2`}>
                   <div className={`${styles.runtimeIdentity} pf-flex pf-min-w-0 pf-flex-1 pf-items-center pf-gap-2`}>
                     <strong title={selectedNode.name}>{selectedNode.name}</strong>
@@ -1020,7 +1107,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                       <ExternalLink size={14} aria-hidden="true" />
                       <span>打开聊天</span>
                     </button>
-                    <IconButton label="关闭运行面板" onClick={closeRuntimePanel}>
+                    <IconButton label="返回画布（关闭运行面板）" onClick={closeRuntimePanel}>
                       <X />
                     </IconButton>
                   </div>
@@ -1201,7 +1288,8 @@ function toCanvasEdges(
     const transient = calls.some(call => call.id === edge.id)
     const selected = selectedEdgeIds.has(edge.id)
     const targetId = nodes.find(node => node.id === edge.target)?.data.agentId ?? edge.target
-    const adjacent = !selectedNodeId || edge.source === selectedNodeId || targetId === selectedNodeId
+    const sourceId = nodes.find(node => node.id === edge.source)?.data.agentId ?? edge.source
+    const adjacent = !selectedNodeId || sourceId === selectedNodeId || targetId === selectedNodeId
     return {
       id: edge.id,
       source: edge.source,
@@ -1213,6 +1301,7 @@ function toCanvasEdges(
         activities: activities.filter(activity => activity.edgeId === edge.id),
         reducedMotion,
         dimmed: !adjacent,
+        highlighted: Boolean(selectedNodeId && adjacent),
         route: routes.get(edge.id),
         transient,
       },
