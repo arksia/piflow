@@ -473,10 +473,16 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     setNodes(current => applyNodeChanges(changes, current))
   }
 
-  function activateNode(node: FlowCanvasNode) {
+  function activateNode(node: FlowCanvasNode, additive = false) {
     const id = node.data.agentId ?? node.id
     if (connectMode) {
       connectNodes(connectMode.sourceId, id)
+      return
+    }
+    if (additive) {
+      setSummaryDisplayId(null)
+      setDetailOpen(false)
+      setNodes(current => current.map(item => item.id === id ? { ...item, selected: !item.selected } : item))
       return
     }
     activeDisplayRef.current = node.id
@@ -489,8 +495,16 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   }
 
   const onNodeClick: NodeMouseHandler<FlowCanvasNode> = (event, node) => {
-    if (!event.shiftKey && !event.metaKey && !event.ctrlKey)
+    if (connectMode) {
       activateNode(node)
+    }
+    else if (event.metaKey || event.ctrlKey) {
+      setSummaryDisplayId(null)
+      setDetailOpen(false)
+    }
+    else if (!event.shiftKey) {
+      activateNode(node)
+    }
   }
 
   function restoreNodeFocus() {
@@ -526,14 +540,15 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     restoreNodeFocus()
   }
 
-  function onNodeDragStop(_event: MouseEvent | TouchEvent, node: FlowCanvasNode) {
+  function onNodeDragStop(_event: MouseEvent | TouchEvent, node: FlowCanvasNode, draggedNodes: FlowCanvasNode[]) {
     const current = documentRef.current
     if (!current)
       return
     const now = new Date().toISOString()
+    const positions = new Map((draggedNodes.length ? draggedNodes : [node]).map(item => [item.id, item.position]))
     void persist({
       ...current,
-      nodes: current.nodes.map(item => item.id === node.id ? { ...item, position: node.position, updatedAt: now } : item),
+      nodes: current.nodes.map(item => positions.has(item.id) ? { ...item, position: positions.get(item.id)!, updatedAt: now } : item),
     }, true)
   }
 
@@ -879,7 +894,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
         isAnchor: connectMode?.sourceId === node.id,
         isStreaming: Boolean(viewForSession(store.views, node.data.sessionPath)?.isStreaming),
         summaryOpen: summaryDisplayId === node.id,
-        onActivate: () => activateNode(node),
+        onActivate: (_id: string, additive?: boolean) => activateNode(node, additive),
         onHover: setHoveredDisplayId,
         isDimmed: Boolean(neighborhoodId && (node.data.agentId ?? node.id) !== neighborhoodId && !selectedNeighbors?.has(node.data.agentId ?? node.id)),
       },
@@ -1014,12 +1029,15 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                   panOnScroll
                   onInit={setInstance}
                   onNodesChange={onNodesChange}
+                  selectNodesOnDrag={false}
+                  multiSelectionKeyCode={['Meta', 'Control']}
                   onNodeClick={onNodeClick}
-                  onNodeDragStart={(_event, node) => {
+                  onNodeDragStart={(_event, node, draggedNodes) => {
                     setSummaryDisplayId(null)
                     setLayoutUndo(null)
-                    setNodes(current => current.map(item => item.id === node.id ? { ...item, position: node.position } : item))
-                    setMovedAgents(current => new Set([...current, node.id]))
+                    const positions = new Map((draggedNodes.length ? draggedNodes : [node]).map(item => [item.id, item.position]))
+                    setNodes(current => current.map(item => positions.has(item.id) ? { ...item, position: positions.get(item.id)! } : item))
+                    setMovedAgents(current => new Set([...current, ...positions.keys()]))
                   }}
                   onNodeDragStop={onNodeDragStop}
                   onNodeDoubleClick={(_event, node) => void node.data.onOpen()}

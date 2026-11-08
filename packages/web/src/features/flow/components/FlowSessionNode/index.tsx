@@ -33,7 +33,7 @@ export type FlowSessionNodeData = Record<string, unknown> & {
   isStreaming?: boolean
   summaryOpen?: boolean
   onHover?: (id: string | null) => void
-  onActivate?: (displayId: string) => void
+  onActivate?: (displayId: string, additive?: boolean) => void
   onOpen: () => void
 }
 export type FlowCanvasNode = Node<FlowSessionNodeData, 'session'>
@@ -63,6 +63,12 @@ export default function FlowSessionNode({ id, data, selected }: NodeProps<FlowCa
         data-flow-node={id}
         aria-label={[data.name, identity, data.referenceLabel, data.provider, data.modelName, attention?.label ?? '空闲'].filter(Boolean).join('，')}
         aria-expanded={Boolean(data.summaryOpen)}
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey) {
+            event.stopPropagation()
+            data.onActivate?.(id, true)
+          }
+        }}
         onPointerEnter={event => event.pointerType === 'mouse' && data.onHover?.(id)}
         onPointerLeave={() => data.onHover?.(null)}
         onFocus={() => data.onHover?.(id)}
