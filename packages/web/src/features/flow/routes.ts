@@ -1,8 +1,11 @@
 import type { CanvasRect } from './viewport'
+import { NODE_LABEL_GAP } from './geometry'
 
 export interface FlowRoutePoint { x: number, y: number }
 export interface FlowRouteNode extends FlowRoutePoint { id: string, size: number, bounds?: CanvasRect }
 interface RouteEdge { id: string, source: string, target: string }
+type Side = 'left' | 'right' | 'top' | 'bottom'
+interface Port { side: Side, points: FlowRoutePoint[] }
 
 function obstacle(node: FlowRouteNode): CanvasRect {
   const rect = node.bounds ?? { x: node.x - node.size / 2, y: node.y - node.size / 2, width: node.size, height: node.size }
@@ -20,7 +23,7 @@ function simplify(points: FlowRoutePoint[]): FlowRoutePoint[] {
     if (last?.x === point.x && last.y === point.y)
       continue
     const before = output.at(-2)
-    if (before && last && ((before.x === last.x && last.x === point.x) || (before.y === last.y && last.y === point.y)))
+    if (before && last && ((before.x === last.x && last.x === point.x && (last.y - before.y) * (point.y - last.y) >= 0) || (before.y === last.y && last.y === point.y && (last.x - before.x) * (point.x - last.x) >= 0)))
       output.pop()
     output.push(point)
   }
@@ -85,34 +88,98 @@ function channelPath(start: FlowRoutePoint, end: FlowRoutePoint, blocks: CanvasR
   return simplify(direct)
 }
 
+function ports(node: FlowRouteNode, offset = 0): Port[] {
+  const rect = obstacle(node)
+  const half = node.size / 2
+  const bottom = { x: node.x + offset, y: node.y + half }
+  const base: Port[] = [
+    { side: 'left', points: [{ x: node.x - half, y: node.y + offset }, { x: rect.x, y: node.y + offset }] },
+    { side: 'right', points: [{ x: node.x + half, y: node.y + offset }, { x: rect.x + rect.width, y: node.y + offset }] },
+    { side: 'top', points: [{ x: node.x + offset, y: node.y - half }, { x: node.x + offset, y: rect.y }] },
+  ]
+  if (!node.bounds || node.bounds.y + node.bounds.height <= bottom.y + NODE_LABEL_GAP) {
+    base.push({ side: 'bottom', points: [bottom, { x: bottom.x, y: rect.y + rect.height }] })
+  }
+  else {
+    // Leave the icon vertically, then use the real gap above its label to escape either side.
+    const elbow = { x: bottom.x, y: bottom.y + NODE_LABEL_GAP / 2 }
+    for (const x of [rect.x, rect.x + rect.width])
+      base.push({ side: 'bottom', points: [bottom, elbow, { x, y: elbow.y }] })
+  }
+  return base
+}
+
+function simplePaths(start: FlowRoutePoint, end: FlowRoutePoint): FlowRoutePoint[][] {
+  const x = (start.x + end.x) / 2
+  const y = (start.y + end.y) / 2
+  return [
+    [start, { x: end.x, y: start.y }, end],
+    [start, { x: start.x, y: end.y }, end],
+    [start, { x, y: start.y }, { x, y: end.y }, end],
+    [start, { x: start.x, y }, { x: end.x, y }, end],
+  ]
+}
+
+function pathCost(points: FlowRoutePoint[]) {
+  return points.slice(1).reduce((sum, point, i) => sum + Math.abs(point.x - points[i]!.x) + Math.abs(point.y - points[i]!.y), 0) + Math.max(0, points.length - 2) * 16
+}
+
+function facingCost(node: FlowRouteNode, other: FlowRouteNode, side: Side) {
+  const dx = other.x - node.x
+  const dy = other.y - node.y
+  const toward = side === 'left' ? -dx : side === 'right' ? dx : side === 'top' ? -dy : dy
+  return 64 * (1 - toward / (Math.hypot(dx, dy) || 1))
+}
+
+function chooseRoute(from: FlowRouteNode, to: FlowRouteNode, fromPorts: Port[], toPorts: Port[], nodes: FlowRouteNode[]) {
+  const blocks = nodes.map(obstacle)
+  const foreignFrom = nodes.filter(node => node.id !== from.id).map(obstacle)
+  const foreignTo = nodes.filter(node => node.id !== to.id).map(obstacle)
+  const clearPath = (points: FlowRoutePoint[], obstacles: CanvasRect[]) => points.slice(1).every((point, i) => clear(points[i]!, point, obstacles))
+  const candidates = fromPorts.flatMap(a => toPorts.flatMap((b) => {
+    const start = a.points.at(-1)!
+    const end = b.points.at(-1)!
+    const exitsClear = clearPath(a.points, foreignFrom) && clearPath(b.points, foreignTo)
+    const facing = facingCost(from, to, a.side) + facingCost(to, from, b.side)
+    return simplePaths(start, end).map((middle) => {
+      const path = simplify([...a.points, ...middle, ...b.points.slice().reverse()])
+      return { a, b, path, clear: exitsClear && clearPath(middle, blocks), exitsClear, cost: pathCost(path) + facing }
+    })
+  })).sort((a, b) => a.cost - b.cost)
+  const simple = candidates.find(candidate => candidate.clear)
+  if (simple)
+    return simple
+  // ponytail: search once per blocked edge, not once for each of the 25 port pairs.
+  const best = candidates.find(candidate => candidate.exitsClear) ?? candidates[0]!
+  const middle = channelPath(best.a.points.at(-1)!, best.b.points.at(-1)!, blocks)
+  return { ...best, path: simplify([...best.a.points, ...middle, ...best.b.points.slice().reverse()]) }
+}
+
 export function routeGraphEdges(edges: RouteEdge[], nodes: FlowRouteNode[], laneGap = 8): Map<string, FlowRoutePoint[]> {
   const byId = new Map(nodes.map(node => [node.id, node]))
-  const blocks = nodes.map(obstacle)
-  const slots = new Map<string, string[]>()
-  const plans = edges.flatMap((edge) => {
+  const slots = new Map<string, { id: string, order: number }[]>()
+  const plans = edges.slice().sort((a, b) => a.id.localeCompare(b.id)).flatMap((edge) => {
     const from = byId.get(edge.source < edge.target ? edge.source : edge.target)
     const to = byId.get(edge.source < edge.target ? edge.target : edge.source)
     if (!from || !to || from.id === to.id)
       return []
-    const fromSide = to.x >= from.x ? 1 : -1
-    const toSide = from.x >= to.x ? 1 : -1
-    for (const [node, side] of [[from, fromSide], [to, toSide]] as const) {
+    const route = chooseRoute(from, to, ports(from), ports(to), nodes)
+    for (const [node, other, side] of [[from, to, route.a.side], [to, from, route.b.side]] as const) {
       const key = `${node.id}:${side}`
-      slots.set(key, [...slots.get(key) ?? [], edge.id].sort())
+      const order = side === 'left' || side === 'right' ? other.y : other.x
+      slots.set(key, [...slots.get(key) ?? [], { id: edge.id, order }].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)))
     }
-    return [{ edge, from, to, fromSide, toSide }]
+    return [{ edge, from, to, route, fromSide: route.a.side, toSide: route.b.side }]
   })
-  return new Map(plans.map(({ edge, from, to, fromSide, toSide }) => {
-    const port = (node: FlowRouteNode, side: number) => {
+  return new Map(plans.map(({ edge, from, to, route, fromSide, toSide }) => {
+    const port = (node: FlowRouteNode, side: Side) => {
       const group = slots.get(`${node.id}:${side}`)!
-      const offset = (group.indexOf(edge.id) - (group.length - 1) / 2) * Math.min(laneGap, node.size * 0.5 / Math.max(1, group.length - 1))
-      const rect = obstacle(node)
-      const p = { x: node.x + side * node.size / 2, y: node.y + offset }
-      return [p, { x: side > 0 ? rect.x + rect.width : rect.x, y: p.y }]
+      const offset = (group.findIndex(item => item.id === edge.id) - (group.length - 1) / 2) * Math.min(laneGap, node.size * 0.5 / Math.max(1, group.length - 1))
+      return ports(node, offset).filter(port => port.side === side)
     }
-    const [a, start] = port(from, fromSide) as [FlowRoutePoint, FlowRoutePoint]
-    const [b, end] = port(to, toSide) as [FlowRoutePoint, FlowRoutePoint]
-    const path = simplify([a, ...channelPath(start, end, blocks), b])
+    const { path } = slots.get(`${from.id}:${fromSide}`)!.length === 1 && slots.get(`${to.id}:${toSide}`)!.length === 1
+      ? route
+      : chooseRoute(from, to, port(from, fromSide), port(to, toSide), nodes)
     return [edge.id, edge.source === from.id ? path : path.reverse()]
   }))
 }
