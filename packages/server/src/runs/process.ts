@@ -36,6 +36,8 @@ export type ProcessFact
   }
   | {
     type: 'closed'
+    exitCode?: number | null
+    signal?: string | null
   }
 /** The JSON process Adapter reports facts; the runs Module owns their meaning. */
 export async function runSubagentProcess(
@@ -324,7 +326,7 @@ export async function runSubagentProcess(
       child.once('error', (error) => {
         failure = error.message
       })
-      child.once('close', (code) => {
+      child.once('close', (code, exitSignal) => {
         signal.removeEventListener('abort', abort)
         clearTimeout(timeout)
         buffer += decoder.end()
@@ -334,7 +336,7 @@ export async function runSubagentProcess(
           flush()
         closed = true
         cancelledAtClose = signal.aborted
-        onFact({ type: 'closed' })
+        onFact({ type: 'closed', exitCode: code, signal: exitSignal })
         resolve(code ?? 1)
       })
     })

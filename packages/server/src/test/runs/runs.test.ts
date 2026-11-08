@@ -472,3 +472,72 @@ it('confirms one cancellation without stopping another run and records process e
     await rm(root, { recursive: true, force: true })
   }
 })
+it('retains native bash exit codes independently of tool status and scopes command pagination', async () => {
+  const { createBashTool } = await import('@earendil-works/pi-coding-agent')
+  const { root, dataDir } = await setup()
+  const runs = await createSubagentRuns({ dataDir, execute: async (_input, _signal, fact) => {
+    const bash = createBashTool(root)
+    for (const [id, command] of [['ok', 'printf ok'], ['failed', 'printf failed; exit 7']] as const) {
+      fact({ type: 'tool_start', toolCallId: id, toolName: 'bash', args: { command } })
+      const result = await bash.execute(id, { command, timeout: 5 })
+      fact({ type: 'tool_end', toolCallId: id, toolName: 'bash', result, isError: id === 'failed' })
+    }
+    fact({ type: 'tool_end', toolCallId: 'orphan', toolName: 'bash', result: { content: [{ type: 'text', text: 'exit code 0' }] }, isError: false })
+    fact({ type: 'tool_start', toolCallId: 'unfinished', toolName: 'bash', args: { command: 'wait' } })
+    fact({ type: 'closed', exitCode: 0, signal: null })
+    return { output: 'done', cancelled: false, closed: true }
+  } })
+  try {
+    const result = await runs.execute(input(root))
+    const page = await runs.commands({ projectPath: root, runId: result.runId })
+    assert.deepEqual(page.counts, { total: 4, nonzero: 1, unknown: 2 })
+    assert.deepEqual(page.commands.map(command => command.commandExitCode), [0, 7, null, null])
+    assert.equal(page.commands[2]!.commandPreview, null)
+    assert.equal(page.commands[3]!.status, 'interrupted')
+    assert.equal('command' in page.commands[0]!, false)
+    const tool = await runs.tool(root, result.runId, 'failed')
+    assert.equal(tool.command?.exitCodeSource, 'pi-structured-result')
+    assert.equal(tool.command?.command, 'printf failed; exit 7')
+    assert.equal((await runs.read(root, result.runId)).processExit?.exitCode, 0)
+    assert.equal(result.status, 'succeeded')
+    await assert.rejects(runs.commands({ projectPath: await realpath(tmpdir()), runId: result.runId }), /不存在/)
+  }
+  finally {
+    await runs.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+it('filters commands before paging and preserves real CLI close codes', async () => {
+  const { root, dataDir } = await setup()
+  const cliEntry = join(root, 'pi.cjs')
+  await writeFile(cliEntry, `
+    const emit=e=>console.log(JSON.stringify(e));
+    for(let i=0;i<110;i++) {
+      const toolName=i<55?'read':'bash', toolCallId=String(i);
+      emit({type:'tool_execution_start', toolCallId, toolName, args:{command:'echo '+i}});
+      emit({type:'tool_execution_end', toolCallId, toolName, result:{structuredContent:{exit_code:i===55?7:0}}, isError:i===55});
+    }
+    emit({type:'message_end',message:{role:'assistant',content:[{type:'text',text:'done'}]}});
+    process.exitCode=9;
+  `)
+  const runs = await createSubagentRuns({ dataDir, cliEntry })
+  try {
+    const result = await runs.execute(input(root))
+    const first = await runs.commands({ projectPath: root, runId: result.runId })
+    assert.equal(first.commands.length, 50)
+    assert.equal(first.commands[0]!.toolCallId, '55')
+    const last = await runs.commands({ projectPath: root, runId: result.runId, cursor: first.nextCursor! })
+    assert.equal(last.commands.length, 5)
+    assert.deepEqual(first.counts, { total: 55, nonzero: 1, unknown: 0 })
+    const detail = await runs.read(root, result.runId)
+    assert.equal(detail.processExit?.exitCode, 9)
+    assert.equal(detail.completedAt, detail.processExit?.closedAt)
+    assert.equal(result.status, 'failed')
+    await assert.rejects(runs.tools({ projectPath: root, runId: result.runId, cursor: first.nextCursor! }), /游标/)
+    await assert.rejects(runs.commands({ projectPath: root, runId: result.runId, cursor: 'bad' }), /游标/)
+  }
+  finally {
+    await runs.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

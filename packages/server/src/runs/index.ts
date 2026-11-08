@@ -3,6 +3,7 @@ import type {
   RunInput,
   RunMessage,
   RunOutputQuery,
+  RunProcessExit,
   RunQuery,
   RunResult,
   RunToolDetail,
@@ -159,6 +160,8 @@ export async function createSubagentRuns(options: {
     let recordingError: string | undefined
     let currentOutput = store.window(run.id)
     const began = performance.now()
+    let processExit: RunProcessExit | undefined
+    let closedDuration: number | undefined
     function recordFailure(error: unknown) {
       recordingError ??= error instanceof Error ? error.message : String(error)
       recordingErrors.set(run.id, recordingError)
@@ -175,6 +178,8 @@ export async function createSubagentRuns(options: {
         const entry = active.get(run.id)
         if (entry)
           entry.closed = true
+        processExit = { closedAt: new Date().toISOString(), exitCode: event.exitCode ?? null, signal: event.signal ?? null }
+        closedDuration = Math.max(0, performance.now() - began)
         return
       }
       if (recordingError)
@@ -277,6 +282,10 @@ export async function createSubagentRuns(options: {
               tool.inputPreview = input.text
               tool.inputTruncated = input.truncated
               tool.evidenceIncomplete = input.incomplete
+              if (tool.toolName === 'bash') {
+                const command = event.args && typeof event.args === 'object' && 'command' in event.args && typeof event.args.command === 'string' ? preview(event.args.command) : null
+                tool.command = { command: command?.text ?? null, commandTruncated: command?.truncated ?? false, exitCode: null, exitCodeSource: 'unavailable' }
+              }
             }
             else {
               const result = preview(event.result, event.isError)
@@ -287,6 +296,13 @@ export async function createSubagentRuns(options: {
               tool.outputTruncated = result.truncated
               tool.evidenceIncomplete ||= result.incomplete
               tool.incomplete = !tool.startedAt
+              if (tool.toolName === 'bash') {
+                const structured = event.result && typeof event.result === 'object' && 'structuredContent' in event.result ? event.result.structuredContent : null
+                const code = structured && typeof structured === 'object' && 'exit_code' in structured && typeof structured.exit_code === 'number' && Number.isSafeInteger(structured.exit_code) ? structured.exit_code : null
+                tool.command = { command: tool.command?.command ?? null, commandTruncated: tool.command?.commandTruncated ?? false, exitCode: code, exitCodeSource: code === null ? 'unavailable' : 'pi-structured-result' }
+                if (code !== null && (code !== 0) !== event.isError && next.diagnostics.length < 10)
+                  next.diagnostics.push('命令退出码与工具状态不一致，已分别保留原始事实。')
+              }
               if (event.isError)
                 next.failedToolCount++
             }
@@ -372,8 +388,9 @@ export async function createSubagentRuns(options: {
         progress: undefined,
         error,
         revision: run.revision + 1,
-        durationMs: Math.max(0, performance.now() - began),
-        ...(closed ? { completedAt: new Date().toISOString() } : {}),
+        durationMs: closedDuration ?? Math.max(0, performance.now() - began),
+        ...(closed ? { completedAt: processExit?.closedAt ?? new Date().toISOString() } : {}),
+        ...(processExit ? { processExit } : {}),
         ...(status === 'interrupted'
           ? { interruptedAt: new Date().toISOString() }
           : {}),
@@ -447,6 +464,9 @@ export async function createSubagentRuns(options: {
         runId: id(query.runId),
         projectPath: await normalize(query.projectPath),
       })
+    },
+    async commands(query: RunToolsQuery) {
+      return store.commands({ ...query, runId: id(query.runId), projectPath: await normalize(query.projectPath) })
     },
     async tool(projectPath: string, runId: string, toolCallId: string) {
       return store.tool(

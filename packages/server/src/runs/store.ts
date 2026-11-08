@@ -1,4 +1,6 @@
 import type {
+  RunCommandCounts,
+  RunCommandsPage,
   RunDetail,
   RunOutputChunk,
   RunOutputQuery,
@@ -38,6 +40,7 @@ export function summarize({
   recordingError: _recording,
   historyAvailability: _history,
   diagnostics: _diagnostics,
+  processExit: _process,
   ...summary
 }: RunDetail): RunSummary {
   return summary
@@ -47,9 +50,10 @@ export function toolSummary({
   outputPreview: _output,
   inputTruncated: _it,
   outputTruncated: _ot,
+  command,
   ...summary
 }: RunToolDetail): RunToolSummary {
-  return summary
+  return { ...summary, ...(command ? { hasCommandEvidence: true, commandExitCode: command.exitCode } : {}) }
 }
 function cursor(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -310,11 +314,12 @@ export async function openRunStore(dataDir: string) {
     }
     const summaries = db
       .prepare(
-        `SELECT json_remove(data,'$.inputPreview','$.outputPreview','$.inputTruncated','$.outputTruncated') AS summary
+        `SELECT json_remove(data,'$.inputPreview','$.outputPreview','$.inputTruncated','$.outputTruncated','$.command') AS summary,
+        json_extract(data,'$.command') AS command
       FROM run_tools WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?`,
       )
       .all(query.runId, after, PAGE_SIZE + 1)
-      .map(row => JSON.parse(String(row.summary)) as RunToolSummary)
+      .map(row => ({ ...JSON.parse(String(row.summary)), ...(row.command ? { hasCommandEvidence: true, commandExitCode: JSON.parse(String(row.command)).exitCode } : {}) }) as RunToolSummary)
     const page = summaries.slice(0, PAGE_SIZE)
     return {
       tools: page,
@@ -325,6 +330,31 @@ export async function openRunStore(dataDir: string) {
           ? cursor([query.projectPath, query.runId, page.at(-1)!.sequence])
           : null,
     }
+  }
+  function commandCounts(runId: string): RunCommandCounts {
+    const row = db.prepare(`SELECT COUNT(*) AS total,
+      COALESCE(SUM(json_extract(data,'$.command.exitCode') != 0),0) AS nonzero,
+      COALESCE(SUM(json_extract(data,'$.command.exitCode') IS NULL),0) AS unknown
+      FROM run_tools WHERE run_id=? AND json_extract(data,'$.toolName')='bash'`).get(runId)!
+    return { total: Number(row.total), nonzero: Number(row.nonzero), unknown: Number(row.unknown) }
+  }
+  function commands(query: RunToolsQuery): RunCommandsPage {
+    const run = read(query.projectPath, query.runId)
+    let after = 0
+    if (query.cursor) {
+      const decoded = decodeCursor(query.cursor)
+      if (!Array.isArray(decoded) || decoded.length !== 4 || decoded[0] !== 'commands' || decoded[1] !== query.projectPath || decoded[2] !== query.runId || !Number.isSafeInteger(decoded[3]) || decoded[3] < 0)
+        throw new RunError('命令游标无效')
+      after = decoded[3] as number
+    }
+    const rows = db.prepare(`SELECT data FROM run_tools WHERE run_id=? AND sequence>? AND json_extract(data,'$.toolName')='bash' ORDER BY sequence LIMIT ?`)
+      .all(query.runId, after, PAGE_SIZE + 1)
+    const page = rows.slice(0, PAGE_SIZE).map((row) => {
+      const tool = JSON.parse(String(row.data)) as RunToolDetail
+      const command = tool.command?.command ?? null
+      return { ...toolSummary(tool), commandPreview: command?.slice(0, 160) ?? null, commandTruncated: !!tool.command?.commandTruncated || (command?.length ?? 0) > 160 }
+    })
+    return { commands: page, counts: commandCounts(query.runId), revision: run.revision, nextCursor: rows.length > PAGE_SIZE ? cursor(['commands', query.projectPath, query.runId, page.at(-1)!.sequence]) : null }
   }
   function output(query: RunOutputQuery): RunOutputChunk {
     const run = read(query.projectPath, query.runId)
@@ -513,6 +543,8 @@ export async function openRunStore(dataDir: string) {
     tools,
     tool,
     toolsAll,
+    commands,
+    commandCounts,
     window,
     output,
     close: async () => {

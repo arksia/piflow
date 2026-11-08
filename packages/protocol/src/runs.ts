@@ -48,6 +48,18 @@ export interface RunDetail extends RunSummary {
   recordingError?: string
   historyAvailability: 'recorded' | 'legacy'
   diagnostics: string[]
+  processExit?: RunProcessExit
+}
+export interface RunProcessExit {
+  closedAt: string
+  exitCode: number | null
+  signal: string | null
+}
+export interface RunCommandEvidence {
+  command: string | null
+  commandTruncated: boolean
+  exitCode: number | null
+  exitCodeSource: 'pi-structured-result' | 'unavailable'
 }
 export interface RunToolSummary {
   toolCallId: string
@@ -60,12 +72,30 @@ export interface RunToolSummary {
   status: 'running' | 'succeeded' | 'failed' | 'interrupted'
   incomplete: boolean
   evidenceIncomplete: boolean
+  hasCommandEvidence?: boolean
+  commandExitCode?: number | null
 }
 export interface RunToolDetail extends RunToolSummary {
   inputPreview: string
   outputPreview: string
   inputTruncated: boolean
   outputTruncated: boolean
+  command?: RunCommandEvidence
+}
+export interface RunCommandSummary extends RunToolSummary {
+  commandPreview: string | null
+  commandTruncated: boolean
+}
+export interface RunCommandCounts {
+  total: number
+  nonzero: number
+  unknown: number
+}
+export interface RunCommandsPage {
+  commands: RunCommandSummary[]
+  counts: RunCommandCounts
+  nextCursor: string | null
+  revision: number
 }
 export interface RunQuery {
   projectPath: string
