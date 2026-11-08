@@ -26,7 +26,7 @@ import {
   ReactFlow,
 } from '@xyflow/react'
 import { ArrowRight, CircleAlert, ExternalLink, FileText, Link2, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Button from '../../components/Button'
 import IconButton from '../../components/IconButton'
 import NewSessionDialog from '../../components/NewSessionDialog'
@@ -53,6 +53,7 @@ import { memberPlacements } from './members'
 import { addDraftNode, configureNode } from './node-forms'
 import { routeGraphEdges } from './routes'
 import styles from './styles.module.css'
+import { focusViewport, revealViewport } from './viewport'
 import '@xyflow/react/dist/style.css'
 
 const nodeTypes = { session: FlowSessionNode }
@@ -105,6 +106,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => new Set())
   const [movedAgents, setMovedAgents] = useState<Set<string>>(() => new Set())
   const [instance, setInstance] = useState<ReactFlowInstance<FlowCanvasNode, Edge> | null>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const focusTargetRef = useRef<string[]>([])
   const [connectMode, setConnectMode] = useState<ConnectMode | null>(null)
   const [activities, setActivities] = useState<FlowEdgeActivity[]>([])
   const previousMessagesRef = useRef<FlowDocument['messages'] | null>(null)
@@ -173,14 +176,12 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
           return
         setDocument(resolved)
         setNodes(current => reconcileCanvasNodes(current, resolved.nodes, focusSession))
-        if (instance)
-          void instance.setViewport(resolved.viewport)
       })
       .catch((reason: unknown) => !cancelled && setError(String(reason)))
     return () => {
       cancelled = true
     }
-  }, [focusSession, instance, projectPath])
+  }, [focusSession, projectPath])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -313,14 +314,32 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
       window.clearTimeout(timer)
   }, [])
 
-  useEffect(() => {
-    if (!active || !instance)
+  const focusCanvas = useCallback((ids: string[], minZoom = 0.85, maxZoom = 1.1) => {
+    focusTargetRef.current = ids
+    requestAnimationFrame(() => {
+      const canvas = canvasRef.current
+      const targets = instance?.getNodes().filter(node => ids.includes(node.id)) ?? []
+      if (!canvas || !instance || !targets.length || focusTargetRef.current !== ids)
+        return
+      const bounds = instance.getNodesBounds(targets)
+      void instance.setViewport(focusViewport(bounds, canvas.getBoundingClientRect(), minZoom, maxZoom), { duration: reducedMotion ? 0 : 180 })
+    })
+  }, [instance, reducedMotion])
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !instance)
       return
-    if (document)
-      void instance.setViewport(document.viewport)
-    // ponytail: refit when the canvas first has nodes; later topology edits stay put
-    // eslint-disable-next-line react/exhaustive-deps -- reading the latest session here would refit on every edit
-  }, [active, instance, nodes.length])
+    const observer = new ResizeObserver(() => {
+      const targets = instance.getNodes().filter(node => focusTargetRef.current.includes(node.id))
+      if (targets.length) {
+        const next = revealViewport(instance.getNodesBounds(targets), canvas.getBoundingClientRect(), instance.getViewport())
+        void instance.setViewport(next)
+      }
+    })
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [instance])
 
   useEffect(() => {
     const focusId = focusRequest?.id
@@ -334,8 +353,8 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     setNodes(current => current.map(item => ({ ...item, selected: item.id === node.id })))
     // eslint-disable-next-line react/set-state-in-effect -- keeps the selected node panel in sync with sidebar navigation.
     setSelection({ nodes: [node.id], edges: [] })
-    void instance.fitView({ nodes: [node], padding: 0.55, maxZoom: 1.1, duration: reducedMotion ? 0 : 180 })
-  }, [focusRequest, instance, nodes, reducedMotion])
+    focusCanvas([node.id])
+  }, [focusRequest, instance, nodes, focusCanvas])
 
   async function persist(next: FlowDocument, commitGraph = false) {
     const previous = documentRef.current
@@ -451,6 +470,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   }
 
   function closeRuntimePanel() {
+    focusTargetRef.current = []
     setSelection({ nodes: [], edges: [] })
     setNodes(current => current.map(node => node.selected ? { ...node, selected: false } : node))
   }
@@ -781,7 +801,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
     setNodes(current => current.map(node => ({ ...node, selected: node.id === target.id })))
     setSelection({ nodes: [target.id], edges: [] })
     if (instance)
-      void instance.fitView({ nodes: [target], padding: 0.7, maxZoom: 1, duration: reducedMotion ? 0 : 180 })
+      focusCanvas([target.id])
   }
 
   const sourceNode = connectMode ? document?.nodes.find(node => node.id === connectMode.sourceId) : undefined
@@ -875,48 +895,49 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
             </aside>
           )
         : null}
-      <div className="pf-relative pf-flex pf-flex-1 pf-min-h-0 pf-flex-col">
-        {!document
-          ? <div className="pf-grid pf-flex-1 pf-place-items-center pf-text-muted pf-text-[0.82rem]">正在读取项目 Flow…</div>
-          : (
-              <ReactFlow<FlowCanvasNode, Edge>
-                nodes={visibleNodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                defaultViewport={document.viewport}
-                minZoom={0.2}
-                maxZoom={2}
-                zoomOnScroll={false}
-                panOnScroll
-                fitView={document.nodes.length > 0 && document.viewport.zoom === 1 && document.viewport.x === 0 && document.viewport.y === 0}
-                onInit={setInstance}
-                onNodesChange={onNodesChange}
-                onNodeClick={onNodeClick}
-                onNodeDragStart={(_event, node) => {
-                  setNodes(current => current.map(item => item.id === node.id ? { ...item, position: node.position } : item))
-                  setMovedAgents(current => new Set([...current, node.id]))
-                }}
-                onNodeDragStop={onNodeDragStop}
-                onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
-                onPaneClick={onPaneClick}
-                onNodesDelete={onNodesDelete}
-                onEdgesChange={onEdgesChange}
-                onEdgesDelete={onEdgesDelete}
-                onMoveEnd={onMoveEnd}
-                onSelectionChange={onSelectionChange}
-                deleteKeyCode={['Backspace', 'Delete']}
-                colorMode="dark"
-              >
-                <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#292929" />
-                <Controls showInteractive={false} />
-                <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
-              </ReactFlow>
-            )}
+      <div className={styles.canvasLayout}>
+        <div ref={canvasRef} className={styles.canvas}>
+          {!document
+            ? <div className="pf-grid pf-flex-1 pf-place-items-center pf-text-muted pf-text-[0.82rem]">正在读取项目 Flow…</div>
+            : (
+                <ReactFlow<FlowCanvasNode, Edge>
+                  nodes={visibleNodes}
+                  edges={edges}
+                  nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
+                  defaultViewport={document.viewport}
+                  minZoom={0.2}
+                  maxZoom={2}
+                  zoomOnScroll={false}
+                  panOnScroll
+                  onInit={setInstance}
+                  onNodesChange={onNodesChange}
+                  onNodeClick={onNodeClick}
+                  onNodeDragStart={(_event, node) => {
+                    setNodes(current => current.map(item => item.id === node.id ? { ...item, position: node.position } : item))
+                    setMovedAgents(current => new Set([...current, node.id]))
+                  }}
+                  onNodeDragStop={onNodeDragStop}
+                  onNodeDoubleClick={(_event, node) => void node.data.onOpen()}
+                  onPaneClick={onPaneClick}
+                  onNodesDelete={onNodesDelete}
+                  onEdgesChange={onEdgesChange}
+                  onEdgesDelete={onEdgesDelete}
+                  onMoveEnd={onMoveEnd}
+                  onSelectionChange={onSelectionChange}
+                  deleteKeyCode={['Backspace', 'Delete']}
+                  colorMode="dark"
+                >
+                  <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#292929" />
+                  <Controls showInteractive={false} />
+                  <MiniMap pannable zoomable nodeColor="var(--c-faint)" maskColor="rgb(0 0 0 / 72%)" />
+                </ReactFlow>
+              )}
 
+        </div>
         {selectedNode && !connectMode && !configurationNode && !panelOpen
           ? (
-              <aside className={`${styles.runtimePanel} pf-top-0 pf-right-0 pf-bottom-0 pf-absolute pf-z-6 pf-flex pf-flex-col`} aria-label={`会话运行面板：${selectedNode.name}`}>
+              <aside className={`${styles.runtimePanel} pf-z-6 pf-flex pf-flex-col`} aria-label={`会话运行面板：${selectedNode.name}`}>
                 <header className={`${styles.runtimeHeader} pf-p-[4px_8px_4px_12px] pf-flex pf-items-center pf-gap-2`}>
                   <div className={`${styles.runtimeIdentity} pf-flex pf-min-w-0 pf-flex-1 pf-items-center pf-gap-2`}>
                     <strong title={selectedNode.name}>{selectedNode.name}</strong>
@@ -942,7 +963,7 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
                 <div className={`${styles.runtimeToolbar} pf-p-[5px_8px] pf-flex pf-flex-none pf-items-center pf-gap-1`} role="toolbar" aria-label="节点操作">
                   {expandedAgents.has(selectedNode.id)
                     ? (
-                        <button type="button" className={`${styles.runtimeTool} pf-inline-flex pf-min-h-[30px] pf-items-center pf-gap-[5px] pf-p-[0_8px] pf-rounded-control pf-text-[0.7rem]`} onClick={() => void instance?.fitView({ nodes: visibleNodes.filter(node => node.id === selectedNode.id || node.data.displayOwnerId === selectedNode.id), padding: 0.5, maxZoom: 1, duration: reducedMotion ? 0 : 180 })}>
+                        <button type="button" className={`${styles.runtimeTool} pf-inline-flex pf-min-h-[30px] pf-items-center pf-gap-[5px] pf-p-[0_8px] pf-rounded-control pf-text-[0.7rem]`} onClick={() => focusCanvas(visibleNodes.filter(node => node.id === selectedNode.id || node.data.displayOwnerId === selectedNode.id).map(node => node.id), 0.5, 1)}>
                           聚焦成员
                         </button>
                       )
