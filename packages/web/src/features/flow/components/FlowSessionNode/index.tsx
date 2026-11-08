@@ -61,7 +61,7 @@ export default function FlowSessionNode({ id, data, selected }: NodeProps<FlowCa
         className={`${styles.node} ${selected ? styles.selected : ''} ${data.isAnchor ? styles.anchor : ''}`}
         data-status={attention?.kind ?? 'idle'}
         data-flow-node={id}
-        aria-label={[data.name, identity, data.provider, data.modelName, attention?.label ?? '空闲'].filter(Boolean).join('，')}
+        aria-label={[data.name, identity, data.referenceLabel, data.provider, data.modelName, attention?.label ?? '空闲'].filter(Boolean).join('，')}
         aria-expanded={Boolean(data.summaryOpen)}
         onPointerEnter={event => event.pointerType === 'mouse' && data.onHover?.(id)}
         onPointerLeave={() => data.onHover?.(null)}
