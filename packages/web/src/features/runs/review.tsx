@@ -1,12 +1,14 @@
 import type { ReviewDecision, ReviewDetail, ReviewDocumentDetail, ReviewFileDetail, ReviewRouteStep, RunSummary } from '@piflow/protocol'
+import type { ReviewStatisticsFilter } from './review-model'
 import { buildReviewsPath } from '@piflow/protocol'
 import { ArrowDown, ArrowUp, ArrowUpRight, Check, ChevronRight, FileCode2, GitBranch, GitCompareArrows, Maximize2, MessageSquare, Minimize2, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { markdownRehypePlugins, markdownRemarkPlugins } from '../../markdown/md'
 import { api, post } from '../../session/api'
-import { decisionLabels, diffRows, reviewGroups } from './review-model'
+import { decisionLabels, diffRows, reviewGroups, statisticsMatches } from './review-model'
 import { createReviewReader } from './review-reader'
+import ReviewStatistics from './review-statistics'
 import styles from './review.module.css'
 
 function unique<T>(values: T[]) {
@@ -23,6 +25,7 @@ interface Props {
 export default function DeliveryReview({ run, connectionVersion, expanded, onExpand, onDraft, onEvidence }: Props) {
   const [reader] = useState(() => createReviewReader(run.projectPath, run.id))
   const state = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const [statisticsFilter, setStatisticsFilter] = useState<{ revision: string, value: ReviewStatisticsFilter } | null>(null)
   const [mode, setMode] = useState<'files' | 'flow'>('files')
   const [selection, setSelection] = useState<{ revision: string, target: string, group: string } | null>(null)
   const [sourceSelection, setSourceSelection] = useState<{ revision: string, id: string } | null>(null)
@@ -53,10 +56,13 @@ export default function DeliveryReview({ run, connectionVersion, expanded, onExp
     }, 2000)
     return () => clearInterval(timer)
   }, [reader, detail?.generation.state])
-  const groups = detail ? reviewGroups(detail, mode) : []
+  const filter = statisticsFilter?.revision === detail?.revision.id ? statisticsFilter?.value : undefined
+  const groups = detail ? reviewGroups(detail, mode, filter) : []
+  const visibleTargets = new Set(groups.flatMap(g => g.targetIds))
+  const matches = detail && filter ? statisticsMatches(detail, filter) : undefined
   const selectedGroup = selection?.revision === detail?.revision.id ? groups.find(g => g.key === selection?.group) : undefined
   const stepSelected = !!selectedGroup?.step && !selection?.target
-  const target = stepSelected ? undefined : detail?.targets.find(t => selection?.revision === detail.revision.id && t.id === selection.target) ?? detail?.targets[0]
+  const target = stepSelected ? undefined : detail?.targets.find(t => selection?.revision === detail.revision.id && t.id === selection.target && visibleTargets.has(t.id)) ?? detail?.targets.find(t => visibleTargets.has(t.id))
   const group = stepSelected ? selectedGroup : groups.find(g => g.key === selectedGroup?.key && g.targetIds.includes(target?.id ?? '')) ?? groups.find(g => g.targetIds.includes(target?.id ?? ''))
   const step = group?.step
   const file = detail?.files.find(f => f.id === target?.fileId)
@@ -221,6 +227,15 @@ export default function DeliveryReview({ run, connectionVersion, expanded, onExp
                 </button>
                 <button type="button" className={styles.iconButton} aria-label="同步审查状态" disabled={state.loading} onClick={() => void reader.refresh()}><RefreshCw size={12} /></button>
               </div>
+              <ReviewStatistics
+                detail={detail}
+                filter={filter}
+                onFilter={(value) => {
+                  setStatisticsFilter(value ? { revision: detail.revision.id, value } : null)
+                  setSelection(null)
+                  setDocumentId(null)
+                }}
+              />
               {detail.revision.comparison
                 ? (
                     <details className={styles.sources}>
@@ -270,8 +285,8 @@ export default function DeliveryReview({ run, connectionVersion, expanded, onExp
                         {g.step
                           ? (
                               <span className={styles.reorder}>
-                                <button type="button" disabled={busy || index === 0} aria-label={`上移 ${g.title}`} onClick={() => void moveStep(index, -1)}><ArrowUp size={11} /></button>
-                                <button type="button" disabled={busy || index >= detail.route!.value.steps.length - 1} aria-label={`下移 ${g.title}`} onClick={() => void moveStep(index, 1)}><ArrowDown size={11} /></button>
+                                <button type="button" disabled={busy || detail.route!.value.steps.findIndex(s => s.key === g.key) === 0} aria-label={`上移 ${g.title}`} onClick={() => void moveStep(detail.route!.value.steps.findIndex(s => s.key === g.key), -1)}><ArrowUp size={11} /></button>
+                                <button type="button" disabled={busy || detail.route!.value.steps.findIndex(s => s.key === g.key) >= detail.route!.value.steps.length - 1} aria-label={`下移 ${g.title}`} onClick={() => void moveStep(detail.route!.value.steps.findIndex(s => s.key === g.key), 1)}><ArrowDown size={11} /></button>
                               </span>
                             )
                           : null}
@@ -293,7 +308,7 @@ export default function DeliveryReview({ run, connectionVersion, expanded, onExp
                       {!g.targetIds.length ? <p className={styles.notice}>此步骤未关联代码变更。</p> : null}
                     </div>
                   ))}
-                  {!groups.length ? <p className={styles.notice}>本修订没有可展示的文本变更。</p> : null}
+                  {!groups.length ? <p className={styles.notice}>{filter ? '此筛选没有可展示的变更。' : '本修订没有可展示的文本变更。'}</p> : null}
                   <details className={styles.gaps}>
                     <summary>
                       范围与缺口 ·
@@ -414,7 +429,8 @@ export default function DeliveryReview({ run, connectionVersion, expanded, onExp
                             <DocumentLinks detail={detail} ids={detail.documents.map(d => d.id)} onSelect={setDocumentId} />
                           </details>
                           {documentId ? <DocumentPreview key={`document:${detail.revision.id}:${documentId}`} projectPath={run.projectPath} reviewId={detail.review.id} revisionId={detail.revision.id} documentId={documentId} association={step ? { linked: [...step.requirementIds, ...step.designSectionIds, ...step.adrIds].includes(documentId), busy, toggle: () => updateAssociation('document', documentId, step.key, [...step.requirementIds, ...step.designSectionIds, ...step.adrIds].includes(documentId)) } : undefined} onClose={() => setDocumentId(null)} /> : null}
-                          <FixedDiff key={`diff:${detail.revision.id}:${target.id}`} projectPath={run.projectPath} reviewId={detail.review.id} revisionId={detail.revision.id} fileId={file.id} hunkIds={target.hunkIds} />
+                          <FixedDiff key={`diff:${detail.revision.id}:${target.id}`} projectPath={run.projectPath} reviewId={detail.review.id} revisionId={detail.revision.id} fileId={file.id} hunkIds={matches ? target.hunkIds.filter(id => matches.get(file.id)?.hunkIds.includes(id)) : target.hunkIds} />
+                          {filter ? <p className={styles.hint}>筛选仅影响阅读；意见和范围操作仍作用于当前完整审查对象。</p> : null}
                           <ScopeEditor key={`scope:${detail.revision.id}:${target.id}`} reasons={[...new Set((detail.exclusions ?? []).filter(e => target.hunkIds.includes(e.hunkId)).map(e => e.reason))]} busy={busy} onSave={reason => action(() => post(endpoint('/scope'), { ...body, hunkIds: target.hunkIds, reason }))} />
                           <DecisionEditor key={`decision:${detail.revision.id}:${target.id}`} decision={decision} busy={busy} onSave={(state, note) => action(() => post(endpoint('/decisions'), { ...body, targetId: target.id, state, note }))} />
                         </>

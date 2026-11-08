@@ -28,6 +28,29 @@ export interface ReviewTarget {
   newEnd?: number
   hunkIds: string[]
 }
+export type ReviewChangeKind = 'added' | 'modified' | 'deleted' | 'unmatched'
+export type ReviewFileCategory = 'implementation' | 'test' | 'other'
+export interface ReviewSymbolChange {
+  name: string
+  kind: 'function' | 'method' | 'callback' | 'test'
+  change: ReviewChangeKind
+  hunkIds: string[]
+  targetIds: string[]
+}
+export interface ReviewFileStatistics {
+  addedHunkIds: string[]
+  removedHunkIds: string[]
+  functionState: 'complete' | 'unavailable' | 'not-applicable'
+  testState: 'complete' | 'partial' | 'unavailable' | 'not-applicable'
+  changes: ReviewSymbolChange[]
+  notes: string[]
+}
+/** Classification is a path convention, not proof that a file contains tests. */
+export function reviewFileCategory(path: string): ReviewFileCategory {
+  if (/(?:^|\/)(?:__tests__|tests?|__mocks__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)test_[^/]+\.py$|_(?:test|spec)\.(?:py|go|rb)$|(?:Test|Tests)\.(?:java|cs)$/i.test(path))
+    return 'test'
+  return /\.(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|html?|py|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|rb|php|sh|sql)$/i.test(path) ? 'implementation' : 'other'
+}
 export interface ReviewFile {
   id: string
   path: string
@@ -39,6 +62,8 @@ export interface ReviewFile {
   hunkIds: string[]
   targetIds: string[]
   languageSupported: boolean
+  /** Absent on historical revisions. Never derive exact counts from review targets. */
+  statistics?: ReviewFileStatistics
 }
 export interface ReviewGap {
   id: string

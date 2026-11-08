@@ -686,6 +686,27 @@
   color: var(--c-ink);
 }
 
+.statistics button {
+  border: 0;
+  padding: 3px 5px;
+  color: var(--c-body);
+  font-size: 11px;
+}
+
+.statistics button[data-metric='added-lines'] {
+  color: var(--c-success);
+}
+
+.statistics button[data-metric='removed-lines'] {
+  color: var(--c-danger);
+}
+
+.statistics button[aria-pressed='true'] {
+  background: var(--c-press);
+  color: var(--c-ink);
+  box-shadow: inset 0 -1px var(--c-signal);
+}
+
 .review button:disabled {
   opacity: 0.45;
   cursor: default;
@@ -711,6 +732,74 @@
   background: color-mix(in srgb, var(--c-mid) 7%, transparent);
 }
 
+
+.statistics {
+  border-top: 1px solid var(--c-line);
+  padding: 10px 14px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.statistics-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: var(--c-muted);
+}
+
+.statistics-heading small {
+  margin-left: 6px;
+  color: var(--c-faint);
+  font-size: 9px;
+}
+
+.statistics-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 12px;
+  padding: 5px 0;
+}
+
+.statistics-row > strong {
+  min-width: 54px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.statistics-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.statistics-metrics > span,
+.statistics-metrics > small {
+  padding: 2px 3px;
+  color: var(--c-faint);
+  font-size: 10px;
+}
+
+.statistics p {
+  margin: 7px 0;
+  color: var(--c-muted);
+  font-size: 10px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.statistics-notes {
+  margin-top: 8px;
+  color: var(--c-faint);
+  line-height: 1.7;
+}
+
+.statistics-notes summary {
+  cursor: pointer;
+}
 
 @container (width <= 620px) {
   .workspace {

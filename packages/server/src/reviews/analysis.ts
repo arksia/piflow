@@ -1,49 +1,10 @@
 import type { ReviewDocument, ReviewFile, ReviewGap, ReviewHunk, ReviewTarget } from '@piflow/protocol'
 import type { SourceSnapshot } from './source'
+import type { SymbolIndex, SymbolRange } from './symbols'
 import { structuredPatch } from 'diff'
-import ts from 'typescript'
 import { digest } from './source'
+import { changedLines, indexSymbols, symbolStatistics } from './symbols'
 
-interface SymbolRange {
-  name: string
-  start: number
-  end: number
-}
-function symbols(path: string, text: string, deadline: number): SymbolRange[] {
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const found: SymbolRange[] = []
-  let nodes = 0
-  function visit(node: ts.Node, containers: string[]) {
-    if (++nodes > 20000 || found.length > 500 || containers.length > 100 || performance.now() > deadline)
-      throw new Error('符号分析预算已耗尽')
-    const named = node as ts.NamedDeclaration
-    const name = named.name?.getText(source)
-    const owner = name ? [...containers, name] : containers
-    if (ts.isFunctionLike(node) && !ts.isCallSignatureDeclaration(node) && !ts.isConstructSignatureDeclaration(node)) {
-      const parentName = ts.isVariableDeclaration(node.parent) || ts.isPropertyAssignment(node.parent) ? node.parent.name.getText(source) : undefined
-      const label = name || parentName || `callback@${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`
-      found.push({ name: [...containers, label].join(' › '), start: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, end: source.getLineAndCharacterOfPosition(node.end).line + 1 })
-      ts.forEachChild(node, child => visit(child, [...containers, label]))
-      return
-    }
-    ts.forEachChild(node, child => visit(child, ts.isClassDeclaration(node) || ts.isModuleDeclaration(node) ? owner : containers))
-  }
-  visit(source, [])
-  return found
-}
-function changedLines(hunk: ReviewHunk, side: 'old' | 'new') {
-  const result: number[] = []
-  let line = side === 'old' ? hunk.oldStart : hunk.newStart
-  for (const text of hunk.lines) {
-    if (text.startsWith('\\'))
-      continue
-    if (text[0] === (side === 'old' ? '-' : '+'))
-      result.push(line)
-    if (text[0] !== (side === 'old' ? '+' : '-'))
-      line++
-  }
-  return result
-}
 export function compareSources(before: SourceSnapshot, after: SourceSnapshot, get: (hash: string) => string) {
   const files: ReviewFile[] = []
   const targets: ReviewTarget[] = []
@@ -84,26 +45,33 @@ export function compareSources(before: SourceSnapshot, after: SourceSnapshot, ge
     const supported = /\.[cm]?[jt]sx?$/i.test(path)
     let oldSymbols: SymbolRange[] = []
     let newSymbols: SymbolRange[] = []
+    let oldIndex: SymbolIndex | undefined
+    let newIndex: SymbolIndex | undefined
     if (supported) {
       try {
-        oldSymbols = symbols(path, oldText, deadline)
-        newSymbols = symbols(path, newText, deadline)
+        oldIndex = indexSymbols(path, oldText, deadline)
+        newIndex = indexSymbols(path, newText, deadline)
+        oldSymbols = oldIndex.symbols.filter(s => s.kind !== 'test')
+        newSymbols = newIndex.symbols.filter(s => s.kind !== 'test')
       }
       catch {
         oldSymbols = []
         newSymbols = []
-        gaps.push({ id: `${fileId}:symbols`, kind: 'symbol-budget', path, explanation: '函数解析未完成，保留为文件级变更。', source: 'host' })
+        oldIndex = undefined
+        newIndex = undefined
+        gaps.push({ id: `${fileId}:symbols`, kind: 'symbol-budget', path, explanation: '函数解析未完成（语法或预算限制），保留为文件级变更。', source: 'host' })
       }
     }
     const fileTargets: ReviewTarget[] = []
+    const pairedTargets = new Map<string, ReviewTarget>()
     for (const side of ['old', 'new'] as const) {
       for (const symbol of side === 'old' ? oldSymbols : newSymbols) {
         const ids = rows.filter(row => changedLines(row, side).some(line => line >= symbol.start && line <= symbol.end)).map(row => row.id)
         if (!ids.length)
           continue
         // A unique same-file name may pair two sides. Ambiguous callbacks stay separate.
-        const unique = oldSymbols.filter(s => s.name === symbol.name).length <= 1 && newSymbols.filter(s => s.name === symbol.name).length <= 1
-        const existing = unique ? fileTargets.find(t => t.name === symbol.name && t.kind === 'function') : undefined
+        const unique = symbol.stable && oldSymbols.filter(s => s.key === symbol.key).length <= 1 && newSymbols.filter(s => s.key === symbol.key).length <= 1
+        const existing = unique ? pairedTargets.get(symbol.key) : undefined
         const target = existing ?? { id: `${fileId}:symbol:${fileTargets.length}`, fileId, name: symbol.name, kind: 'function' as const, hunkIds: [] }
         target.hunkIds = [...new Set([...target.hunkIds, ...ids])]
         if (side === 'old') {
@@ -114,8 +82,11 @@ export function compareSources(before: SourceSnapshot, after: SourceSnapshot, ge
           target.newStart = symbol.start
           target.newEnd = symbol.end
         }
-        if (!existing)
+        if (!existing) {
           fileTargets.push(target)
+          if (unique)
+            pairedTargets.set(symbol.key, target)
+        }
       }
     }
     const fileLevel = rows.filter(row => (['old', 'new'] as const).some(side => changedLines(row, side).some(line => !(side === 'old' ? oldSymbols : newSymbols).some(symbol => line >= symbol.start && line <= symbol.end))))
@@ -123,11 +94,13 @@ export function compareSources(before: SourceSnapshot, after: SourceSnapshot, ge
       fileTargets.push({ id: `${fileId}:file`, fileId, name: supported ? '文件级变更' : '文件变更', kind: 'file', hunkIds: (fileLevel.length ? fileLevel : rows).map(row => row.id) })
     if (targets.length + fileTargets.length > 5000) {
       fileTargets.splice(0, fileTargets.length, { id: `${fileId}:file`, fileId, name: '文件变更', kind: 'file', hunkIds: rows.map(row => row.id) })
+      oldIndex = undefined
+      newIndex = undefined
       gaps.push({ id: `${fileId}:target-budget`, kind: 'target-budget', path, explanation: '函数对象超出总量预算，保留为文件级变更。', source: 'host' })
     }
     targets.push(...fileTargets)
     hunks[fileId] = rows
-    files.push({ id: fileId, path, status: !oldHash ? 'added' : !newHash ? 'deleted' : 'modified', beforeDigest: oldHash, afterDigest: newHash, added: rows.reduce((n, h) => n + h.lines.filter(l => l.startsWith('+')).length, 0), removed: rows.reduce((n, h) => n + h.lines.filter(l => l.startsWith('-')).length, 0), hunkIds: rows.map(h => h.id), targetIds: fileTargets.map(t => t.id), languageSupported: supported })
+    files.push({ id: fileId, path, status: !oldHash ? 'added' : !newHash ? 'deleted' : 'modified', beforeDigest: oldHash, afterDigest: newHash, added: rows.reduce((n, h) => n + h.lines.filter(l => l.startsWith('+')).length, 0), removed: rows.reduce((n, h) => n + h.lines.filter(l => l.startsWith('-')).length, 0), hunkIds: rows.map(h => h.id), targetIds: fileTargets.map(t => t.id), languageSupported: supported, statistics: symbolStatistics(path, oldIndex, newIndex, rows, fileTargets) })
   }
   return { files, targets, hunks, gaps }
 }

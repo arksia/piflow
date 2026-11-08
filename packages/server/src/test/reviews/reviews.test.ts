@@ -71,6 +71,7 @@ it('persists fixed docs and diffs, isolates projects/revisions, and preserves hu
     const id = reviews.forRun(f.cwd, 'run-1').reviewId!
     const initial = reviews.read(f.cwd, id)
     assert.equal(initial.files.length, 1)
+    assert.equal(initial.files[0]!.statistics?.changes.find(c => c.name === 'calculate')?.change, 'modified')
     assert.equal(initial.documents.filter(d => d.kind === 'requirement').length, 2)
     const doc = initial.documents.find(d => d.anchor === 'AC-CODE-UNKNOWN')!
     assert.equal(doc.stableAnchor, true)
@@ -97,6 +98,7 @@ it('persists fixed docs and diffs, isolates projects/revisions, and preserves hu
     reviews.close()
     reviews = await createReviews({ dataDir })
     assert.equal(reviews.read(f.cwd, id).generation.state, 'interrupted')
+    assert.deepEqual(reviews.read(f.cwd, id, initial.revision.id).files[0]!.statistics, initial.files[0]!.statistics)
     assert.ok(reviews.read(f.cwd, id).review.version > versionBeforeRestart)
     assert.equal(reviews.read(f.cwd, id, initial.revision.id).decisions[0]!.note, 'Keep zero distinct.')
     reviews.remove(f.cwd, id)
