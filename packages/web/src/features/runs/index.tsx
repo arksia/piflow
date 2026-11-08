@@ -12,8 +12,8 @@ import {
   buildRunsPath,
   RUN_STATUS_LABELS,
 } from '@piflow/protocol'
-import { ArrowUpRight, RefreshCw, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowUpRight, RefreshCw, SlidersHorizontal, X } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import Dialog from '../../components/Dialog'
 import { openSession } from '../../session/actions'
 import { api, post } from '../../session/api'
@@ -51,6 +51,9 @@ export default function RunPanel({
   onShowChat: () => void
 }) {
   const project = useRunProject(projectPath)
+  const inspectorId = useId()
+  const filterRef = useRef<HTMLDetailsElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [owner, setOwner] = useState(initialFilter.orchestratorId ?? '')
   const [role, setRole] = useState(initialFilter.roleId ?? '')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -68,6 +71,14 @@ export default function RunPanel({
     .flatMap(id => (project.runs[id] ? [project.runs[id]!] : []))
     .sort(runOrder)
   const active = rows.some(run => run.status === 'running')
+  function selectRun(id: string | null) {
+    if (!id && selectedId) {
+      const trigger = [...(panelRef.current?.querySelectorAll<HTMLButtonElement>('[data-run-id]') ?? [])]
+        .find(button => button.dataset.runId === selectedId)
+      trigger?.focus({ preventScroll: true })
+    }
+    setSelectedId(id)
+  }
   const key = JSON.stringify(filter)
   useEffect(() => {
     void loadRunWindow(projectPath, JSON.parse(key) as RunFilter)
@@ -88,6 +99,15 @@ export default function RunPanel({
       document.removeEventListener('visibilitychange', sync)
     }
   }, [active, connection.connected])
+  useEffect(() => {
+    function dismissFilter(event: PointerEvent) {
+      const details = filterRef.current
+      if (details?.open && event.target instanceof Node && !details.contains(event.target))
+        details.open = false
+    }
+    document.addEventListener('pointerdown', dismissFilter)
+    return () => document.removeEventListener('pointerdown', dismissFilter)
+  }, [])
   const selected = selectedId && project.runs[selectedId]
   const owners = new Map(
     Object.values(project.runs).map(run => [
@@ -104,128 +124,196 @@ export default function RunPanel({
       width={1240}
       maxHeight={820}
       responsive
+      compact
       onClose={onClose}
       actions={(
-        <button
-          type="button"
-          className={styles.action}
-          disabled={window.loading}
-          onClick={() => void loadRunWindow(projectPath, filter)}
-          aria-label="刷新运行记录"
-        >
-          <RefreshCw size={15} />
-        </button>
-      )}
-    >
-      <div className={styles.filters}>
-        <label>
-          主 Agent
-          <select
-            value={owner}
-            onChange={(event) => {
-              setOwner(event.target.value)
-              setSelectedId(null)
+        <>
+          <details
+            className={styles.filterMenu}
+            ref={filterRef}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && filterRef.current?.open) {
+                event.preventDefault()
+                event.stopPropagation()
+                filterRef.current.open = false
+                filterRef.current.querySelector('summary')?.focus()
+              }
             }}
           >
-            <option value="">全部</option>
-            {[...owners].map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          角色
-          <select
-            value={role}
-            onChange={(event) => {
-              setRole(event.target.value)
-              setSelectedId(null)
-            }}
-          >
-            <option value="">全部</option>
-            {[...roles].map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span role="status">
-          {!connection.connected
-            ? '连接中断 · 状态待同步'
-            : window.loading
-              ? '正在同步…'
-              : window.error
-                ? '同步失败 · 记录可能过期'
-                : `已加载 ${rows.length} 次运行`}
-        </span>
-      </div>
-      {window.error
-        ? (
-            <p className={styles.error} role="alert">
-              {window.error}
+            <summary aria-label="筛选运行记录" title="筛选运行记录" data-active={!!(owner || role) || undefined}><SlidersHorizontal size={15} /></summary>
+            <div className={styles.filterPopover}>
+              <strong>筛选运行</strong>
+              <label>
+                主 Agent
+                <select
+                  value={owner}
+                  onChange={(event) => {
+                    setOwner(event.target.value)
+                    setSelectedId(null)
+                  }}
+                >
+                  <option value="">全部主 Agent</option>
+                  {[...owners].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </label>
+              <label>
+                角色
+                <select
+                  value={role}
+                  onChange={(event) => {
+                    setRole(event.target.value)
+                    setSelectedId(null)
+                  }}
+                >
+                  <option value="">全部角色</option>
+                  {[...roles].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+              </label>
               <button
                 type="button"
-                onClick={() => void loadRunWindow(projectPath, filter)}
-              >
-                重试
-              </button>
-            </p>
-          )
-        : null}
-      <div
-        className={`${styles.workspace} ${selected ? styles.hasDetail : ''}`}
-      >
-        <section className={styles.list} aria-label="运行时间线">
-          {rows.length
-            ? <RunTimeline runs={rows} now={frozenNowRef.current} live={connection.connected && !window.loading && !window.error} selectedId={selectedId} onSelect={setSelectedId} />
-            : <p className={styles.empty}>{window.loading ? '正在加载运行记录…' : '尚无符合条件的运行。主 Agent 委派任务后会在这里留下记录。'}</p>}
-          {window.nextCursor
-            ? (
-                <button
-                  className={styles.more}
-                  type="button"
-                  disabled={window.loading}
-                  onClick={() => void loadRunWindow(projectPath, filter, true)}
-                >
-                  {window.loading ? '加载中…' : '加载更早运行'}
-                </button>
-              )
-            : null}
-        </section>
-        {selected
-          ? (
-              <RunInspector
-                key={`${projectPath}:${selected.id}`}
-                run={selected}
-                connectionVersion={connection.version}
-                now={frozenNowRef.current}
-                onDismiss={() => setSelectedId(null)}
-                onParent={async () => {
-                  await openSession(selected.parentSessionPath)
-                  requestToolFocus(
-                    selected.parentSessionPath,
-                    selected.parentToolCallId,
-                  )
-                  onClose()
-                  onShowChat()
+                className={styles.action}
+                onClick={() => {
+                  setOwner('')
+                  setRole('')
+                  setSelectedId(null)
                 }}
-              />
+              >
+                清除筛选
+              </button>
+            </div>
+          </details>
+          <button
+            type="button"
+            className={styles.iconAction}
+            disabled={window.loading}
+            onClick={() => void loadRunWindow(projectPath, filter)}
+            aria-label="刷新运行记录"
+          >
+            <RefreshCw size={15} />
+          </button>
+        </>
+      )}
+    >
+      <div
+        className={styles.panel}
+        ref={panelRef}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && selectedId) {
+            event.preventDefault()
+            event.stopPropagation()
+            selectRun(null)
+          }
+        }}
+      >
+        {owner || role
+          ? (
+              <div className={styles.scope} aria-label="当前筛选">
+                {owner
+                  ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOwner('')
+                          setSelectedId(null)
+                        }}
+                      >
+                        {owners.get(owner) ?? '所选主 Agent'}
+                        <X size={12} />
+                        <span className={styles.srOnly}>清除主 Agent 筛选</span>
+                      </button>
+                    )
+                  : null}
+                {role
+                  ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRole('')
+                          setSelectedId(null)
+                        }}
+                      >
+                        {roles.get(role) ?? '所选角色'}
+                        <X size={12} />
+                        <span className={styles.srOnly}>清除角色筛选</span>
+                      </button>
+                    )
+                  : null}
+              </div>
             )
           : null}
+        {!connection.connected || window.loading || window.error
+          ? (
+              <p className={styles.connection} role="status">{!connection.connected ? '连接中断 · 显示最后同步的记录' : window.loading ? '正在同步运行记录…' : '同步失败 · 记录可能过期'}</p>
+            )
+          : null}
+        {window.error
+          ? (
+              <p className={styles.error} role="alert">
+                {window.error}
+                <button
+                  type="button"
+                  onClick={() => void loadRunWindow(projectPath, filter)}
+                >
+                  重试
+                </button>
+              </p>
+            )
+          : null}
+        <div
+          className={`${styles.workspace} ${selected ? styles.hasDetail : ''}`}
+        >
+          <section className={styles.list} aria-label="运行时间线">
+            {rows.length
+              ? <RunTimeline runs={rows} now={frozenNowRef.current} live={connection.connected && !window.loading && !window.error} selectedId={selectedId} inspectorId={inspectorId} onSelect={selectRun} />
+              : <p className={styles.empty}>{window.loading ? '正在加载运行记录…' : '尚无符合条件的运行。主 Agent 委派任务后会在这里留下记录。'}</p>}
+            {window.nextCursor
+              ? (
+                  <button
+                    className={styles.more}
+                    type="button"
+                    disabled={window.loading}
+                    onClick={() => void loadRunWindow(projectPath, filter, true)}
+                  >
+                    {window.loading ? '加载中…' : '加载更早运行'}
+                  </button>
+                )
+              : null}
+          </section>
+          {selected
+            ? (
+                <RunInspector
+                  key={`${projectPath}:${selected.id}`}
+                  id={inspectorId}
+                  run={selected}
+                  connectionVersion={connection.version}
+                  now={frozenNowRef.current}
+                  onDismiss={() => selectRun(null)}
+                  onParent={async () => {
+                    await openSession(selected.parentSessionPath)
+                    requestToolFocus(
+                      selected.parentSessionPath,
+                      selected.parentToolCallId,
+                    )
+                    onClose()
+                    onShowChat()
+                  }}
+                />
+              )
+            : null}
+        </div>
       </div>
     </Dialog>
   )
 }
 function RunInspector({
+  id,
   run,
   connectionVersion,
   onParent,
   onDismiss,
   now,
 }: {
+  id: string
   run: RunSummary
   connectionVersion: number
   onParent: () => Promise<void>
@@ -371,7 +459,7 @@ function RunInspector({
     }
   }
   return (
-    <aside className={styles.inspector} aria-label="运行详情">
+    <aside id={id} className={styles.inspector} aria-label="运行详情">
       <header className={styles.detailHeader}>
         <strong>{run.roleName}</strong>
         <span className={styles[run.status]}>

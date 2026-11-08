@@ -2,7 +2,7 @@ import type { RunOutputChunk, RunSummary, RunToolSummary } from '@piflow/protoco
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
 import { mergeOutput, mergeRuns, mergeTools } from './cache'
-import { runLanes, runOrder, timelineRange } from './time'
+import { runLanes, runOrder, runPlacement, timelineRange, timelineTicks } from './time'
 
 it('keeps newer SSE facts when older HTTP pages arrive and never merges concurrent role runs', () => {
   const live = { id: 'one', roleId: 'code', status: 'succeeded', revision: 5 } as RunSummary
@@ -47,4 +47,36 @@ it('packs overlapping calls into distinct tracks and reuses a track after comple
   assert.equal(lanes.length, 2)
   const main = lanes.find(lane => lane.id === 'main:code')!
   assert.deepEqual(main.tracks.map(track => track.map(run => run.id)), [['a', 'c'], ['b']])
+})
+
+it('keeps dense short-task hit targets separate at different viewport widths', () => {
+  const base = { roleId: 'code', roleName: 'Code', orchestratorId: 'main', orchestratorName: 'Main', status: 'succeeded' } as RunSummary
+  const at = (seconds: number) => new Date(seconds * 1000).toISOString()
+  const rows = [0, 1, 2, 300].map((seconds, i) => ({ ...base, id: String(i), createdAt: at(seconds), completedAt: at(seconds + 1) }))
+  for (const width of [160, 344, 900]) {
+    const viewport = { start: 0, end: 1800000, width }
+    const lanes = runLanes(rows, 1800000, viewport)
+    assert.equal(lanes[0]!.tracks.length, 3)
+    for (const track of lanes[0]!.tracks) {
+      let previousEnd = -4
+      for (const run of track) {
+        const placed = runPlacement(run, 1800000, viewport)
+        assert.ok(placed.marker)
+        assert.ok(placed.left >= previousEnd + 4)
+        assert.ok(placed.left + placed.width <= width)
+        previousEnd = placed.left + placed.width
+      }
+    }
+  }
+})
+
+it('clips tasks to the visible window and uses sparse readable ticks', () => {
+  const viewport = { start: 1000, end: 1801000, width: 344 }
+  const run = { createdAt: new Date(0).toISOString(), completedAt: new Date(2000000).toISOString(), status: 'succeeded' } as RunSummary
+  assert.deepEqual(runPlacement(run, 2000000, viewport), { left: 0, width: 344, marker: false })
+  const edge = { ...run, createdAt: new Date(1800000).toISOString() }
+  assert.deepEqual(runPlacement(edge, 2000000, viewport), { left: 326, width: 18, marker: true })
+  const ticks = timelineTicks(viewport.start, viewport.end, viewport.width)
+  assert.ok(ticks.length > 0 && ticks.length <= 3)
+  assert.ok(ticks.every(tick => tick % 600000 === 0))
 })
