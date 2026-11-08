@@ -105,6 +105,7 @@ export type {
   SetThinkingRequest,
   TrustProjectRequest,
 } from './http'
+export * from './reviews'
 export * from './runs'
 export type { ImageContent } from '@earendil-works/pi-ai'
 export type { AuthEvent, AuthPrompt, AuthType } from '@earendil-works/pi-ai'
@@ -307,6 +308,7 @@ export interface SessionState {
 
 export type ServerMessage
   = | import('./runs').RunMessage
+    | import('./reviews').ReviewMessage
     | { type: 'hello', cwd: string }
     | { type: 'sessions', sessions: SessionInfoLite[] }
     | { type: 'models', models: ModelInfo[] }
