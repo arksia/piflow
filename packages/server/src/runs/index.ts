@@ -11,10 +11,12 @@ import type {
   RunToolDetail,
   RunToolsQuery,
 } from '@piflow/protocol'
+import type { Reviews } from '../reviews'
 import type { ProcessFact } from './process'
 import { Buffer } from 'node:buffer'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative } from 'node:path'
+import { parseReviewRoute, REVIEW_SUBMIT_TOOL } from '../reviews/contract'
 import { CODE_DELIVERY_TOOL, deliveryDetail, deliverySummary, parseCodeDelivery } from './delivery'
 import { captureGitSnapshot } from './git-snapshot'
 import { runSubagentProcess } from './process'
@@ -69,6 +71,7 @@ function preview(value: unknown, tail = false) {
 }
 export async function createSubagentRuns(options: {
   dataDir: string
+  reviews?: Reviews
   publish?: (message: RunMessage) => void
   agentDir?: string
   cliEntry?: string
@@ -151,6 +154,12 @@ export async function createSubagentRuns(options: {
     ) {
       throw new RunError('任务或模型配置无效')
     }
+    if (input.configurationSnapshot.reviewAnalysis && (input.configurationSnapshot.tools.length || input.configurationSnapshot.delivery))
+      throw new RunError('审查分析不允许编辑、执行或代码交付工具')
+    if (input.configurationSnapshot.reviewId && !input.configurationSnapshot.delivery)
+      throw new RunError('只有 Code 交付可关联功能审查')
+    if (input.configurationSnapshot.reviewId && options.reviews)
+      options.reviews.read(projectPath, input.configurationSnapshot.reviewId)
     const snapshot: RunInput = structuredClone({
       projectPath,
       orchestratorId: input.orchestratorId,
@@ -375,6 +384,17 @@ export async function createSubagentRuns(options: {
               tool.outputTruncated = result.truncated
               tool.evidenceIncomplete ||= result.incomplete
               tool.incomplete = !tool.startedAt
+              if (snapshot.configurationSnapshot.reviewAnalysis && tool.toolName === REVIEW_SUBMIT_TOOL && !event.isError) {
+                try {
+                  const result = event.result
+                  const details = result && typeof result === 'object' && 'details' in result ? result.details : null
+                  tool.reviewRoute = parseReviewRoute(details && typeof details === 'object' && 'reviewRoute' in details ? details.reviewRoute : undefined)
+                }
+                catch (error) {
+                  tool.evidenceIncomplete = true
+                  next.diagnostics.push(error instanceof Error ? error.message : String(error))
+                }
+              }
               if (tool.toolName === 'bash') {
                 const structured = event.result && typeof event.result === 'object' && 'structuredContent' in event.result ? event.result.structuredContent : null
                 const code = structured && typeof structured === 'object' && 'exit_code' in structured && typeof structured.exit_code === 'number' && Number.isSafeInteger(structured.exit_code) ? structured.exit_code : null
@@ -463,6 +483,8 @@ export async function createSubagentRuns(options: {
       let output = ''
       let closed = false
       try {
+        if (delivery && options.reviews)
+          await options.reviews.captureBefore(run.id, projectPath, snapshot.configurationSnapshot.cwd, combined, snapshot.configurationSnapshot.reviewId)
         if (delivery) {
           const before = await captureGitSnapshot(snapshot.configurationSnapshot.cwd, combined)
           updateDelivery((value) => {
@@ -538,6 +560,12 @@ export async function createSubagentRuns(options: {
       }
       catch (failure) {
         recordFailure(failure)
+      }
+      if (delivery && options.reviews) {
+        try {
+          await options.reviews.captureAfter(run.id, projectPath, snapshot.configurationSnapshot.cwd, snapshot.task, !!processExit && !recordingError, controller.signal)
+        }
+        catch (failure) { console.error('[piflow] review source capture failed', failure) }
       }
       let resultDelivery: RunResult['delivery']
       if (delivery) {

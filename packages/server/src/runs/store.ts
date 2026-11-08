@@ -53,6 +53,7 @@ export function toolSummary({
   outputTruncated: _ot,
   command,
   deliveryDeclaration: _declaration,
+  reviewRoute: _reviewRoute,
   ...summary
 }: RunToolDetail): RunToolSummary {
   return { ...summary, ...(command ? { hasCommandEvidence: true, commandExitCode: command.exitCode } : {}) }
@@ -339,7 +340,7 @@ export async function openRunStore(dataDir: string) {
     }
     const summaries = db
       .prepare(
-        `SELECT json_remove(data,'$.inputPreview','$.outputPreview','$.inputTruncated','$.outputTruncated','$.command','$.deliveryDeclaration') AS summary,
+        `SELECT json_remove(data,'$.inputPreview','$.outputPreview','$.inputTruncated','$.outputTruncated','$.command','$.deliveryDeclaration','$.reviewRoute') AS summary,
         json_extract(data,'$.command') AS command
       FROM run_tools WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?`,
       )

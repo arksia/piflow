@@ -4,6 +4,8 @@ import { build } from './app'
 import { createExtensionManager } from './extensions/manager'
 import { createFlowStore } from './flow/store'
 import { createProviderAuthManager } from './providers/provider-auth'
+import { createReviews } from './reviews'
+import { createReviewGeneration } from './reviews/generation'
 import { createSubagentRuns } from './runs'
 import { loadConfig } from './server/config'
 import { createSseHub } from './server/sse'
@@ -13,7 +15,9 @@ import { getUsage } from './usage/index'
 const config = loadConfig()
 const sse = createSseHub(config.rootCwd)
 const flow = createFlowStore(config.dataDir)
-const runs = await createSubagentRuns({ dataDir: config.dataDir, publish: sse.broadcast })
+const reviews = await createReviews({ dataDir: config.dataDir, publish: sse.broadcast })
+const runs = await createSubagentRuns({ dataDir: config.dataDir, publish: sse.broadcast, reviews })
+const reviewGeneration = createReviewGeneration(reviews, runs)
 const extensions = createExtensionManager()
 const modelRuntime = await ModelRuntime.create()
 const sessions = createSessionStore({
@@ -35,6 +39,8 @@ const app = await build({
   getUsage,
   flow,
   runs,
+  reviews,
+  reviewGeneration,
   extensions,
   logger: true,
   modelRuntime,
@@ -45,7 +51,9 @@ await app.listen({ host: config.host, port: config.port })
 console.info(`piflow · http://${config.host}:${config.port}`)
 
 async function shutdown() {
+  await reviewGeneration.close()
   await runs.close()
+  reviews.close()
   await sessions.disposeAll()
   await app.close()
 }

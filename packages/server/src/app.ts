@@ -4,6 +4,8 @@ import type { FastifyServerOptions } from 'fastify'
 import type { ExtensionManager } from './extensions/manager'
 import type { FlowStore } from './flow/store'
 import type { ProviderAuthManager } from './providers/provider-auth'
+import type { Reviews } from './reviews'
+import type { ReviewGeneration } from './reviews/generation'
 import type { UsageSnapshot } from './routes/usage'
 import type { SubagentRuns } from './runs'
 import type { ServerConfig } from './server/config'
@@ -19,6 +21,7 @@ import { extensionRoutes } from './routes/extensions'
 import { flowRoutes } from './routes/flow'
 import { projectRoutes } from './routes/project'
 import { providerRoutes } from './routes/providers'
+import { reviewRoutes } from './routes/reviews'
 import { runRoutes } from './routes/runs'
 import { sessionRoutes } from './routes/sessions'
 import { usageRoutes } from './routes/usage'
@@ -27,6 +30,8 @@ import { SessionsStreamingError } from './sessions/index'
 
 interface CreateAppOptions {
   runs: SubagentRuns
+  reviews?: Reviews
+  reviewGeneration?: ReviewGeneration
   config: ServerConfig
   sessions: SessionStore
   sse: SseHub
@@ -81,6 +86,8 @@ export async function build(options: CreateAppOptions) {
   app.register(usageRoutes, { getUsage, sessions })
   app.register(flowRoutes, { config, flow, sessions })
   app.register(runRoutes, { runs: options.runs })
+  if (options.reviews && options.reviewGeneration)
+    app.register(reviewRoutes, { reviews: options.reviews, generation: options.reviewGeneration, runs: options.runs, isTrusted: project => sessions.getProjectTrust(project).trusted })
   app.register(providerRoutes, { modelRuntime, providerAuth, sessions })
   app.register(projectRoutes, { config, sessions })
   app.register(extensionRoutes, { config, extensions, sessions })

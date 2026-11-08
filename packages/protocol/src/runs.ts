@@ -8,6 +8,8 @@ export interface RunConfiguration {
   cwd: string
   memberRoleIds: string[]
   delivery?: { kind: 'code', version: 1 }
+  reviewId?: string
+  reviewAnalysis?: { reviewId: string, revisionId: string, bundlePath: string }
 }
 export interface RunInput {
   projectPath: string
@@ -85,6 +87,7 @@ export interface RunToolDetail extends RunToolSummary {
   outputTruncated: boolean
   command?: RunCommandEvidence
   deliveryDeclaration?: CodeDeliveryDeclaration
+  reviewRoute?: import('./reviews').ReviewRoute
 }
 export interface RunCommandSummary extends RunToolSummary {
   commandPreview: string | null

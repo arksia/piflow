@@ -4,6 +4,7 @@ import { chmod, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { compareSources, documentText, sourceDocuments } from './analysis'
+import { parseReviewRoute } from './contract'
 import { captureSource, ReviewError } from './source'
 
 export { ReviewError } from './source'
@@ -135,7 +136,8 @@ export async function createReviews(options: {
     const value = revision(projectPath, reviewId, revisionId)
     const row = db.prepare('SELECT version, source, data FROM routes WHERE revision_id=? ORDER BY version DESC LIMIT 1').get(value.id)
     const route = row ? { version: Number(row.version), source: row.source as 'agent' | 'user', value: JSON.parse(row.data as string) as ReviewRoute } : null
-    const assigned = new Set(route?.value.steps.flatMap(step => step.targets.flatMap(link => value.targets.find(t => t.id === link.targetId)?.hunkIds ?? [])) ?? [])
+    const linked = new Set(route?.value.steps.flatMap(step => step.targets.map(link => link.targetId)) ?? [])
+    const assigned = new Set(value.files.flatMap(file => file.hunkIds).filter(id => value.targets.filter(t => t.hunkIds.includes(id)).every(t => linked.has(t.id))))
     return { review: entry, revision: summary(value), revisions: db.prepare('SELECT data FROM revisions WHERE review_id=? ORDER BY rowid DESC').all(entry.id).map(row => summary(JSON.parse(row.data as string))), files: value.files, targets: value.targets, documents: value.documents, evidence: value.evidence, gaps: value.gaps, route, decisions: db.prepare('SELECT data FROM decisions WHERE revision_id=?').all(value.id).map(row => JSON.parse(row.data as string)), unassignedHunkIds: value.files.flatMap(file => file.hunkIds).filter(id => !assigned.has(id)), generation: value.generation }
   }
   // A process restart cannot prove an unfinished model analysis completed.
@@ -235,6 +237,7 @@ export async function createReviews(options: {
     },
     saveRoute(projectPath: string, reviewId: string, revisionId: string, route: ReviewRoute, source: 'agent' | 'user', runId?: string, toolId?: string) {
       const value = revision(projectPath, reviewId, revisionId)
+      route = parseReviewRoute(route, { reviewId, revisionId, revisionToken: value.revisionToken, files: value.files, targets: value.targets, documents: value.documents, evidence: value.evidence, gaps: value.gaps })
       if (route.revisionToken !== value.revisionToken)
         throw new ReviewError('路线来自其他修订', 409)
       const existing = runId && toolId ? db.prepare('SELECT version FROM routes WHERE run_id=? AND tool_id=?').get(runId, toolId) : undefined
