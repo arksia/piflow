@@ -12,7 +12,7 @@
   width: 100%;
   flex-direction: column;
   align-items: center;
-  gap: var(--node-label-gap);
+  gap: 9px;
   padding: var(--node-padding) 6px 4px;
   border: 0;
   border-radius: 12px;

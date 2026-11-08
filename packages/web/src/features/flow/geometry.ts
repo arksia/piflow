@@ -3,7 +3,6 @@ import type { CanvasRect } from './viewport'
 export const NODE_WIDTH = 164
 export const NODE_HEIGHT = 154
 export const NODE_PADDING = 10
-export const NODE_LABEL_GAP = 9
 export function iconSize(node: { kind?: string, orchestrationEnabled?: boolean }) {
   return node.orchestrationEnabled ? 52 : node.kind === 'subagent-role' ? 40 : 46
 }

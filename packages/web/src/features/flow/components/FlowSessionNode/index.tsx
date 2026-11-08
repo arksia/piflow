@@ -5,7 +5,7 @@ import { Handle, Position } from '@xyflow/react'
 import { ChevronDown, ChevronUp, CircleAlert, Clock3, GitBranch, Link2, Network } from 'lucide-react'
 import ProviderLogo from '../../../../components/ProviderLogo'
 import { brandStyle } from '../../../../components/ProviderLogo/brand'
-import { iconSize, NODE_HEIGHT, NODE_LABEL_GAP, NODE_PADDING, NODE_WIDTH } from '../../geometry'
+import { iconSize, NODE_HEIGHT, NODE_PADDING, NODE_WIDTH } from '../../geometry'
 import styles from './styles.module.css'
 
 export type FlowSessionNodeData = Record<string, unknown> & {
@@ -55,7 +55,7 @@ export default function FlowSessionNode({ id, data, selected }: NodeProps<FlowCa
   const size = iconSize(data)
   const identity = data.orchestrationEnabled ? '编排者' : data.kind === 'subagent-role' ? '角色' : 'Agent'
   return (
-    <div className={`${styles.root} ${data.isDimmed ? styles.dimmed : ''}`} style={{ ...brandStyle(data.brand ?? 'unknown'), '--node-width': `${NODE_WIDTH}px`, '--node-height': `${NODE_HEIGHT}px`, '--node-padding': `${NODE_PADDING}px`, '--node-label-gap': `${NODE_LABEL_GAP}px`, '--icon-size': `${size}px` } as CSSProperties}>
+    <div className={`${styles.root} ${data.isDimmed ? styles.dimmed : ''}`} style={{ ...brandStyle(data.brand ?? 'unknown'), '--node-width': `${NODE_WIDTH}px`, '--node-height': `${NODE_HEIGHT}px`, '--node-padding': `${NODE_PADDING}px`, '--icon-size': `${size}px` } as CSSProperties}>
       <button
         type="button"
         className={`${styles.node} ${selected ? styles.selected : ''} ${data.isAnchor ? styles.anchor : ''}`}

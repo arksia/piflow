@@ -1,15 +1,14 @@
 import type { CanvasRect } from './viewport'
-import { NODE_LABEL_GAP } from './geometry'
 
 export interface FlowRoutePoint { x: number, y: number }
-export interface FlowRouteNode extends FlowRoutePoint { id: string, size: number, bounds?: CanvasRect }
+export interface FlowRouteNode extends FlowRoutePoint { id: string, size: number }
 interface RouteEdge { id: string, source: string, target: string }
 type Side = 'left' | 'right' | 'top' | 'bottom'
 interface Port { side: Side, points: FlowRoutePoint[] }
 
 function obstacle(node: FlowRouteNode): CanvasRect {
-  const rect = node.bounds ?? { x: node.x - node.size / 2, y: node.y - node.size / 2, width: node.size, height: node.size }
-  return { x: rect.x - 10, y: rect.y - 10, width: rect.width + 20, height: rect.height + 20 }
+  const half = node.size / 2 + 6
+  return { x: node.x - half, y: node.y - half, width: half * 2, height: half * 2 }
 }
 function clear(a: FlowRoutePoint, b: FlowRoutePoint, blocks: CanvasRect[]) {
   return !blocks.some(rect => a.x === b.x
@@ -30,7 +29,7 @@ function simplify(points: FlowRoutePoint[]): FlowRoutePoint[] {
   return output
 }
 
-/** Search finite obstacle-side channels. Edge crossings are allowed; label crossings are avoided. */
+/** Search finite icon-side channels. Labels mask edges rather than diverting them. */
 function channelPath(start: FlowRoutePoint, end: FlowRoutePoint, blocks: CanvasRect[]): FlowRoutePoint[] {
   const direct = [start, { x: end.x, y: start.y }, end]
   if (direct.slice(1).every((point, i) => clear(direct[i]!, point, blocks)))
@@ -84,29 +83,19 @@ function channelPath(start: FlowRoutePoint, end: FlowRoutePoint, blocks: CanvasR
       }
     }
   }
-  // ponytail: overlapping authored rectangles can enclose ports; preserve topology and mask labels.
+  // ponytail: overlapping authored icons can enclose ports; retain a deterministic fallback.
   return simplify(direct)
 }
 
 function ports(node: FlowRouteNode, offset = 0): Port[] {
   const rect = obstacle(node)
   const half = node.size / 2
-  const bottom = { x: node.x + offset, y: node.y + half }
-  const base: Port[] = [
+  return [
     { side: 'left', points: [{ x: node.x - half, y: node.y + offset }, { x: rect.x, y: node.y + offset }] },
     { side: 'right', points: [{ x: node.x + half, y: node.y + offset }, { x: rect.x + rect.width, y: node.y + offset }] },
     { side: 'top', points: [{ x: node.x + offset, y: node.y - half }, { x: node.x + offset, y: rect.y }] },
+    { side: 'bottom', points: [{ x: node.x + offset, y: node.y + half }, { x: node.x + offset, y: rect.y + rect.height }] },
   ]
-  if (!node.bounds || node.bounds.y + node.bounds.height <= bottom.y + NODE_LABEL_GAP) {
-    base.push({ side: 'bottom', points: [bottom, { x: bottom.x, y: rect.y + rect.height }] })
-  }
-  else {
-    // Leave the icon vertically, then use the real gap above its label to escape either side.
-    const elbow = { x: bottom.x, y: bottom.y + NODE_LABEL_GAP / 2 }
-    for (const x of [rect.x, rect.x + rect.width])
-      base.push({ side: 'bottom', points: [bottom, elbow, { x, y: elbow.y }] })
-  }
-  return base
 }
 
 function simplePaths(start: FlowRoutePoint, end: FlowRoutePoint): FlowRoutePoint[][] {
@@ -149,7 +138,7 @@ function chooseRoute(from: FlowRouteNode, to: FlowRouteNode, fromPorts: Port[], 
   const simple = candidates.find(candidate => candidate.clear)
   if (simple)
     return simple
-  // ponytail: search once per blocked edge, not once for each of the 25 port pairs.
+  // ponytail: search once per route selection, not once for each of the 16 port pairs.
   const best = candidates.find(candidate => candidate.exitsClear) ?? candidates[0]!
   const middle = channelPath(best.a.points.at(-1)!, best.b.points.at(-1)!, blocks)
   return { ...best, path: simplify([...best.a.points, ...middle, ...best.b.points.slice().reverse()]) }

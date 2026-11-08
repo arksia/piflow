@@ -15,6 +15,7 @@ import type { RunFilter } from '../runs/store'
 import type { FlowCanvasNode } from './components/FlowSessionNode'
 import type { FlowEdgeActivity } from './edges'
 import type { NewNodeDraft, NodeConfigurationDraft } from './node-forms'
+import type { FlowRouteNode } from './routes'
 import { conductorDraftReady, parseConductorDraft, RUN_STATUS_LABELS } from '@piflow/protocol'
 import {
   applyEdgeChanges,
@@ -816,9 +817,15 @@ export default function FlowView({ projectPath, onProjectChange, focusRequest, o
   const draftMessage = latestDraftMessage(conductorView)
   const conductorReady = conductorDraftReady(parseConductorDraft(draftMessage ? messageText(draftMessage) : '')) && !conductorStreaming
   const callEdges = useMemo(() => subagentCallEdges(runs, activities, projectedNodes), [runs, activities, projectedNodes])
-  const routeInput = JSON.stringify({ edges: [...document?.edges ?? [], ...callEdges].map(({ id, source, target }) => ({ id, source, target })), nodes: projectedNodes.map(nodeGeometry) })
+  const routeInput = JSON.stringify({
+    edges: [...document?.edges ?? [], ...callEdges].map(({ id, source, target }) => ({ id, source, target })),
+    nodes: projectedNodes.map((node) => {
+      const { id, x, y, size } = nodeGeometry(node)
+      return { id, x, y, size }
+    }),
+  })
   const graphRoutes = useMemo(() => {
-    const input = JSON.parse(routeInput) as { edges: Array<{ id: string, source: string, target: string }>, nodes: ReturnType<typeof nodeGeometry>[] }
+    const input = JSON.parse(routeInput) as { edges: Array<{ id: string, source: string, target: string }>, nodes: FlowRouteNode[] }
     return routeGraphEdges(input.edges, input.nodes)
   }, [routeInput])
 

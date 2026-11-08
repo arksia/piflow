@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { NODE_LABEL_GAP } from './geometry'
 import { roundedOrthogonalPath, routeGraphEdges } from './routes'
 
-it('routes around full labels with multiple rounded corners and reversible geometry', () => {
+it('routes around icons with multiple rounded corners and reversible geometry', () => {
   const nodes = [
     { id: 'a', x: 50, y: 30, size: 46, bounds: { x: 0, y: 0, width: 100, height: 150 } },
     { id: 'b', x: 450, y: 30, size: 46, bounds: { x: 400, y: 0, width: 100, height: 150 } },
-    { id: 'label', x: 250, y: -60, size: 40, bounds: { x: 180, y: -90, width: 140, height: 240 } },
+    { id: 'block', x: 250, y: 30, size: 100 },
   ]
   const route = routeGraphEdges([{ id: 'edge', source: 'a', target: 'b' }], nodes).get('edge')!
   assert.ok(route.length > 3)
@@ -15,7 +14,7 @@ it('routes around full labels with multiple rounded corners and reversible geome
     const a = route[i - 1]!
     const b = route[i]!
     assert.ok(a.x === b.x || a.y === b.y)
-    assert.ok(!(Math.min(a.x, b.x) < 320 && Math.max(a.x, b.x) > 180 && Math.min(a.y, b.y) < 150 && Math.max(a.y, b.y) > -90))
+    assert.ok(!(Math.min(a.x, b.x) < 300 && Math.max(a.x, b.x) > 200 && Math.min(a.y, b.y) < 80 && Math.max(a.y, b.y) > -20))
   }
   assert.deepEqual(routeGraphEdges([{ id: 'edge', source: 'b', target: 'a' }], nodes).get('edge'), [...route].reverse())
   assert.ok((roundedOrthogonalPath(route).match(/Q/g) ?? []).length > 1)
@@ -51,28 +50,16 @@ it('uses all four sides, including straight vertical and mixed-axis connections'
   assert.ok(route[0]!.y === 23 || route.at(-1)!.y === 277)
 })
 
-it('escapes below an icon through the label gap and avoids its own and foreign text', () => {
+it('connects vertically through its own and other titles without a detour', () => {
   const nodes = [
     { id: 'a', x: 0, y: 0, size: 46, bounds: { x: -82, y: -33, width: 164, height: 154 } },
     { id: 'b', x: 0, y: 360, size: 46, bounds: { x: -82, y: 327, width: 164, height: 154 } },
-    { id: 'block', x: -110, y: 180, size: 46, bounds: { x: -160, y: 150, width: 100, height: 100 } },
+    { id: 'title', x: 80, y: 150, size: 46, bounds: { x: -20, y: 117, width: 200, height: 154 } },
   ]
   const route = routeGraphEdges([{ id: 'e', source: 'a', target: 'b' }], nodes).get('e')!
-  assert.deepEqual(route[0], { x: 0, y: 23 })
-  assert.equal(route[1]!.x, 0)
-  assert.ok(route[1]!.y > 23 && route[1]!.y < 23 + NODE_LABEL_GAP)
-  assert.deepEqual(route.at(-1), { x: 0, y: 337 })
-  const text = nodes.slice(0, 2).map(node => ({ ...node.bounds, y: node.y + node.size / 2 + NODE_LABEL_GAP, height: node.bounds.y + node.bounds.height - (node.y + node.size / 2 + NODE_LABEL_GAP) }))
-  for (const rect of [...text, nodes[2]!.bounds]) {
-    for (let i = 1; i < route.length; i++) {
-      const a = route[i - 1]!
-      const b = route[i]!
-      assert.ok(a.x === b.x || a.y === b.y)
-      assert.ok(!(a.x === b.x
-        ? a.x > rect.x && a.x < rect.x + rect.width && Math.max(a.y, b.y) > rect.y && Math.min(a.y, b.y) < rect.y + rect.height
-        : a.y > rect.y && a.y < rect.y + rect.height && Math.max(a.x, b.x) > rect.x && Math.min(a.x, b.x) < rect.x + rect.width))
-    }
-  }
+  assert.deepEqual(route, [{ x: 0, y: 23 }, { x: 0, y: 337 }])
+  const resizedTitles = nodes.map(node => ({ ...node, bounds: { ...node.bounds, width: 500, height: 500 } }))
+  assert.deepEqual(routeGraphEdges([{ id: 'e', source: 'a', target: 'b' }], resizedTitles).get('e'), route)
   assert.deepEqual(routeGraphEdges([{ id: 'e', source: 'b', target: 'a' }], nodes.slice().reverse()).get('e'), route.slice().reverse())
 })
 
