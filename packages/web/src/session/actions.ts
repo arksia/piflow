@@ -76,7 +76,8 @@ async function requestSession(path: string, body: OpenSessionRequest | NewSessio
     new Promise<SessionState>((_, reject) => window.setTimeout(() => reject(new Error('操作超时，请重试')), 10_000)),
   ])
   store.activeKey = state.key
-  migrateDraft(draftKey, state.key)
+  if (path === newSessionPath && draftKey.startsWith('new:'))
+    migrateDraft(draftKey, state.key)
   clearSessionUnread(state.sessionFile ?? state.key)
   dismissSessionFailure(state.sessionFile ?? state.key)
   saveActiveSessionFile(state.sessionFile)

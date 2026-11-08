@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { selectProjectForNewChat, sendPrompt } from './actions'
+import { newSession, openSession, selectProjectForNewChat, sendPrompt } from './actions'
 import { readDraft, saveDraftImages, saveDraftText } from './persistence'
 import { ensureView, store } from './store'
 
@@ -61,6 +61,47 @@ it('keeps the draft when a prompt request is rejected', async () => {
   }
   finally {
     globalThis.fetch = previousFetch
+    store.activeKey = null
+    store.views = {}
+  }
+})
+
+it('preserves both session drafts when opening a review parent, and migrates only a new chat draft', async () => {
+  const previous = { fetch: globalThis.fetch, document: globalThis.document, frame: globalThis.requestAnimationFrame, storage: globalThis.localStorage, window: globalThis.window }
+  const state = { key: 'parent-review', cwd: '/project', sessionFile: '/parent', messages: [], isStreaming: false, isCompacting: false, autoCompactionEnabled: true, model: null, thinkingLevel: null, thinkingLevels: [], context: null, queue: { steering: [], followUp: [] }, extensionRequests: [], error: null }
+  globalThis.document = { hidden: false } as Document
+  globalThis.requestAnimationFrame = (callback) => {
+    callback(0)
+    return 0
+  }
+  globalThis.localStorage = { setItem: () => {} } as unknown as Storage
+  globalThis.window = { setTimeout: () => 0 } as unknown as Window & typeof globalThis
+  globalThis.fetch = async () => new Response(JSON.stringify({ state, models: [], status: { trusted: true } }), { status: 200 })
+  store.activeKey = 'other-review'
+  store.views = {}
+  saveDraftText('other-review', 'unrelated draft')
+  saveDraftText('parent-review', 'parent draft')
+  try {
+    await openSession('/parent')
+    assert.equal(readDraft('other-review').text, 'unrelated draft')
+    assert.equal(readDraft('parent-review').text, 'parent draft')
+    await openSession('/parent')
+    assert.equal(readDraft('parent-review').text, 'parent draft')
+    store.activeKey = null
+    store.cwd = '/project'
+    saveDraftText('new:/project', 'new chat draft')
+    state.key = 'created-review'
+    await newSession()
+    assert.equal(readDraft('created-review').text, 'new chat draft')
+    assert.equal(readDraft('new:/project').text, '')
+    assert.equal(readDraft('parent-review').text, 'parent draft')
+  }
+  finally {
+    globalThis.fetch = previous.fetch
+    globalThis.document = previous.document
+    globalThis.requestAnimationFrame = previous.frame
+    globalThis.localStorage = previous.storage
+    globalThis.window = previous.window
     store.activeKey = null
     store.views = {}
   }

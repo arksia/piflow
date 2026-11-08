@@ -46,6 +46,8 @@ export function clearDraft(key: string | null) {
 }
 
 export function migrateDraft(from: string, to: string) {
+  if (from === to)
+    return
   const draft = drafts.get(from)
   if (!draft)
     return

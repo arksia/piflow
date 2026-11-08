@@ -7,6 +7,8 @@ it('keeps text and images together in memory by session key', () => {
   saveDraftText('session-a', 'draft')
   saveDraftImages('session-a', [image])
   assert.deepEqual(readDraft('session-a'), { text: 'draft', images: [image] })
+  migrateDraft('session-a', 'session-a')
+  assert.deepEqual(readDraft('session-a'), { text: 'draft', images: [image] })
   assert.deepEqual(readDraft('session-b'), { text: '', images: [] })
   clearDraft('session-a')
   assert.deepEqual(readDraft('session-a'), { text: '', images: [] })
