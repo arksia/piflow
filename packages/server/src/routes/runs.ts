@@ -34,6 +34,7 @@ export const runRoutes: FastifyPluginAsync<{ runs: SubagentRuns }> = async (app,
     return runs.list({ projectPath: project(request), orchestratorId: optional(q.orchestratorId), roleId: optional(q.roleId), cursor: optional(q.cursor) })
   })
   app.get(`${API_RUNS_PATH}/:id`, request => runs.read(project(request), (request.params as { id: string }).id))
+  app.get(`${API_RUNS_PATH}/:id/delivery`, request => runs.delivery(project(request), (request.params as { id: string }).id))
   app.get(`${API_RUNS_PATH}/:id/tools`, request => runs.tools({ projectPath: project(request), runId: (request.params as { id: string }).id, cursor: optional(query(request).cursor) }))
   app.get(`${API_RUNS_PATH}/:id/commands`, request => runs.commands({ projectPath: project(request), runId: (request.params as { id: string }).id, cursor: optional(query(request).cursor) }))
   app.get(`${API_RUNS_PATH}/:id/tools/:toolCallId`, (request) => {

@@ -7,6 +7,7 @@ export interface RunConfiguration {
   tools: string[]
   cwd: string
   memberRoleIds: string[]
+  delivery?: { kind: 'code', version: 1 }
 }
 export interface RunInput {
   projectPath: string
@@ -40,6 +41,8 @@ export interface RunSummary {
   failedToolCount: number
   revision: number
   outputRevision: number
+  deliveryKind?: 'code'
+  deliveryRevision?: number
 }
 export interface RunDetail extends RunSummary {
   task: string
@@ -81,6 +84,7 @@ export interface RunToolDetail extends RunToolSummary {
   inputTruncated: boolean
   outputTruncated: boolean
   command?: RunCommandEvidence
+  deliveryDeclaration?: CodeDeliveryDeclaration
 }
 export interface RunCommandSummary extends RunToolSummary {
   commandPreview: string | null
@@ -142,6 +146,7 @@ export interface RunResult {
   output: string
   error?: string
   recordingError?: string
+  delivery?: RunDeliverySummary
 }
 export type RunMessage = {
   type: 'run_updated'
@@ -170,4 +175,73 @@ export function buildRunsPath(projectPath: string, suffix = '', query: Record<st
       params.set(key, String(value))
   }
   return `${API_RUNS_PATH}${suffix}?${params}`
+}
+
+export interface CodeDeliveryDeclaration {
+  outcome: 'completed' | 'partial' | 'blocked'
+  summary: string
+  changes: string[]
+  artifacts: { path: string, description: string }[]
+  checks: { name: string, claimedStatus: 'passed' | 'failed' | 'not-run' | 'unknown', toolCallIds: string[], note: string }[]
+  unresolved: string[]
+}
+export type GitWorkspaceSnapshot = {
+  state: 'pending' | 'unavailable' | 'not-captured'
+  reason?: string
+} | {
+  state: 'recorded'
+  startedAt: string
+  capturedAt: string
+  root: string
+  head: string | null
+  branch: string | null
+  files: { path: string, originalPath?: string, index: string, worktree: string }[]
+  filesTruncated: boolean
+  stagedStat: string
+  unstagedStat: string
+  stagedStatTruncated: boolean
+  unstagedStatTruncated: boolean
+}
+export interface RunDeliveryRecord {
+  runId: string
+  projectPath: string
+  revision: number
+  declaration?: {
+    value: CodeDeliveryDeclaration
+    toolCallId: string
+    submittedAt: string
+    sequence: number
+    subsequentToolActivity: boolean
+  }
+  lastDeclarationError?: string
+  before: GitWorkspaceSnapshot
+  after: GitWorkspaceSnapshot
+  concurrentRunIds: string[]
+}
+export interface RunCheckReference {
+  toolCallId: string
+  linked: boolean
+  exitCode: number | null
+  status?: RunToolSummary['status']
+}
+export interface RunDeliveryDetail {
+  availability: 'recorded' | 'not-requested' | 'not-captured'
+  runId: string
+  projectPath: string
+  revision: number
+  record?: RunDeliveryRecord
+  commands: RunCommandCounts
+  checkReferences: RunCheckReference[]
+}
+export interface RunDeliverySummary {
+  declaration: 'submitted' | 'missing'
+  outcome?: CodeDeliveryDeclaration['outcome']
+  summary?: string
+  commands: RunCommandCounts
+  unresolved: string[]
+  unresolvedCount: number
+  unresolvedTruncated: boolean
+  before: GitWorkspaceSnapshot['state']
+  after: GitWorkspaceSnapshot['state']
+  warnings: string[]
 }

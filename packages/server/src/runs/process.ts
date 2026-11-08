@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { StringDecoder } from 'node:string_decoder'
 import { fileURLToPath } from 'node:url'
+import { CODE_DELIVERY_TOOL } from './delivery'
 
 const MAX_OUTPUT = 160000
 export type ProcessFact
@@ -84,14 +85,15 @@ export async function runSubagentProcess(
       '--no-mcp',
       '--no-skills',
       '--no-prompt-templates',
+      ...(config.delivery ? ['-e', fileURLToPath(new URL('./code-delivery-extension.ts', import.meta.url))] : []),
       '--append-system-prompt',
       promptFile,
       '--model',
       config.model,
       '--thinking',
       config.thinkingLevel,
-      ...(config.tools.length
-        ? ['--tools', config.tools.join(',')]
+      ...(config.tools.length || config.delivery
+        ? ['--tools', [...new Set([...config.tools, ...(config.delivery ? [CODE_DELIVERY_TOOL] : [])])].join(',')]
         : ['--no-tools']),
       '--',
       `Task: ${run.task}`,

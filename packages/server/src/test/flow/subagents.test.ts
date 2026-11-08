@@ -13,7 +13,9 @@ it('delegates with immutable snapshots and independent history without changing 
   const root = await mkdtemp(join(tmpdir(), 'piflow-subagent-'))
   const flow = createFlowStore(join(root, 'data'))
   const runs = await createSubagentRuns({ dataDir: join(root, 'data'), execute: async (input, _signal, fact) => {
-    assert.deepEqual(input.configurationSnapshot.tools, ['read'])
+    assert.deepEqual(input.configurationSnapshot.tools, input.configurationSnapshot.delivery ? ['read', 'submit_code_delivery'] : ['read'])
+    if (input.configurationSnapshot.delivery)
+      assert.match(input.configurationSnapshot.effectivePrompt, /Code delivery evidence/)
     assert.match(input.configurationSnapshot.effectivePrompt, /检查边界条件/)
     fact({ type: 'output', output: '验证通过', endOffset: 4 })
     return { output: '验证通过', cancelled: false, closed: true }
@@ -42,6 +44,9 @@ it('delegates with immutable snapshots and independent history without changing 
     assert.deepEqual(after, before)
     assert.equal('runs' in after, false)
     assert.equal(JSON.parse(await readFile(join(root, '.piflow/flow.json'), 'utf8')).runs, undefined)
+    const code = await call.execute('code-call', { roleId: 'role', task: '检查交付', delivery: 'code' }, undefined, undefined, emptyContext)
+    assert.match(JSON.stringify(code.content), /missing/)
+    assert.deepEqual(await flow.read(root), before)
     await assert.rejects(call.execute('invalid', { roleId: 'main', task: 'test' }, undefined, undefined, emptyContext), /target must/)
   }
   finally {

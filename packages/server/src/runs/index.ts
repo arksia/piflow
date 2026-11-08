@@ -1,4 +1,6 @@
 import type {
+  RunDeliveryDetail,
+  RunDeliveryRecord,
   RunDetail,
   RunInput,
   RunMessage,
@@ -12,6 +14,7 @@ import type {
 import type { ProcessFact } from './process'
 import { Buffer } from 'node:buffer'
 import { realpath } from 'node:fs/promises'
+import { CODE_DELIVERY_TOOL, deliveryDetail, deliverySummary, parseCodeDelivery } from './delivery'
 import { runSubagentProcess } from './process'
 import { openRunStore, RunError, summarize, toolSummary } from './store'
 
@@ -110,6 +113,22 @@ export async function createSubagentRuns(options: {
       throw new RunError('运行或工具身份无效')
     return value
   }
+  function readDelivery(run: RunDetail): RunDeliveryDetail {
+    const record = store.delivery(run.projectPath, run.id)
+    const counts = store.commandCounts(run.id)
+    if (!record)
+      return { availability: run.deliveryKind ? 'not-captured' : 'not-requested', runId: run.id, projectPath: run.projectPath, revision: run.deliveryRevision ?? 0, commands: counts, checkReferences: [] }
+    return deliveryDetail(record, counts, (toolId) => {
+      try {
+        return store.tool(run.projectPath, run.id, toolId)
+      }
+      catch (error) {
+        if (error instanceof RunError && error.statusCode === 404)
+          return undefined
+        throw error
+      }
+    })
+  }
   async function execute(
     input: RunInput,
     signal?: AbortSignal,
@@ -150,8 +169,19 @@ export async function createSubagentRuns(options: {
       failedToolCount: 0,
       historyAvailability: 'recorded',
       diagnostics: [],
+      ...(snapshot.configurationSnapshot.delivery ? { deliveryKind: 'code', deliveryRevision: 1 } : {}),
     }
-    store.insert(run)
+    let delivery: RunDeliveryRecord | undefined = run.deliveryKind
+      ? {
+          runId: run.id,
+          projectPath,
+          revision: 1,
+          before: { state: 'not-captured' },
+          after: { state: 'not-captured' },
+          concurrentRunIds: [],
+        }
+      : undefined
+    store.insert(run, '', delivery)
     const controller = new AbortController()
     const combined = signal
       ? AbortSignal.any([signal, controller.signal])
@@ -188,6 +218,7 @@ export async function createSubagentRuns(options: {
       next.revision++
       next.lastObservedAt = new Date().toISOString()
       const changed: RunToolDetail[] = []
+      let changedDelivery: RunDeliveryRecord | undefined
       let output: typeof currentOutput | undefined
       try {
         if (event.type === 'output') {
@@ -242,7 +273,7 @@ export async function createSubagentRuns(options: {
           }
           if (
             previous
-            && (event.type === 'tool_start' || previous.status !== 'running')
+            && (previous.toolName !== event.toolName || event.type === 'tool_start' || previous.status !== 'running')
           ) {
             const contradiction
               = previous.toolName !== event.toolName
@@ -306,6 +337,33 @@ export async function createSubagentRuns(options: {
               if (event.isError)
                 next.failedToolCount++
             }
+            if (delivery && (tool.toolName === 'bash' || (tool.toolName === CODE_DELIVERY_TOOL && event.type === 'tool_end') || (delivery.declaration && !delivery.declaration.subsequentToolActivity && tool.toolName !== CODE_DELIVERY_TOOL))) {
+              changedDelivery = structuredClone(delivery)
+              changedDelivery.revision++
+              next.deliveryRevision = changedDelivery.revision
+              if (tool.toolName === CODE_DELIVERY_TOOL && event.type === 'tool_end') {
+                if (!event.isError) {
+                  try {
+                    const result = event.result
+                    const details = result && typeof result === 'object' && 'details' in result ? result.details : null
+                    const value = parseCodeDelivery(details && typeof details === 'object' && 'codeDelivery' in details ? details.codeDelivery : undefined)
+                    tool.deliveryDeclaration = value
+                    changedDelivery.declaration = { value, toolCallId: tool.toolCallId, submittedAt: next.lastObservedAt, sequence: tool.sequence, subsequentToolActivity: false }
+                    changedDelivery.lastDeclarationError = undefined
+                  }
+                  catch (error) {
+                    changedDelivery.lastDeclarationError = error instanceof Error ? error.message : String(error)
+                    tool.evidenceIncomplete = true
+                  }
+                }
+                else {
+                  changedDelivery.lastDeclarationError = '交付声明工具未成功提交；保留此前有效声明。'
+                }
+              }
+              else if (changedDelivery.declaration) {
+                changedDelivery.declaration.subsequentToolActivity = true
+              }
+            }
             changed.push(tool)
           }
           const pending = new Map(runningTools)
@@ -321,8 +379,10 @@ export async function createSubagentRuns(options: {
               }
             : undefined
         }
-        store.save(next, changed, output)
+        store.save(next, changed, output, changedDelivery)
         run = next
+        if (changedDelivery)
+          delivery = changedDelivery
         if (output)
           currentOutput = output
         for (const tool of changed) {
@@ -414,11 +474,19 @@ export async function createSubagentRuns(options: {
       catch (failure) {
         recordFailure(failure)
       }
+      let resultDelivery: RunResult['delivery']
+      if (delivery) {
+        try {
+          resultDelivery = deliverySummary(readDelivery(next))
+        }
+        catch (failure) { recordFailure(failure) }
+      }
       return {
         runId: run.id,
         status,
         output,
         error,
+        ...(resultDelivery ? { delivery: resultDelivery } : {}),
         ...(recordingError ? { recordingError } : {}),
       }
     }
@@ -467,6 +535,9 @@ export async function createSubagentRuns(options: {
     },
     async commands(query: RunToolsQuery) {
       return store.commands({ ...query, runId: id(query.runId), projectPath: await normalize(query.projectPath) })
+    },
+    async delivery(projectPath: string, runId: string) {
+      return readDelivery(store.read(await normalize(projectPath), id(runId)))
     },
     async tool(projectPath: string, runId: string, toolCallId: string) {
       return store.tool(

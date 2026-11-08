@@ -1,6 +1,7 @@
 import type {
   RunCommandCounts,
   RunCommandsPage,
+  RunDeliveryRecord,
   RunDetail,
   RunOutputChunk,
   RunOutputQuery,
@@ -51,6 +52,7 @@ export function toolSummary({
   inputTruncated: _it,
   outputTruncated: _ot,
   command,
+  deliveryDeclaration: _declaration,
   ...summary
 }: RunToolDetail): RunToolSummary {
   return { ...summary, ...(command ? { hasCommandEvidence: true, commandExitCode: command.exitCode } : {}) }
@@ -103,9 +105,9 @@ export async function openRunStore(dataDir: string) {
     const schema = Number(
       db.prepare('PRAGMA user_version').get()!.user_version,
     )
-    if (schema > 1)
+    if (schema > 2)
       throw new Error('运行数据库来自更新的 piflow 版本，请升级后重试')
-    db.exec(`
+    db.exec(`BEGIN IMMEDIATE;
       CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY, project_path TEXT NOT NULL, created_at TEXT NOT NULL,
         orchestrator_id TEXT NOT NULL, role_id TEXT NOT NULL, status TEXT NOT NULL,
@@ -120,7 +122,11 @@ export async function openRunStore(dataDir: string) {
         sequence INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL,
         PRIMARY KEY(run_id, tool_id), UNIQUE(run_id, sequence)
       );
-      PRAGMA user_version=1;
+      CREATE TABLE IF NOT EXISTS run_deliveries (
+        run_id TEXT PRIMARY KEY REFERENCES runs(id), data TEXT NOT NULL
+      );
+      PRAGMA user_version=2;
+      COMMIT;
     `)
   }
   catch (error) {
@@ -148,21 +154,28 @@ export async function openRunStore(dataDir: string) {
       throw new RunError('运行记录不存在', 404)
     return JSON.parse(String(row.metadata)) as RunDetail
   }
-  function insert(run: RunDetail, output = '') {
-    db.prepare(
-      `INSERT INTO runs(id, project_path, created_at, orchestrator_id, role_id, status, metadata, output, output_end)
+  function insert(run: RunDetail, output = '', delivery?: RunDeliveryRecord) {
+    function write() {
+      db.prepare(
+        `INSERT INTO runs(id, project_path, created_at, orchestrator_id, role_id, status, metadata, output, output_end)
       VALUES(?,?,?,?,?,?,?,?,?)`,
-    ).run(
-      run.id,
-      run.projectPath,
-      run.createdAt,
-      run.orchestratorId,
-      run.roleId,
-      run.status,
-      JSON.stringify(run),
-      output,
-      output.length,
-    )
+      ).run(
+        run.id,
+        run.projectPath,
+        run.createdAt,
+        run.orchestratorId,
+        run.roleId,
+        run.status,
+        JSON.stringify(run),
+        output,
+        output.length,
+      )
+      if (delivery)
+        saveDelivery(delivery)
+    }
+    if (delivery)
+      transaction(write)
+    else write()
   }
   function toolsAll(id: string, status?: string): RunToolDetail[] {
     return db
@@ -176,6 +189,7 @@ export async function openRunStore(dataDir: string) {
     run: RunDetail,
     changed: RunToolDetail[] = [],
     output?: OutputWindow,
+    delivery?: RunDeliveryRecord,
   ) {
     transaction(() => {
       db.prepare(
@@ -205,7 +219,18 @@ export async function openRunStore(dataDir: string) {
           run.id,
         )
       }
+      if (delivery)
+        saveDelivery(delivery)
     })
+  }
+  function saveDelivery(delivery: RunDeliveryRecord) {
+    db.prepare('INSERT INTO run_deliveries(run_id,data) VALUES(?,?) ON CONFLICT(run_id) DO UPDATE SET data=excluded.data')
+      .run(delivery.runId, JSON.stringify(delivery))
+  }
+  function delivery(projectPath: string, runId: string): RunDeliveryRecord | undefined {
+    read(projectPath, runId)
+    const row = db.prepare('SELECT data FROM run_deliveries WHERE run_id=?').get(runId)
+    return row ? JSON.parse(String(row.data)) as RunDeliveryRecord : undefined
   }
   function tool(
     projectPath: string,
@@ -314,7 +339,7 @@ export async function openRunStore(dataDir: string) {
     }
     const summaries = db
       .prepare(
-        `SELECT json_remove(data,'$.inputPreview','$.outputPreview','$.inputTruncated','$.outputTruncated','$.command') AS summary,
+        `SELECT json_remove(data,'$.inputPreview','$.outputPreview','$.inputTruncated','$.outputTruncated','$.command','$.deliveryDeclaration') AS summary,
         json_extract(data,'$.command') AS command
       FROM run_tools WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?`,
       )
@@ -545,6 +570,7 @@ export async function openRunStore(dataDir: string) {
     toolsAll,
     commands,
     commandCounts,
+    delivery,
     window,
     output,
     close: async () => {
