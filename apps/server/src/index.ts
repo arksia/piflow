@@ -2,6 +2,7 @@ import process from 'node:process'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import { build } from './app.ts'
 import { createExtensionManager } from './extensions/manager.ts'
+import { openFactsStore } from './facts/store.ts'
 import { createFlowStore } from './flow/store.ts'
 import { createProviderAuthManager } from './providers/provider-auth.ts'
 import { createReviewGeneration } from './reviews/generation.ts'
@@ -17,10 +18,12 @@ const sse = createSseHub(config.rootCwd)
 const flow = createFlowStore(config.dataDir)
 const reviews = await createReviews({ dataDir: config.dataDir, publish: sse.broadcast })
 const runs = await createSubagentRuns({ dataDir: config.dataDir, publish: sse.broadcast, reviews })
+const facts = await openFactsStore(config.dataDir)
 const reviewGeneration = createReviewGeneration(reviews, runs)
 const extensions = createExtensionManager()
 const modelRuntime = await ModelRuntime.create()
 const sessions = createSessionStore({
+  facts,
   rootCwd: config.rootCwd,
   runs,
   reviews,
@@ -58,6 +61,7 @@ async function shutdown() {
   reviews.close()
   await sessions.disposeAll()
   await app.close()
+  facts.close()
 }
 
 process.once('SIGINT', () => void shutdown())

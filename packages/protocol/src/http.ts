@@ -23,6 +23,7 @@ export const API_PROJECT_TRUST_PATH = '/api/project-trust'
 export const API_GIT_PATH = '/api/git'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
+export const API_SUBMISSIONS_PATH = '/api/submissions'
 export const MAX_PROMPT_IMAGES = 10
 export const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -61,6 +62,24 @@ export interface PromptRequest {
   text: string
   images?: ImageContent[]
   streamingBehavior?: 'steer' | 'followUp'
+}
+
+export interface PromptAcceptedResponse {
+  ok: true
+  submissionId: string
+}
+
+export interface SubmissionFactResponse {
+  submission: {
+    id: string
+    projectPath: string
+    sessionId: string
+    sessionPath: string
+    status: 'accepted' | 'settled' | 'failed'
+    inputDigest: string
+    createdAt: string
+    settledAt: string | null
+  }
 }
 
 export interface SetModelRequest {

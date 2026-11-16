@@ -7,6 +7,7 @@ import type {
   NavigateSessionRequest,
   NewSessionRequest,
   OpenSessionRequest,
+  PromptAcceptedResponse,
   PromptRequest,
   RenameSessionRequest,
   SessionsResponse,
@@ -58,9 +59,9 @@ export const sessionRoutes: FastifyPluginAsync<RegisterSessionRoutesOptions> = a
     sse.broadcast({ type: 'sessions', sessions: await sessions.listSessions() })
   }
 
-  async function handlePrompt(managed: ManagedSession, prompt: PromptRequest) {
+  async function settlePrompt(managed: ManagedSession, completion: Promise<void>) {
     try {
-      await sessions.prompt(managed, prompt.text, prompt.images, prompt.streamingBehavior)
+      await completion
     }
     catch (err) {
       sessions.publishError(managed.key, String(err))
@@ -204,8 +205,15 @@ export const sessionRoutes: FastifyPluginAsync<RegisterSessionRoutesOptions> = a
       return send(reply, 400, { error: imageError })
     if (prompt.streamingBehavior !== undefined && prompt.streamingBehavior !== 'steer' && prompt.streamingBehavior !== 'followUp')
       return send(reply, 400, { error: 'unknown streaming behavior' })
-    send(reply, 202, { ok: true } satisfies ApiOkResponse)
-    void handlePrompt(managed, prompt as PromptRequest)
+    let submission: ReturnType<SessionStore['submitPrompt']>
+    try {
+      submission = sessions.submitPrompt(managed, prompt.text, prompt.images, prompt.streamingBehavior)
+    }
+    catch (error) {
+      return send(reply, 500, { error: error instanceof Error ? error.message : String(error) })
+    }
+    send(reply, 202, { ok: true, submissionId: submission.submissionId } satisfies PromptAcceptedResponse)
+    void settlePrompt(managed, submission.completion)
   })
 
   app.post(actionPath('abort'), async (request, reply) => {

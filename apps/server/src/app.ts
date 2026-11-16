@@ -25,6 +25,7 @@ import { providerRoutes } from './routes/providers.ts'
 import { reviewRoutes } from './routes/reviews.ts'
 import { runRoutes } from './routes/runs.ts'
 import { sessionRoutes } from './routes/sessions.ts'
+import { submissionRoutes } from './routes/submissions.ts'
 import { usageRoutes } from './routes/usage.ts'
 import { send } from './server/reply.ts'
 import { SessionsStreamingError } from './sessions/index.ts'
@@ -84,6 +85,7 @@ export async function build(options: CreateAppOptions) {
   })
 
   app.register(sessionRoutes, { sessions, sse })
+  app.register(submissionRoutes, { sessions })
   app.register(usageRoutes, { getUsage, sessions })
   app.register(flowActivityRoutes, { runs: options.runs, reviews: options.reviews })
   app.register(flowRoutes, { config, flow, sessions })

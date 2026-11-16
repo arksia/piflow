@@ -17,6 +17,7 @@ import type {
   SessionStatus,
   SessionStatusRecord,
 } from '@piflow/protocol'
+import type { FactsStore } from '../facts/store.ts'
 import type { FlowStore } from '../flow/store.ts'
 import type { ReviewGeneration } from '../reviews/generation.ts'
 import type { Reviews } from '../reviews/index.ts'
@@ -74,6 +75,8 @@ export interface SessionStore {
   startFlowConductorPrompt: (projectPath: string, text: string) => Promise<ManagedSession>
   openSavedSession: (path: string, options?: { refresh?: boolean }) => Promise<ManagedSession | null>
   prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
+  submitPrompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => { submissionId: string, completion: Promise<void> }
+  readSubmission: (projectPath: string, id: string) => ReturnType<FactsStore['readSubmission']>
   compact: (managed: ManagedSession, instructions?: string) => Promise<void>
   abortCompaction: (managed: ManagedSession) => void
   setAutoCompaction: (managed: ManagedSession, enabled: boolean) => void
@@ -103,6 +106,7 @@ export interface SessionStore {
 }
 
 interface CreateSessionStoreOptions {
+  facts?: FactsStore
   runs?: SubagentRuns
   reviews?: Reviews
   reviewGeneration?: ReviewGeneration
@@ -408,6 +412,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         lastUsed: Date.now(),
         modelDiagnostics: [...(runtime.diagnostics ?? [])],
       }
+      if (runtime.session.sessionFile)
+        options.facts?.registerSession(runtime.cwd, runtime.session.sessionId, runtime.session.sessionFile)
       const enabledModels = runtime.services.settingsManager.getEnabledModels()
       if (enabledModels?.length) {
         const { diagnostics } = await resolveModelScopeWithDiagnostics(enabledModels, runtime.services.modelRuntime)
@@ -498,10 +504,32 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     }
   }
 
+  function submitPrompt(managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') {
+    const session = managed.runtime.session
+    const sessionPath = session.sessionFile ?? session.sessionManager.getSessionFile()
+    if (!sessionPath)
+      throw new Error('pi Session path is unavailable')
+    const submissionId = options.facts
+      ? options.facts.beginSubmission({ projectPath: managed.cwd, sessionId: session.sessionId, sessionPath, text, images }).id
+      : crypto.randomUUID()
+    const completion = (async () => {
+      try {
+        touch(managed)
+        await injectFlowDirectory(managed)
+        await session.prompt(text, { images, streamingBehavior })
+        options.facts?.settleSubmission(submissionId, 'settled')
+      }
+      catch (error) {
+        options.facts?.settleSubmission(submissionId, 'failed')
+        throw error
+      }
+    })()
+    return { submissionId, completion }
+  }
+
   async function prompt(managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') {
-    touch(managed)
-    await injectFlowDirectory(managed)
-    await managed.runtime.session.prompt(text, { images, streamingBehavior })
+    const submission = submitPrompt(managed, text, images, streamingBehavior)
+    await submission.completion
   }
 
   async function compact(managed: ManagedSession, instructions?: string) {
@@ -909,6 +937,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     startFlowConductorPrompt,
     openSavedSession,
     prompt,
+    submitPrompt,
+    readSubmission: (projectPath, id) => options.facts?.readSubmission(projectPath, id),
     compact,
     abortCompaction,
     setAutoCompaction,

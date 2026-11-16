@@ -64,6 +64,7 @@ export {
   API_SESSIONS_NEW_PATH,
   API_SESSIONS_OPEN_PATH,
   API_SESSIONS_PATH,
+  API_SUBMISSIONS_PATH,
   API_USAGE_PATH,
   AUTH_PATH,
   buildAuthPath,
@@ -98,12 +99,14 @@ export type {
   NavigateSessionRequest,
   NewSessionRequest,
   OpenSessionRequest,
+  PromptAcceptedResponse,
   PromptRequest,
   RenameSessionRequest,
   SessionAction,
   SetAutoCompactionRequest,
   SetModelRequest,
   SetThinkingRequest,
+  SubmissionFactResponse,
   TrustProjectRequest,
 } from './http.ts'
 export { reviewScope } from './review-scope.ts'
