@@ -10,11 +10,11 @@ import type {
   RpcExtensionUIResponse,
   SessionStats,
 } from '@earendil-works/pi-coding-agent'
-import type { AgentConfiguration, FlowMembership } from './agents'
+import type { AgentConfiguration, FlowMembership } from './agents.ts'
 
-export { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
+export { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents.ts'
 
-export type { AgentConfiguration, FlowMembership } from './agents'
+export type { AgentConfiguration, FlowMembership } from './agents.ts'
 export {
   LEGACY_CANVAS_FILE,
   LEGACY_MODULES_FILE,
@@ -24,7 +24,7 @@ export {
   PROJECT_FLOW_FILE,
   serializeProjectCanvas,
   UnsupportedProjectCanvasVersion,
-} from './canvas'
+} from './canvas.ts'
 
 export type {
   CanvasLink,
@@ -32,18 +32,19 @@ export type {
   LegacyModules,
   ProjectCanvas,
   ProjectCanvasDocument,
-} from './canvas'
+} from './canvas.ts'
 export {
   conductorDraftReady,
   mergeConductorDraft,
   parseConductorDraft,
   stripConductorFences,
-} from './conductor'
+} from './conductor.ts'
 export type {
   ConductorDraft,
   ConductorDraftLink,
   ConductorDraftModule,
-} from './conductor'
+} from './conductor.ts'
+export * from './flow-activity.ts'
 export {
   API_COMPOSER_PATH,
   API_DIRECTORIES_PATH,
@@ -78,7 +79,7 @@ export {
   MAX_PROMPT_IMAGES,
   parseSessionActionPath,
   SESSION_ACTIONS,
-} from './http'
+} from './http.ts'
 export type {
   AcceptConductorRequest,
   ApiOkResponse,
@@ -104,12 +105,11 @@ export type {
   SetModelRequest,
   SetThinkingRequest,
   TrustProjectRequest,
-} from './http'
-export * from './reviews'
-export * from './runs'
+} from './http.ts'
+export { reviewScope } from './review-scope.ts'
+export * from './reviews.ts'
+export * from './runs.ts'
 export type { ImageContent } from '@earendil-works/pi-ai'
-export type { AuthEvent, AuthPrompt, AuthType } from '@earendil-works/pi-ai'
-export type { SessionStats } from '@earendil-works/pi-coding-agent'
 
 /** POST body for the extension-UI response route: the official RPC frame plus the target session key. */
 export type ExtensionUIResponseBody = { session: string } & RpcExtensionUIResponse
@@ -307,8 +307,8 @@ export interface SessionState {
 }
 
 export type ServerMessage
-  = | import('./runs').RunMessage
-    | import('./reviews').ReviewMessage
+  = | import('./runs.ts').RunMessage
+    | import('./reviews.ts').ReviewMessage
     | { type: 'hello', cwd: string }
     | { type: 'sessions', sessions: SessionInfoLite[] }
     | { type: 'models', models: ModelInfo[] }
@@ -400,3 +400,6 @@ export interface SessionTreeResponse {
   tree: import('@earendil-works/pi-coding-agent').SessionTreeNode[]
   leafId: string | null
 }
+
+export type { AuthEvent, AuthPrompt, AuthType } from '@earendil-works/pi-ai'
+export type { SessionStats } from '@earendil-works/pi-coding-agent'

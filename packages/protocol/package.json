@@ -4,19 +4,52 @@
   "private": true,
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./agents": {
+      "types": "./dist/agents.d.ts",
+      "import": "./dist/agents.js"
+    },
+    "./canvas": {
+      "types": "./dist/canvas.d.ts",
+      "import": "./dist/canvas.js"
+    },
+    "./conductor": {
+      "types": "./dist/conductor.d.ts",
+      "import": "./dist/conductor.js"
+    },
+    "./flow-activity": {
+      "types": "./dist/flow-activity.d.ts",
+      "import": "./dist/flow-activity.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./review-scope": {
+      "types": "./dist/review-scope.d.ts",
+      "import": "./dist/review-scope.js"
+    },
+    "./reviews": {
+      "types": "./dist/reviews.d.ts",
+      "import": "./dist/reviews.js"
+    },
+    "./runs": {
+      "types": "./dist/runs.d.ts",
+      "import": "./dist/runs.js"
     }
   },
+  "files": ["dist"],
   "scripts": {
-    "build": "tsc --noEmit",
-    "dev": "tsc --noEmit --watch --preserveWatchOutput",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "^1.2.0",
-    "@earendil-works/pi-ai": "^1.2.0",
-    "@earendil-works/pi-coding-agent": "^1.2.0",
+    "@earendil-works/pi-agent-core": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-coding-agent": "1.5.2",
     "typescript": "^5.8.0"
   }
 }

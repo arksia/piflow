@@ -2,6 +2,7 @@ shellEmulator: true
 trustPolicy: no-downgrade
 
 packages:
+  - apps/*
   - packages/*
 allowBuilds:
   '@google/genai': false

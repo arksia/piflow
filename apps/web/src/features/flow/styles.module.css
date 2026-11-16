@@ -1,0 +1,552 @@
+.delegation-entry {
+  border-bottom: 1px solid var(--c-line);
+}
+
+.delegation-entry > summary {
+  padding: 12px;
+  cursor: pointer;
+}
+
+.delegation {
+  padding: 12px;
+  font-size: 0.75rem;
+}
+
+.delegation button {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.delegation small {
+  color: var(--c-muted);
+}
+
+.workspace {
+  --flow-edge: rgb(255 255 255 / 14%);
+  --flow-edge-selected: rgb(255 255 255 / 45%);
+  --flow-grid: rgb(255 255 255 / 3%);
+
+  container-type: size;
+  background: var(--c-canvas);
+}
+
+.bar {
+  height: var(--chrome-h);
+  min-height: var(--chrome-h);
+  border-bottom: 1px solid var(--c-line);
+}
+
+.heading strong {
+  overflow: hidden;
+  color: var(--c-ink);
+  font-size: 0.92rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: var(--radius-control);
+  color: var(--c-muted);
+  font-size: 0.82rem;
+}
+
+.breadcrumb:hover {
+  background: var(--c-press);
+  color: var(--c-ink);
+}
+
+.empty-team {
+  position: absolute;
+  z-index: 4;
+  bottom: 80px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.empty-team button { color: var(--c-signal); }
+
+.group-choices {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.group-choices button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.group-choices button:hover { background: var(--c-press); }
+
+.heading span {
+  min-width: 0;
+  color: var(--c-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention {
+  --attention-border: var(--c-danger);
+  --attention-bg: var(--c-danger-tint);
+  --attention-ink: var(--c-danger);
+  --attention-strong: var(--c-danger);
+  --attention-muted: var(--c-danger);
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-bottom: 1px solid var(--attention-border);
+  background: var(--attention-bg);
+  color: var(--attention-ink);
+  font-size: 0.76rem;
+}
+
+.attention > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.attention strong {
+  color: var(--attention-strong);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attention span span {
+  min-width: 0;
+  color: var(--attention-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-action {
+  color: var(--attention-strong);
+}
+
+.attention-action:hover {
+  background: var(--c-press);
+  color: var(--c-ink);
+}
+
+.attention-needs-input {
+  --attention-border: var(--c-warning);
+  --attention-bg: var(--c-warning-tint);
+  --attention-ink: var(--c-warning);
+  --attention-strong: var(--c-warning);
+  --attention-muted: var(--c-warning);
+}
+
+.add,
+.delete,
+.cancel {
+  display: inline-flex;
+  height: var(--control);
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  font-size: 0.78rem;
+  line-height: 1;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.cancel {
+  color: var(--c-muted);
+}
+
+.cancel:hover {
+  background: var(--c-danger-tint);
+  color: var(--c-danger);
+}
+
+.add {
+  background: var(--c-accent);
+  color: var(--c-accent-contrast);
+}
+
+.add:disabled {
+  opacity: 0.45;
+}
+
+.add:hover {
+  background: var(--c-accent-hover);
+}
+
+.runtime-toolbar {
+  border-bottom: 1px solid var(--c-line);
+}
+
+.runtime-tool {
+  color: var(--c-muted);
+}
+
+.runtime-tool:hover {
+  background: var(--c-press);
+  color: var(--c-ink);
+}
+
+.runtime-delete {
+  color: var(--c-danger);
+}
+
+.runtime-delete:hover {
+  background: var(--c-danger-tint);
+  color: var(--c-danger);
+}
+
+.delete:hover {
+  background: var(--c-danger-tint);
+}
+
+.conductor-button {
+  background: var(--c-canvas);
+}
+
+.conductor-button:hover {
+  background: var(--c-press);
+}
+
+.conductor {
+  position: relative;
+  flex: 0 0 380px;
+  min-width: 0;
+  min-height: 0;
+  width: 380px;
+  border-left: 1px solid var(--c-line);
+}
+
+.conductor-bar {
+  border-bottom: 1px solid var(--c-line);
+}
+
+.conductor-draft {
+  margin: 4px 0 12px;
+}
+
+.conductor-draft .panel-actions {
+  padding: 8px 12px 12px;
+}
+
+.conductor-draft h3 {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.conductor-draft p,
+.conductor-empty {
+  margin: 6px 0 12px;
+  color: var(--c-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.conductor-chat {
+  flex: 1 1 220px;
+}
+
+.delegation button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.runtime-panel {
+  position: relative;
+  flex: 0 0 380px;
+  min-width: 0;
+  min-height: 0;
+  width: 380px;
+  border-left: 1px solid var(--c-line-strong);
+  background: var(--c-canvas);
+  box-shadow: -12px 0 30px rgb(0 0 0 / 18%);
+}
+
+.runtime-header {
+  min-height: var(--chrome-h);
+  border-bottom: 1px solid var(--c-line);
+}
+
+.runtime-identity strong {
+  overflow: hidden;
+  color: var(--c-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-idle { color: var(--c-muted); }
+.runtime-running { color: var(--c-signal); }
+.runtime-failed { color: var(--c-danger); }
+.runtime-needs-input { color: var(--c-warning); }
+
+.runtime-actions > button:not([aria-label]) {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: var(--radius-control);
+  color: var(--c-muted);
+  font-size: 0.7rem;
+}
+
+.runtime-actions > button:not([aria-label]):hover {
+  background: var(--c-press);
+  color: var(--c-ink);
+}
+
+.runtime-summary {
+  border-bottom: 1px solid var(--c-line);
+}
+
+.runtime-summary p {
+  display: -webkit-box;
+  max-height: 3.2em;
+  margin: 0;
+  overflow: hidden;
+  color: var(--c-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.runtime-summary .runtime-brief {
+  margin-top: 5px;
+  color: var(--c-faint);
+}
+
+.delivery-list {
+  max-height: 190px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.delivery-list h3 {
+  margin: 0 0 6px;
+  color: var(--c-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.delivery {
+  border-top: 1px solid var(--c-line);
+}
+
+.deliveryqueued,
+.deliverydelivered { color: var(--c-signal); }
+.deliveryreplied { color: var(--c-success); }
+.deliveryfailed { color: var(--c-danger); }
+
+.delivery p {
+  display: -webkit-box;
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--c-body);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.delivery .delivery-reply {
+  color: var(--c-muted);
+}
+
+.runtime-chat > div {
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 100%;
+
+  --chat-w: 100%;
+}
+
+.error {
+  max-width: min(520px, calc(100% - 32px));
+  background: var(--c-danger-tint);
+}
+
+/* stylelint-disable selector-pseudo-class-no-unknown, selector-class-pattern */
+.workspace :global(.react-flow) {
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace :global(.react-flow__controls),
+.workspace :global(.react-flow__minimap) {
+  border: 1px solid var(--c-line-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+
+.workspace :global(.react-flow__controls-button) {
+  border-bottom-color: var(--c-line-strong);
+  background: var(--c-surface);
+  fill: var(--c-mid);
+}
+
+.workspace :global(.react-flow__controls-button:hover) {
+  background: var(--c-press);
+}
+
+.workspace :global(.react-flow__edge.selected .react-flow__edge-path) {
+  stroke: var(--flow-edge-selected);
+}
+
+/* React Flow renders the interaction path with stroke-width: 20 but no stroke color,
+   making it unhittable. Give it a transparent stroke so the wide hit area works. */
+.workspace :global(.react-flow__edge-interaction) {
+  stroke: transparent;
+}
+/* stylelint-enable selector-pseudo-class-no-unknown, selector-class-pattern */
+
+.mode {
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 32px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (width <= 768px) {
+  .runtime-panel {
+    width: 100%;
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  .runtime-header {
+    min-height: 44px;
+  }
+
+  .delivery-list {
+    max-height: 150px;
+  }
+}
+
+.run-list {
+  border-bottom: 1px solid var(--c-line);
+  font-size: 0.75rem;
+}
+
+.run-list h3 {
+  margin: 0 0 8px;
+  font-size: inherit;
+}
+
+.run {
+  border-top: 1px solid var(--c-line);
+}
+
+.run summary {
+  cursor: pointer;
+}
+
+.run pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--c-muted);
+}
+
+.run-filter {
+  padding: 12px;
+}
+
+.runtime-panel .run-filter select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid var(--c-line);
+  border-radius: 4px;
+  background: var(--c-surface);
+  color: var(--c-ink);
+}
+
+.canvas-layout {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+@container (width < 860px) {
+  .canvas-layout { flex-direction: column; }
+
+  .runtime-panel,
+  .conductor {
+    overflow: auto;
+    flex: 0 1 55%;
+    width: 100%;
+    max-height: 55%;
+    border-top: 1px solid var(--c-line);
+    border-left: 0;
+  }
+}
+
+@container (width < 860px) and (height < 480px) {
+  .canvas-layout:has(> .runtime-panel) .canvas,
+  .canvas-layout:has(> .conductor) .canvas { display: none; }
+
+  .runtime-panel,
+  .conductor {
+    flex: 1;
+    max-height: none;
+  }
+}
+
+.evidence-reader {
+  flex: 1;
+  min-height: 0;
+  padding: 0 12px 12px;
+  overflow: auto;
+}

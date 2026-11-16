@@ -1,0 +1,15 @@
+.path {
+  transition: stroke var(--duration-fast) var(--ease-in-out), opacity var(--duration-fast) var(--ease-in-out);
+}
+
+.count {
+  transform: translate(-50%, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .path { transition: none; }
+
+  .pulses {
+    display: none;
+  }
+}

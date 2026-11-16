@@ -32,7 +32,7 @@ pnpm build
 pnpm start
 ```
 
-The product is split into `packages/web` and `packages/server`. The server runs from TypeScript source via `tsx`, serves `packages/web/dist`, and listens at [http://127.0.0.1:3141](http://127.0.0.1:3141).
+The product is split into `apps/web` and `apps/server`, with shared wire contracts in `packages/protocol`. Development runs the server through `tsx`; production builds JavaScript and serves the Web distribution at [http://127.0.0.1:3141](http://127.0.0.1:3141).
 
 ### LAN Access
 

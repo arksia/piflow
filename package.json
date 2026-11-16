@@ -3,15 +3,15 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter piflow-web --filter piflow-server run dev",
+    "dev": "pnpm --filter @piflow/protocol run build && pnpm --parallel --filter @piflow/protocol --filter piflow-web --filter piflow-server run dev",
     "build": "pnpm --filter @piflow/protocol run build && pnpm --filter piflow-server run build && pnpm --filter piflow-web run build",
     "start": "pnpm --filter piflow-server run start",
-    "lint": "eslint . --max-warnings 0 && stylelint 'packages/web/src/**/*.css' --max-warnings 0",
-    "lint:fix": "eslint . --fix && stylelint 'packages/web/src/**/*.css' --fix",
-    "typecheck": "pnpm --filter @piflow/protocol run typecheck && pnpm --filter piflow-web run typecheck && pnpm --filter piflow-server run typecheck",
+    "lint": "eslint . --max-warnings 0 && stylelint 'apps/web/src/**/*.css' --max-warnings 0",
+    "lint:fix": "eslint . --fix && stylelint 'apps/web/src/**/*.css' --fix",
+    "typecheck": "pnpm --filter @piflow/protocol run build && pnpm --filter @piflow/protocol run typecheck && pnpm --filter piflow-web run typecheck && pnpm --filter piflow-server run typecheck",
     "test": "pnpm --filter piflow-server run test && pnpm --filter piflow-web run test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },

@@ -169,7 +169,9 @@ export interface ReviewAnalysisContext {
   evidence: ReviewEvidence[]
   gaps: ReviewGap[]
 }
-export interface ReviewMessage { type: 'review_updated', projectPath: string, reviewId: string, revisionId: string, version: number }
+export type ReviewMessage
+  = | { type: 'review_updated', projectPath: string, reviewId: string, revisionId: string, version: number }
+    | { type: 'review_removed', projectPath: string, reviewId: string, version: number }
 export const API_REVIEWS_PATH = '/api/reviews'
 export function buildReviewsPath(projectPath: string, suffix = '', query: Record<string, string | undefined> = {}) {
   const params = new URLSearchParams({ projectPath })

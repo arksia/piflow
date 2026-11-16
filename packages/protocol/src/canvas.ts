@@ -1,5 +1,5 @@
-import type { AgentConfiguration, FlowMembership } from './agents'
-import { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents'
+import type { AgentConfiguration, FlowMembership } from './agents.ts'
+import { InvalidAgentConfiguration, parseAgentConfiguration, parseFlowMemberships } from './agents.ts'
 
 export const PROJECT_FLOW_FILE = '.piflow/flow.json'
 export const LEGACY_CANVAS_FILE = '.piflow/canvas.json'

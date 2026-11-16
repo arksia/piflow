@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { ImageContent } from '@earendil-works/pi-ai'
-import type { ConductorDraft } from './conductor'
+import type { ConductorDraft } from './conductor.ts'
 
 export const AUTH_PATH = '/auth'
 

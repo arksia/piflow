@@ -23,6 +23,8 @@ export interface RunInput {
   configurationSnapshot: RunConfiguration
 }
 export interface RunSummary {
+  /** Derived from the recorded configuration; absent in older clients. */
+  purpose?: 'task' | 'review-analysis'
   id: string
   projectPath: string
   orchestratorId: string
@@ -87,7 +89,7 @@ export interface RunToolDetail extends RunToolSummary {
   outputTruncated: boolean
   command?: RunCommandEvidence
   deliveryDeclaration?: CodeDeliveryDeclaration
-  reviewRoute?: import('./reviews').ReviewRoute
+  reviewRoute?: import('./reviews.ts').ReviewRoute
 }
 export interface RunCommandSummary extends RunToolSummary {
   commandPreview: string | null
