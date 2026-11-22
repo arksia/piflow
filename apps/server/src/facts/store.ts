@@ -84,6 +84,9 @@ export function createFactsStore(database: FactsDatabase) {
 
   return {
     beginSubmission,
+    interruptSession(projectPath: string, sessionId: string) {
+      db.prepare('UPDATE submissions SET observation=\'execution-uncertain\' WHERE project_path=? AND session_id=? AND status=\'accepted\'').run(projectPath, sessionId)
+    },
     observeUncertain(id: string) {
       db.prepare('UPDATE submissions SET observation=\'execution-uncertain\' WHERE id=? AND status=\'accepted\'').run(id)
     },

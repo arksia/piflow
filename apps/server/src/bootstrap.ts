@@ -10,6 +10,7 @@ import { createProviderAuthManager } from './providers/provider-auth.ts'
 import { createReviewGeneration } from './reviews/generation.ts'
 import { createReviews } from './reviews/index.ts'
 import { createSubagentRuns } from './runs/index.ts'
+import { createProjectRuntime } from './runtime/index.ts'
 import { createSseHub } from './server/sse.ts'
 import { createSessionStore } from './sessions/index.ts'
 import { getUsage } from './usage/index.ts'
@@ -84,6 +85,8 @@ export async function bootstrap(config: ServerConfig, options: { signal?: AbortS
       publish: sse.broadcast,
     })
     cleanup.push(() => sessions.disposeAll())
+    const runtime = createProjectRuntime({ facts, dataDir: config.dataDir, agentDir })
+    cleanup.push(() => runtime.close())
     const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (providerId) => {
       void sessions.refreshProvider(providerId).catch(error => sessions.publishError('', String(error)))
     })
@@ -99,7 +102,7 @@ export async function bootstrap(config: ServerConfig, options: { signal?: AbortS
     const address = await app.listen({ host: config.host, port: config.port })
     check()
     options.signal?.addEventListener('abort', onAbort, { once: true })
-    return { app, address, close }
+    return { app, address, runtime, close }
   }
   catch (error) {
     try {
