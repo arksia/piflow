@@ -8,7 +8,8 @@ import process from 'node:process'
 import { it } from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 import Fastify from 'fastify'
-import { openFactsStore } from '../../facts/store.ts'
+import { openDatabase } from '../../facts/database.ts'
+import { createFactsStore } from '../../facts/store.ts'
 import { createFlowStore } from '../../flow/store.ts'
 import { httpAuth } from '../../plugins/auth.ts'
 import { sessionRoutes } from '../../routes/sessions.ts'
@@ -42,7 +43,8 @@ it('runs an authenticated web submission through pi and reads back its fact and 
     },
   }))
   process.env.PI_CODING_AGENT_DIR = agentDir
-  const facts = await openFactsStore(join(root, 'data'))
+  const database = await openDatabase(join(root, 'data'))
+  const facts = createFactsStore(database)
   const sessions = createSessionStore({ rootCwd: root, agentDir, facts, flow: createFlowStore(join(root, 'data')), poolSize: 2, publish: () => {} })
   const app = Fastify({ logger: false })
   await app.register(httpAuth, { authToken: token, isLoopback: true })
@@ -90,7 +92,7 @@ it('runs an authenticated web submission through pi and reads back its fact and 
   finally {
     await app.close()
     await sessions.disposeAll()
-    facts.close()
+    database.close()
     await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()))
     if (previousAgentDir === undefined)
       delete process.env.PI_CODING_AGENT_DIR

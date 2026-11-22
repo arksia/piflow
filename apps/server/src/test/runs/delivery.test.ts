@@ -98,7 +98,7 @@ it('allows the declaration tool with no base tools and migrates schema 1 without
   }
   finally { await runs.close() }
   const db = new DatabaseSync(join(dataDir, 'runs.sqlite'))
-  db.exec('DROP TABLE run_deliveries; PRAGMA user_version=1;')
+  db.exec('DROP TABLE run_deliveries; DROP TABLE submissions; DROP TABLE sessions; DROP TABLE projects; PRAGMA user_version=1;')
   db.close()
   const again = await createSubagentRuns({ dataDir })
   try {

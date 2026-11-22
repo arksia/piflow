@@ -76,6 +76,7 @@ export interface SubmissionFactResponse {
     sessionId: string
     sessionPath: string
     status: 'accepted' | 'settled' | 'failed'
+    observation: 'legacy' | 'host-accepted' | 'prompt-returned' | 'queued-or-handled' | 'prompt-rejected' | 'execution-uncertain'
     inputDigest: string
     createdAt: string
     settledAt: string | null

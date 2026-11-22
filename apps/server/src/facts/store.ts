@@ -1,8 +1,8 @@
+import type { FactsDatabase } from './database.ts'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { chmod, mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+
+export type SubmissionObservation = 'legacy' | 'host-accepted' | 'prompt-returned' | 'queued-or-handled' | 'prompt-rejected' | 'execution-uncertain'
 
 export type SubmissionStatus = 'accepted' | 'settled' | 'failed'
 
@@ -12,46 +12,14 @@ export interface SubmissionFact {
   sessionId: string
   sessionPath: string
   status: SubmissionStatus
+  observation: SubmissionObservation
   inputDigest: string
   createdAt: string
   settledAt: string | null
 }
 
-export async function openFactsStore(dataDir: string) {
-  await mkdir(dataDir, { recursive: true, mode: 0o700 })
-  const databasePath = join(dataDir, 'runs.sqlite')
-  const db = new DatabaseSync(databasePath)
-  await chmod(databasePath, 0o600)
-  db.exec(`
-    PRAGMA foreign_keys=ON;
-    PRAGMA busy_timeout=5000;
-    PRAGMA journal_mode=WAL;
-    PRAGMA synchronous=FULL;
-    CREATE TABLE IF NOT EXISTS projects (
-      path TEXT PRIMARY KEY,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL REFERENCES projects(path),
-      native_path TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      UNIQUE(project_path, native_path)
-    );
-    CREATE TABLE IF NOT EXISTS submissions (
-      id TEXT PRIMARY KEY,
-      project_path TEXT NOT NULL,
-      session_id TEXT NOT NULL REFERENCES sessions(id),
-      session_path TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('accepted', 'settled', 'failed')),
-      input_digest TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      settled_at TEXT,
-      FOREIGN KEY(project_path, session_path) REFERENCES sessions(project_path, native_path)
-    );
-    CREATE INDEX IF NOT EXISTS submissions_project_created
-      ON submissions(project_path, created_at DESC, id DESC);
-  `)
+export function createFactsStore(database: FactsDatabase) {
+  const { db, transaction } = database
 
   function ensureSession(projectPath: string, sessionId: string, sessionPath: string, createdAt: string) {
     db.prepare('INSERT INTO projects(path,created_at) VALUES(?,?) ON CONFLICT(path) DO NOTHING').run(projectPath, createdAt)
@@ -60,19 +28,6 @@ export async function openFactsStore(dataDir: string) {
     const existing = db.prepare('SELECT project_path,native_path FROM sessions WHERE id=?').get(sessionId)
     if (existing?.project_path !== projectPath || existing?.native_path !== sessionPath)
       throw new Error(`pi Session identity is already registered to another project: ${sessionId}`)
-  }
-
-  function transaction<T>(work: () => T): T {
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      const result = work()
-      db.exec('COMMIT')
-      return result
-    }
-    catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
   }
 
   function registerSession(projectPath: string, sessionId: string, sessionPath: string) {
@@ -89,27 +44,28 @@ export async function openFactsStore(dataDir: string) {
       sessionId: input.sessionId,
       sessionPath: input.sessionPath,
       status: 'accepted',
+      observation: 'host-accepted',
       inputDigest: hashInput(input.text, input.images),
       createdAt: new Date().toISOString(),
       settledAt: null,
     }
     transaction(() => {
       ensureSession(input.projectPath, input.sessionId, input.sessionPath, fact.createdAt)
-      db.prepare(`INSERT INTO submissions(id,project_path,session_id,session_path,status,input_digest,created_at,settled_at)
-        VALUES(?,?,?,?,?,?,?,?)`).run(fact.id, fact.projectPath, fact.sessionId, fact.sessionPath, fact.status, fact.inputDigest, fact.createdAt, fact.settledAt)
+      db.prepare(`INSERT INTO submissions(id,project_path,session_id,session_path,status,input_digest,created_at,settled_at,observation)
+        VALUES(?,?,?,?,?,?,?,?,?)`).run(fact.id, fact.projectPath, fact.sessionId, fact.sessionPath, fact.status, fact.inputDigest, fact.createdAt, fact.settledAt, fact.observation)
     })
     return fact
   }
 
   function settleSubmission(id: string, status: Extract<SubmissionStatus, 'settled' | 'failed'>) {
     const settledAt = new Date().toISOString()
-    const result = db.prepare(`UPDATE submissions SET status=?,settled_at=? WHERE id=? AND status='accepted'`).run(status, settledAt, id)
+    const result = db.prepare(`UPDATE submissions SET status=?,settled_at=?,observation=? WHERE id=? AND status='accepted'`).run(status, settledAt, status === 'settled' ? 'prompt-returned' : 'prompt-rejected', id)
     if (Number(result.changes) !== 1)
       throw new Error(`submission is not pending: ${id}`)
   }
 
   function readSubmission(projectPath: string, id: string): SubmissionFact | undefined {
-    const row = db.prepare(`SELECT id,project_path,session_id,session_path,status,input_digest,created_at,settled_at
+    const row = db.prepare(`SELECT id,project_path,session_id,session_path,status,input_digest,created_at,settled_at,observation
       FROM submissions WHERE project_path=? AND id=?`).get(projectPath, id)
     return row
       ? {
@@ -118,6 +74,7 @@ export async function openFactsStore(dataDir: string) {
           sessionId: String(row.session_id),
           sessionPath: String(row.session_path),
           status: String(row.status) as SubmissionStatus,
+          observation: String(row.observation) as SubmissionObservation,
           inputDigest: String(row.input_digest),
           createdAt: String(row.created_at),
           settledAt: row.settled_at === null ? null : String(row.settled_at),
@@ -127,7 +84,15 @@ export async function openFactsStore(dataDir: string) {
 
   return {
     beginSubmission,
-    close: () => db.close(),
+    observeUncertain(id: string) {
+      db.prepare('UPDATE submissions SET observation=\'execution-uncertain\' WHERE id=? AND status=\'accepted\'').run(id)
+    },
+    recover() {
+      db.prepare('UPDATE submissions SET observation=\'execution-uncertain\' WHERE status=\'accepted\'').run()
+    },
+    observeQueued(id: string) {
+      db.prepare('UPDATE submissions SET observation=\'queued-or-handled\' WHERE id=? AND status=\'accepted\'').run(id)
+    },
     readSubmission,
     registerSession,
     settleSubmission,
@@ -145,4 +110,4 @@ function hashInput(text: string, images?: readonly { mimeType: string, data: str
   return hash.digest('hex')
 }
 
-export type FactsStore = Awaited<ReturnType<typeof openFactsStore>>
+export type FactsStore = Awaited<ReturnType<typeof createFactsStore>>

@@ -127,6 +127,9 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   const creatingConductors = new Map<string, Promise<ManagedSession>>()
   const flowPromptQueues = new Map<string, Promise<void>>()
   const statuses = new Map<string, SessionStatusRecord>()
+  let closing = false
+  let closePromise: Promise<void> | undefined
+  const pendingPrompts = new Set<Promise<void>>()
   const publish = options.publish
   const deliveries = createDeliveries(flow, async (node, projectPath) => {
     const managed = node.sessionPath
@@ -308,6 +311,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   }
 
   async function openSession(opts: { path?: string, cwd: string, key?: string, conductor?: boolean }): Promise<ManagedSession> {
+    if (closing)
+      throw new Error('Session store is closing')
     const key = opts.key ?? opts.path ?? `new:${crypto.randomUUID()}`
     const existing = pool.get(key)
     if (existing) {
@@ -404,6 +409,10 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
         agentDir,
         sessionManager,
       })
+      if (closing) {
+        await runtime.dispose()
+        throw new Error('Session store is closing')
+      }
       managed = {
         key,
         cwd: runtime.cwd,
@@ -505,6 +514,8 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
   }
 
   function submitPrompt(managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') {
+    if (closing)
+      throw new Error('Session store is closing')
     const session = managed.runtime.session
     const sessionPath = session.sessionFile ?? session.sessionManager.getSessionFile()
     if (!sessionPath)
@@ -516,14 +527,20 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
       try {
         touch(managed)
         await injectFlowDirectory(managed)
+        const queued = !session.isIdle
         await session.prompt(text, { images, streamingBehavior })
-        options.facts?.settleSubmission(submissionId, 'settled')
+        if (queued)
+          options.facts?.observeQueued(submissionId)
+        else
+          options.facts?.settleSubmission(submissionId, 'settled')
       }
       catch (error) {
         options.facts?.settleSubmission(submissionId, 'failed')
         throw error
       }
     })()
+    pendingPrompts.add(completion)
+    void completion.then(() => pendingPrompts.delete(completion), () => pendingPrompts.delete(completion))
     return { submissionId, completion }
   }
 
@@ -921,14 +938,24 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     return getProjectTrust(cwd)
   }
 
-  async function disposeAll() {
-    const active = activeSessions()
-    pool.clear()
-    statuses.clear()
-    await Promise.all(active.map(async (managed) => {
-      unbind(managed)
-      await managed.runtime.dispose()
-    }))
+  function disposeAll() {
+    if (closePromise)
+      return closePromise
+    closing = true
+    closePromise = (async () => {
+      await Promise.allSettled([...opening.values()])
+      const active = activeSessions()
+      for (const managed of active) managed.extensionUi.cancelPending()
+      await Promise.allSettled(active.map(managed => managed.runtime.session.abort()))
+      await Promise.allSettled([...pendingPrompts])
+      pool.clear()
+      statuses.clear()
+      await Promise.all(active.map(async (managed) => {
+        unbind(managed)
+        await managed.runtime.dispose()
+      }))
+    })()
+    return closePromise
   }
 
   return {

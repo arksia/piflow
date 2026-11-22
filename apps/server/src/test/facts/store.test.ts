@@ -3,11 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { it } from 'node:test'
-import { openFactsStore } from '../../facts/store.ts'
+import { openDatabase } from '../../facts/database.ts'
+import { createFactsStore } from '../../facts/store.ts'
 
 it('commits submission identity and outcome without storing input text', async () => {
   const root = await mkdtemp(join(tmpdir(), 'piflow-facts-'))
-  const facts = await openFactsStore(join(root, 'data'))
+  const database = await openDatabase(join(root, 'data'))
+  const facts = createFactsStore(database)
   try {
     const submission = facts.beginSubmission({
       projectPath: root,
@@ -32,7 +34,7 @@ it('commits submission identity and outcome without storing input text', async (
     assert.throws(() => facts.settleSubmission(submission.id, 'failed'), /not pending/)
   }
   finally {
-    facts.close()
+    database.close()
     await rm(root, { recursive: true, force: true })
   }
 })

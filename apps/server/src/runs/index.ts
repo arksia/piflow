@@ -11,6 +11,7 @@ import type {
   RunToolDetail,
   RunToolsQuery,
 } from '@piflow/protocol'
+import type { FactsDatabase } from '../facts/database.ts'
 import type { Reviews } from '../reviews/index.ts'
 import type { ProcessFact } from './process.ts'
 import { Buffer } from 'node:buffer'
@@ -71,13 +72,14 @@ function preview(value: unknown, tail = false) {
 }
 export async function createSubagentRuns(options: {
   dataDir: string
+  database?: FactsDatabase
   reviews?: Reviews
   publish?: (message: RunMessage) => void
   agentDir?: string
   cliEntry?: string
   execute?: typeof runSubagentProcess
 }) {
-  const store = await openRunStore(options.dataDir)
+  const store = await openRunStore(options.dataDir, options.database)
   const active = new Map<
     string,
     {

@@ -13,17 +13,16 @@ import type {
   RunToolsQuery,
   RunToolSummary,
 } from '@piflow/protocol'
+import type { FactsDatabase } from '../facts/database.ts'
 import { Buffer } from 'node:buffer'
 import {
-  chmod,
-  mkdir,
   readdir,
   readFile,
   rename,
   writeFile,
 } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openDatabase } from '../facts/database.ts'
 
 const PAGE_SIZE = 50
 export class RunError extends Error {
@@ -78,75 +77,10 @@ interface OutputWindow {
   end: number
   truncated: boolean
 }
-export async function openRunStore(dataDir: string) {
-  await mkdir(dataDir, { recursive: true, mode: 0o700 })
-  // SQLite's OS lock is released on crashes; no stale PID files or unsafe PID killing.
-  const lease = new DatabaseSync(join(dataDir, 'runs-owner.sqlite'))
-  try {
-    lease.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE;')
-  }
-  catch {
-    lease.close()
-    throw new Error('运行数据目录正被另一个 piflow 实例使用。')
-  }
-  const unlock = () => lease.close()
-  let db: DatabaseSync
-  try {
-    db = new DatabaseSync(join(dataDir, 'runs.sqlite'))
-    await chmod(join(dataDir, 'runs.sqlite'), 0o600)
-  }
-  catch (error) {
-    await unlock()
-    throw error
-  }
-  try {
-    db.exec(
-      'PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;',
-    )
-    const schema = Number(
-      db.prepare('PRAGMA user_version').get()!.user_version,
-    )
-    if (schema > 2)
-      throw new Error('运行数据库来自更新的 piflow 版本，请升级后重试')
-    db.exec(`BEGIN IMMEDIATE;
-      CREATE TABLE IF NOT EXISTS runs (
-        id TEXT PRIMARY KEY, project_path TEXT NOT NULL, created_at TEXT NOT NULL,
-        orchestrator_id TEXT NOT NULL, role_id TEXT NOT NULL, status TEXT NOT NULL,
-        metadata TEXT NOT NULL, output TEXT NOT NULL DEFAULT '', output_version INTEGER NOT NULL DEFAULT 1,
-        output_base INTEGER NOT NULL DEFAULT 0, output_end INTEGER NOT NULL DEFAULT 0,
-        output_truncated INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE INDEX IF NOT EXISTS runs_project_created ON runs(project_path, created_at DESC, id DESC);
-      CREATE INDEX IF NOT EXISTS runs_active ON runs(project_path, status);
-      CREATE TABLE IF NOT EXISTS run_tools (
-        run_id TEXT NOT NULL REFERENCES runs(id), tool_id TEXT NOT NULL,
-        sequence INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL,
-        PRIMARY KEY(run_id, tool_id), UNIQUE(run_id, sequence)
-      );
-      CREATE TABLE IF NOT EXISTS run_deliveries (
-        run_id TEXT PRIMARY KEY REFERENCES runs(id), data TEXT NOT NULL
-      );
-      PRAGMA user_version=2;
-      COMMIT;
-    `)
-  }
-  catch (error) {
-    db.close()
-    await unlock()
-    throw error
-  }
-  function transaction<T>(fn: () => T): T {
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      const result = fn()
-      db.exec('COMMIT')
-      return result
-    }
-    catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
-  }
+export async function openRunStore(dataDir: string, sharedDatabase?: FactsDatabase) {
+  const database = sharedDatabase ?? await openDatabase(dataDir)
+  const { db, transaction } = database
+  const release = () => sharedDatabase ? undefined : database.close()
   function read(projectPath: string, id: string): RunDetail {
     const row = db
       .prepare('SELECT metadata FROM runs WHERE id=? AND project_path=?')
@@ -582,8 +516,7 @@ export async function openRunStore(dataDir: string) {
     recover()
   }
   catch (error) {
-    db.close()
-    await unlock()
+    release()
     throw error
   }
   return {
@@ -601,8 +534,7 @@ export async function openRunStore(dataDir: string) {
     window,
     output,
     close: async () => {
-      db.close()
-      await unlock()
+      release()
     },
   }
 }
