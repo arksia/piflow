@@ -1,8 +1,10 @@
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { ExtensionManager } from '../extensions/manager.ts'
+import type { FactsStore } from '../facts/store.ts'
 import type { FlowStore } from '../flow/store.ts'
 import type { ProviderAuthManager } from '../providers/provider-auth.ts'
 import type { SubagentRuns } from '../runs/index.ts'
+import type { ProjectRuntime } from '../runtime/index.ts'
 import type { SessionStore } from '../sessions/index.ts'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -21,6 +23,8 @@ writeFileSync(join(webDist, 'app.js'), 'console.log(1)')
 function testApp() {
   const config = { ...loadConfig({ HOST: '127.0.0.1', PIFLOW_TOKEN: token, PORT: '3141' }), webDist }
   return build({
+    facts: {} as FactsStore,
+    runtime: {} as ProjectRuntime,
     config,
     extensions: {} as ExtensionManager,
     flow: {} as FlowStore,

@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url'
 import { openDatabase } from '../../facts/database.ts'
 import { createFactsStore } from '../../facts/store.ts'
 import { createProjectRuntime } from '../../runtime/index.ts'
+import { WORKER_PROTOCOL } from '../../runtime/messages.ts'
 import { createProjectWorkers, WorkerLostError } from '../../runtime/project-workers.ts'
 
 it('isolates Session aborts and project crashes using real SDK worker processes', { timeout: 30000 }, async () => {
@@ -84,7 +85,7 @@ it('isolates Session aborts and project crashes using real SDK worker processes'
     assert.notEqual(reopened.generation, two.generation)
     assert.throws(() => workers.submit(two, 'stale'), /Stale/)
     await workers.closeSession(reopened)
-    assert.throws(() => workers.submit(reopened, 'closed'), /Stale/)
+    assert.throws(() => workers.submit(reopened, 'closed'), /not open/)
     const fresh = await workers.open(a, { sessionPath: two.sessionPath, model })
     database.db.exec(`CREATE TRIGGER reject_submission BEFORE INSERT ON submissions BEGIN SELECT RAISE(ABORT, 'disk failure fixture'); END`)
     assert.throws(() => workers.submit(fresh, 'must not execute'), /disk failure fixture/)
@@ -132,7 +133,7 @@ it('does not settle a submission from an unrecognized worker result', async () =
   const root = await realpath(await mkdtemp(join(tmpdir(), 'piflow-worker-result-')))
   const script = join(root, 'worker.mjs')
   await writeFile(script, `process.on('message', m => {
-    const base = {version:1, workerId:m.workerId};
+    const base = {version:${WORKER_PROTOCOL}, workerId:m.workerId};
     if(m.type === 'init') process.send({...base, type:'ready', nonce:m.nonce, projectPath:m.projectPath});
     else process.send({...base, type:'result', id:m.id, ok:true, value:m.command.action === 'open' ? {sessionId:'test',generation:'test',sessionPath:'test.jsonl'} : null});
   });`)
@@ -163,9 +164,9 @@ it('rejects boot failures, late ready, IPC loss and missing executables without 
     process.on('SIGTERM',()=>{});
     process.on('message', m => {
     if(m.type === 'init') {
-      if(m.projectPath.endsWith('invalid')) { process.stderr.write('x'.repeat(20000)); process.send({version:1,workerId:m.workerId,type:'ready',nonce:'wrong',projectPath:m.projectPath}); return; }
+      if(m.projectPath.endsWith('invalid')) { process.stderr.write('x'.repeat(20000)); process.send({version:${WORKER_PROTOCOL},workerId:m.workerId,type:'ready',nonce:'wrong',projectPath:m.projectPath}); return; }
       if(m.projectPath.endsWith('disconnect')) { process.disconnect(); return; }
-      setTimeout(() => { if(process.connected) process.send({version:1,workerId:m.workerId,type:'ready',nonce:m.nonce,projectPath:m.projectPath}) }, 150);
+      setTimeout(() => { if(process.connected) process.send({version:${WORKER_PROTOCOL},workerId:m.workerId,type:'ready',nonce:m.nonce,projectPath:m.projectPath}) }, 150);
     }
   }); setInterval(()=>{},1000);`)
   try {

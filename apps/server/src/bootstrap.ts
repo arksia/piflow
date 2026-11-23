@@ -16,7 +16,12 @@ import { createSessionStore } from './sessions/index.ts'
 import { getUsage } from './usage/index.ts'
 
 /** Own all host resources, including startup rollback. The caller owns OS signals. */
-export async function bootstrap(config: ServerConfig, options: { signal?: AbortSignal, logger?: boolean, agentDir?: string } = {}) {
+export async function bootstrap(config: ServerConfig, options: {
+  signal?: AbortSignal
+  logger?: boolean
+  agentDir?: string
+  worker?: Pick<Parameters<typeof createProjectRuntime>[0], 'entry' | 'startTimeoutMs' | 'stopTimeoutMs'>
+} = {}) {
   const cleanup: Array<() => void | Promise<void>> = []
   let closePromise: Promise<void> | undefined
   let app: Awaited<ReturnType<typeof build>> | undefined
@@ -85,15 +90,17 @@ export async function bootstrap(config: ServerConfig, options: { signal?: AbortS
       publish: sse.broadcast,
     })
     cleanup.push(() => sessions.disposeAll())
-    const runtime = createProjectRuntime({ facts, dataDir: config.dataDir, agentDir })
+    const runtime = createProjectRuntime({ ...options.worker, facts, dataDir: config.dataDir, agentDir })
     cleanup.push(() => runtime.close())
     const providerAuth = createProviderAuthManager(modelRuntime, sse.broadcast, (providerId) => {
       void sessions.refreshProvider(providerId).catch(error => sessions.publishError('', String(error)))
     })
     sse.setStatusSnapshotProvider(sessions.getStatusSnapshot)
     sse.setStateSnapshotProvider(sessions.getStateSnapshot)
-    app = await build({ config, sessions, sse, getUsage, flow, runs, reviews, reviewGeneration, extensions, logger: options.logger ?? false, modelRuntime, providerAuth })
+    app = await build({ config, facts, runtime, sessions, sse, getUsage, flow, runs, reviews, reviewGeneration, extensions, logger: options.logger ?? false, modelRuntime, providerAuth })
     cleanup.push(() => app!.close())
+    // Stop workers before HTTP drain: a control may itself be awaiting an unresponsive worker.
+    app.addHook('preClose', async () => runtime.close())
     app.addHook('onRequest', async (_request, reply) => {
       if (closing)
         return reply.code(503).send({ error: 'Host is closing' })

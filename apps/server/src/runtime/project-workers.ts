@@ -7,7 +7,7 @@ import { realpath, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { isWorkerMessage, WORKER_PROTOCOL } from './messages.ts'
+import { isWorkerMessage, RuntimeCommandError, WORKER_PROTOCOL } from './messages.ts'
 
 export class WorkerLostError extends Error {
   constructor(public readonly projectPath: string, public readonly workerId: string, message: string) {
@@ -194,7 +194,7 @@ function spawnProject(projectPath: string, options: WorkerOptions) {
       pending.delete(raw.id)
       if (raw.ok)
         waiter.resolve(raw.value)
-      else waiter.reject(new Error(raw.error))
+      else waiter.reject(new RuntimeCommandError(raw.code, raw.error))
     }
     else if (state === 'ready') {
       try {

@@ -34,7 +34,7 @@ apps/
 │       ├── app.ts      # Fastify app: plugins, then routes
 │       ├── bootstrap.ts # Host resource ownership and shutdown
 │       ├── facts/      # Host-owned SQLite connection, migrations and submission facts
-│       ├── runtime/    # Project worker IPC and lifecycle (HTTP migration pending)
+│       ├── runtime/    # Project worker IPC and lifecycle (core HTTP wired; UI migration pending)
 │       ├── plugins/    # Support plugins (auth)
 │       ├── routes/     # Route plugins
 │       ├── server/     # Config, static files, SSE
@@ -73,6 +73,7 @@ pnpm build          # production build (web dist + server tsc)
 - **Component style**: `components/Name/index.tsx` + `styles.module.css`.
 - **Protocol changes**: edit `packages/protocol/src/index.ts`; server and web consume it via `@piflow/protocol`.
 - **Worker IPC**: private Host/worker messages live in `apps/server/src/runtime/messages.ts`, separate from browser wire contracts. Only explicit Session open may start a project worker; stale controls must never restart it or replay work.
+- **Execution HTTP**: `/api/execution/sessions` controls worker-owned Sessions by canonical project path, native Session ID and generation. Submission queries read facts directly. See `docs/design/execution-sessions.md` for the current migration scope.
 - **Product scope**: [docs/PRD.md](docs/PRD.md) defines goals and explicit non-goals (piflow does not replace IDE, terminal, or Git hosting).
 
 ## Key entry points

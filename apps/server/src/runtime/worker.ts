@@ -6,7 +6,7 @@ import process from 'node:process'
 import { DatabaseSync } from 'node:sqlite'
 import { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices, hasTrustRequiringProjectResources, ProjectTrustStore, SessionManager, SettingsManager } from '@earendil-works/pi-coding-agent'
 import { toJsonEvent } from '../sessions/json-event.ts'
-import { isHostMessage, WORKER_PROTOCOL } from './messages.ts'
+import { isHostMessage, RuntimeCommandError, WORKER_PROTOCOL } from './messages.ts'
 
 if (!process.send)
   throw new Error('Project worker requires a private parent IPC channel')
@@ -68,7 +68,7 @@ async function execute(command: WorkerCommand): Promise<unknown> {
     if (path) {
       const existing = [...sessions.values()].find(entry => entry.runtime.session.sessionFile === path)
       if (existing && closingSessions.has(existing.runtime.session.sessionId))
-        throw new Error('Session is closing')
+        throw new RuntimeCommandError('session-busy', 'Session is closing')
       if (existing)
         return { sessionId: existing.runtime.session.sessionId, sessionPath: path, generation: existing.generation }
       const pendingOpen = opening.get(path)
@@ -80,7 +80,7 @@ async function execute(command: WorkerCommand): Promise<unknown> {
       const { projectPath, agentDir } = init!
       const manager = path ? SessionManager.open(path) : SessionManager.create(projectPath, join(agentDir, 'sessions', encodeURIComponent(projectPath)))
       if (await realpath(manager.getCwd()) !== projectPath)
-        throw new Error('Session is not part of this project')
+        throw new RuntimeCommandError('project-mismatch', 'Session is not part of this project')
       const runtime = await createAgentSessionRuntime(async (options) => {
         const trusted = !hasTrustRequiringProjectResources(options.cwd) || new ProjectTrustStore(agentDir).get(options.cwd) === true
         const services = await createAgentSessionServices({
@@ -98,7 +98,7 @@ async function execute(command: WorkerCommand): Promise<unknown> {
         if (command.model) {
           const model = runtime.services.modelRuntime.getAvailableSnapshot().find(model => model.provider === command.model!.provider && model.id === command.model!.id)
           if (!model)
-            throw new Error('Model not found')
+            throw new RuntimeCommandError('model-not-found', 'Model not found')
           await runtime.session.setModel(model)
         }
         const sessionId = runtime.session.sessionId
@@ -122,7 +122,7 @@ async function execute(command: WorkerCommand): Promise<unknown> {
   }
   const entry = sessions.get(command.sessionId)
   if (!entry || closingSessions.has(command.sessionId) || entry.generation !== command.generation)
-    throw new Error('Stale Session target')
+    throw new RuntimeCommandError('stale-target', 'Stale Session target')
   switch (command.action) {
     case 'prompt': {
       const queued = !entry.runtime.session.isIdle
@@ -136,7 +136,7 @@ async function execute(command: WorkerCommand): Promise<unknown> {
       return { messages: entry.runtime.session.messages, isIdle: entry.runtime.session.isIdle, sessionPath: entry.runtime.session.sessionFile }
     case 'closeSession':
       if (!entry.runtime.session.isIdle)
-        throw new Error('Session is busy')
+        throw new RuntimeCommandError('session-busy', 'Session is busy')
       closingSessions.add(command.sessionId)
       entry.unsubscribe()
       await entry.runtime.dispose()
@@ -181,6 +181,6 @@ process.on('message', (raw: unknown) => {
     pending.add(task)
   void task.then(
     value => send({ version: WORKER_PROTOCOL, workerId: raw.workerId, type: 'result', id: raw.id, ok: true, value }),
-    error => send({ version: WORKER_PROTOCOL, workerId: raw.workerId, type: 'result', id: raw.id, ok: false, error: String(error).slice(0, 2000) }),
+    error => send({ version: WORKER_PROTOCOL, workerId: raw.workerId, type: 'result', id: raw.id, ok: false, code: error instanceof RuntimeCommandError ? error.code : 'execution-failed', error: String(error).slice(0, 2000) }),
   ).finally(() => pending.delete(task))
 })

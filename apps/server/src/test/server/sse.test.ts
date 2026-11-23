@@ -2,9 +2,11 @@ import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { ServerMessage, SessionState, SessionStatusRecord } from '@piflow/protocol'
 import type { FastifyReply } from 'fastify'
 import type { ExtensionManager } from '../../extensions/manager.ts'
+import type { FactsStore } from '../../facts/store.ts'
 import type { FlowStore } from '../../flow/store.ts'
 import type { ProviderAuthManager } from '../../providers/provider-auth.ts'
 import type { SubagentRuns } from '../../runs/index.ts'
+import type { ProjectRuntime } from '../../runtime/index.ts'
 import type { SseHub } from '../../server/sse.ts'
 import type { SessionStore } from '../../sessions/index.ts'
 import assert from 'node:assert/strict'
@@ -19,6 +21,8 @@ const token = '0123456789abcdef0123456789abcdef'
 
 function testApp(sse: SseHub) {
   return build({
+    facts: {} as FactsStore,
+    runtime: {} as ProjectRuntime,
     config: loadConfig({ HOST: '127.0.0.1', PIFLOW_TOKEN: token, PORT: '3141' }),
     extensions: {} as ExtensionManager,
     flow: {} as FlowStore,

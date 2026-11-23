@@ -49,7 +49,7 @@ it('runs an authenticated web submission through pi and reads back its fact and 
   const app = Fastify({ logger: false })
   await app.register(httpAuth, { authToken: token, isLoopback: true })
   await app.register(sessionRoutes, { sessions, sse: { broadcast() {} } as unknown as SseHub })
-  await app.register(submissionRoutes, { sessions })
+  await app.register(submissionRoutes, { facts })
   try {
     const auth = await app.inject({ method: 'GET', url: '/auth' })
     const cookie = String(auth.headers['set-cookie']).split(';')[0]

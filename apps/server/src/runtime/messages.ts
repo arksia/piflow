@@ -2,7 +2,20 @@ import type { Static } from 'typebox'
 import { Type } from 'typebox'
 import { Value } from 'typebox/value'
 
-export const WORKER_PROTOCOL = 1
+export const WORKER_PROTOCOL = 2
+const commandErrorCode = Type.Union([
+  Type.Literal('session-not-open'),
+  Type.Literal('stale-target'),
+  Type.Literal('session-busy'),
+  Type.Literal('model-not-found'),
+  Type.Literal('project-mismatch'),
+  Type.Literal('execution-failed'),
+])
+export class RuntimeCommandError extends Error {
+  constructor(public readonly code: Static<typeof commandErrorCode>, message: string) {
+    super(message)
+  }
+}
 const identity = { version: Type.Literal(WORKER_PROTOCOL), workerId: Type.String({ minLength: 1 }) }
 const target = { sessionId: Type.String({ minLength: 1 }), generation: Type.String({ minLength: 1 }) }
 const command = Type.Union([
@@ -23,7 +36,7 @@ const hostMessage = Type.Union([
 const workerMessage = Type.Union([
   Type.Object({ ...identity, type: Type.Literal('ready'), nonce: Type.String(), projectPath: Type.String() }),
   Type.Object({ ...identity, type: Type.Literal('result'), id: Type.String(), ok: Type.Literal(true), value: Type.Unknown() }),
-  Type.Object({ ...identity, type: Type.Literal('result'), id: Type.String(), ok: Type.Literal(false), error: Type.String() }),
+  Type.Object({ ...identity, type: Type.Literal('result'), id: Type.String(), ok: Type.Literal(false), code: commandErrorCode, error: Type.String() }),
   Type.Object({ ...identity, type: Type.Literal('event'), ...target, event: Type.Unknown() }),
 ])
 export type HostMessage = Static<typeof hostMessage>

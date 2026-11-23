@@ -76,7 +76,6 @@ export interface SessionStore {
   openSavedSession: (path: string, options?: { refresh?: boolean }) => Promise<ManagedSession | null>
   prompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => Promise<void>
   submitPrompt: (managed: ManagedSession, text: string, images?: NonNullable<import('@piflow/protocol').PromptRequest['images']>, streamingBehavior?: 'steer' | 'followUp') => { submissionId: string, completion: Promise<void> }
-  readSubmission: (projectPath: string, id: string) => ReturnType<FactsStore['readSubmission']>
   compact: (managed: ManagedSession, instructions?: string) => Promise<void>
   abortCompaction: (managed: ManagedSession) => void
   setAutoCompaction: (managed: ManagedSession, enabled: boolean) => void
@@ -965,7 +964,6 @@ export function createSessionStore(options: CreateSessionStoreOptions): SessionS
     openSavedSession,
     prompt,
     submitPrompt,
-    readSubmission: (projectPath, id) => options.facts?.readSubmission(projectPath, id),
     compact,
     abortCompaction,
     setAutoCompaction,

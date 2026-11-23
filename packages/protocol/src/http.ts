@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
+import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { ImageContent } from '@earendil-works/pi-ai'
 import type { ConductorDraft } from './conductor.ts'
 
@@ -24,6 +24,7 @@ export const API_GIT_PATH = '/api/git'
 export const API_SESSIONS_OPEN_PATH = '/api/sessions/open'
 export const API_SESSIONS_NEW_PATH = '/api/sessions/new'
 export const API_SUBMISSIONS_PATH = '/api/submissions'
+export const API_EXECUTION_SESSIONS_PATH = '/api/execution/sessions'
 export const MAX_PROMPT_IMAGES = 10
 export const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -67,6 +68,39 @@ export interface PromptRequest {
 export interface PromptAcceptedResponse {
   ok: true
   submissionId: string
+}
+
+/** A live native Session incarnation; generation changes after close/reopen or worker loss. */
+export interface ExecutionSession {
+  projectPath: string
+  sessionId: string
+  generation: string
+  sessionPath: string
+}
+
+export interface OpenExecutionSessionRequest {
+  projectPath: string
+  sessionPath?: string
+  model?: { provider: string, id: string }
+}
+
+export interface ExecutionSessionResponse {
+  session: ExecutionSession
+}
+
+export interface ExecutionTargetQuery {
+  projectPath: string
+  generation: string
+}
+
+export interface ExecutionPromptRequest {
+  text: string
+  streamingBehavior?: 'steer' | 'followUp'
+}
+
+export interface ExecutionSnapshotResponse extends ExecutionSessionResponse {
+  messages: AgentMessage[]
+  isIdle: boolean
 }
 
 export interface SubmissionFactResponse {

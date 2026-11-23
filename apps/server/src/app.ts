@@ -2,12 +2,14 @@ import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { HelloResponse } from '@piflow/protocol'
 import type { FastifyServerOptions } from 'fastify'
 import type { ExtensionManager } from './extensions/manager.ts'
+import type { FactsStore } from './facts/store.ts'
 import type { FlowStore } from './flow/store.ts'
 import type { ProviderAuthManager } from './providers/provider-auth.ts'
 import type { ReviewGeneration } from './reviews/generation.ts'
 import type { Reviews } from './reviews/index.ts'
 import type { UsageSnapshot } from './routes/usage.ts'
 import type { SubagentRuns } from './runs/index.ts'
+import type { ProjectRuntime } from './runtime/index.ts'
 import type { ServerConfig } from './server/config.ts'
 import type { SseHub } from './server/sse.ts'
 import type { SessionStore } from './sessions/index.ts'
@@ -17,6 +19,7 @@ import { API_EVENTS_PATH, API_HELLO_PATH } from '@piflow/protocol'
 import Fastify from 'fastify'
 import { httpAuth } from './plugins/auth.ts'
 import { ProviderAuthBusyError } from './providers/provider-auth.ts'
+import { executionRoutes } from './routes/execution.ts'
 import { extensionRoutes } from './routes/extensions.ts'
 import { flowActivityRoutes } from './routes/flow-activity.ts'
 import { flowRoutes } from './routes/flow.ts'
@@ -31,6 +34,8 @@ import { send } from './server/reply.ts'
 import { SessionsStreamingError } from './sessions/index.ts'
 
 interface CreateAppOptions {
+  facts: FactsStore
+  runtime: ProjectRuntime
   runs: SubagentRuns
   reviews?: Reviews
   reviewGeneration?: ReviewGeneration
@@ -49,6 +54,7 @@ export async function build(options: CreateAppOptions) {
   const { config, sessions, sse, getUsage, flow, extensions, modelRuntime, providerAuth } = options
   const app = Fastify({
     logger: options.logger ?? false,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
     routerOptions: {
       // Windows session keys are absolute paths that easily exceed the 100-char default.
       maxParamLength: 500,
@@ -85,7 +91,8 @@ export async function build(options: CreateAppOptions) {
   })
 
   app.register(sessionRoutes, { sessions, sse })
-  app.register(submissionRoutes, { sessions })
+  app.register(submissionRoutes, { facts: options.facts })
+  app.register(executionRoutes, { runtime: options.runtime })
   app.register(usageRoutes, { getUsage, sessions })
   app.register(flowActivityRoutes, { runs: options.runs, reviews: options.reviews })
   app.register(flowRoutes, { config, flow, sessions })
