@@ -26,6 +26,12 @@ Build checks inspect the actual transitive bundler inputs, including browser and
 
 The provider and data directories are isolated; the test sends no paid-model requests. `PIFLOW_TEST_NODE=/absolute/path/to/node pnpm test:dist` runs installed Host/worker/extension acceptance with another Node version without changing the shell default. Native browser-launch adapters are covered through an injected adapter; platform-specific installation and opening behavior require acceptance on that platform.
 
+## Development lifecycle
+
+The root `pnpm dev` uses Node's recursive filesystem watcher and directly owns the compiler, Host and Vite processes. Server/worker source changes restart only the Host. Protocol source changes stop both consumers, perform a complete TypeScript emit, and restart consumers only after success. A failed protocol build leaves consumers stopped; later source edits retry the build before allowing either consumer to run. Changes received during compilation trigger another complete build first.
+
+Vite retains frontend HMR. This supervisor watches TypeScript source directories; dependency, manifest and configuration edits require a manual development restart. Host restarts interrupt active work. SIGINT/SIGTERM stop owned children, giving the Host time to reap its workers before escalating to forced termination. Production launch has no watch loop.
+
 ## Current migration scope
 
 The new worker-backed interface is `/api/execution/sessions`. Browser chat, Flow and child CLI execution still use the prior path until P2. Both paths are included in the product; packaging does not introduce a second future runtime or claim the UI migration is complete. Native pi history and local user data are retained. Startup never automatically replays an interrupted input.

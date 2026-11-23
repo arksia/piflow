@@ -55,7 +55,7 @@ apps/
 packages/
 └── protocol/        # @piflow/protocol — browser/HTTP wire contracts; built to dist
 
-scripts/             # Product build/pack, build-policy and installed-package acceptance
+scripts/             # Coordinated dev lifecycle, product build/pack and acceptance
 docs/                # Public product requirements
 ```
 
@@ -63,13 +63,13 @@ docs/                # Public product requirements
 
 ```bash
 pnpm install        # install all workspaces
-pnpm dev            # run server + web in dev mode
+pnpm dev            # supervise server + web; protocol emit is a restart barrier
 pnpm lint           # eslint + stylelint
 pnpm typecheck      # tsc --noEmit across workspaces
 pnpm test           # node:test across workspaces
 pnpm build          # compile workspaces and stage standalone product in dist/app
 pnpm pack:app       # verify existing build and create an installable tarball
-pnpm test:build     # exercise bundler policy and artifact-integrity rejection
+pnpm test:build     # bundler policy, artifact integrity and dev lifecycle tests
 pnpm test:dist      # install prior tarball and test HTTP + native pi workers
 ```
 
@@ -81,6 +81,7 @@ pnpm test:dist      # install prior tarball and test HTTP + native pi workers
 - **Protocol changes**: edit `packages/protocol/src/index.ts`; server and web consume it via `@piflow/protocol`.
 - **Worker IPC**: private Host/worker messages live in `apps/server/src/runtime/messages.ts`, separate from browser wire contracts. Only explicit Session open may start a project worker; stale controls must never restart it or replay work.
 - **Execution HTTP**: `/api/execution/sessions` controls worker-owned Sessions by canonical project path, native Session ID and generation. Submission queries read facts directly. See `docs/design/execution-sessions.md` for the current migration scope.
+- **Development lifecycle**: the root `scripts/dev.mjs` owns Host/Vite/compiler processes. Watch sources, not protocol dist; stop consumers before a full protocol emit and restart only after success. Do not reintroduce independent watchers that can read a partial emit. Manifest/config/dependency changes require restarting `pnpm dev`.
 - **Distribution**: runtime resources resolve from explicit entry URLs, never caller cwd. Build and pack are separate; pack refuses changed source inputs or artifact bytes. Third-party production dependencies stay external and version-pinned in the generated manifest. Tests install tarballs into temporary directories; never publish or install globally as a test.
 - **Product scope**: [docs/PRD.md](docs/PRD.md) defines goals and explicit non-goals (piflow does not replace IDE, terminal, or Git hosting).
 

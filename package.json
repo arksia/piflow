@@ -7,7 +7,7 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "dev": "pnpm --filter @piflow/protocol run build && pnpm --parallel --filter @piflow/protocol --filter piflow-web --filter piflow-server run dev",
+    "dev": "node scripts/dev.mjs",
     "build": "pnpm --filter @piflow/protocol run build && pnpm --filter piflow-server run build && pnpm --filter piflow-web run build && node scripts/build-app.mjs",
     "start": "pnpm --filter piflow-server run start",
     "lint": "eslint . --max-warnings 0 && stylelint 'apps/web/src/**/*.css' --max-warnings 0",
@@ -17,7 +17,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:build && pnpm build",
     "pack:app": "node scripts/pack-app.mjs",
     "test:dist": "node --test scripts/test/dist.test.mjs",
-    "test:build": "node --test scripts/test/build.test.mjs"
+    "test:build": "node --test scripts/test/build.test.mjs scripts/test/dev.test.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.2.0",

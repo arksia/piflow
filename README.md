@@ -36,7 +36,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3142](http://localhost:3142). The Node server runs on port `3141`; Vite runs on `3142` with HMR. Node's built-in SQLite stores execution facts.
+Open [http://localhost:3142](http://localhost:3142). The Node server runs on port `3141`; Vite runs on `3142` with HMR. The root development supervisor watches server/worker sources. Protocol source changes stop both consumers, compile the entire protocol, and restart them only after success; failed builds keep consumers stopped until a successful retry. Restarts interrupt active development executions. Ctrl-C stops the owned processes. Node's built-in SQLite stores execution facts.
 
 ## Build and installation acceptance
 
