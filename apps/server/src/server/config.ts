@@ -18,13 +18,16 @@ export interface ServerConfig {
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DEFAULT_WEB_DIST = resolve(__dirname, '../../../web/dist')
 
-export function loadConfig(env = process.env): ServerConfig {
+export function loadConfig(env = process.env, paths: { rootCwd?: string, webDist?: string } = {}): ServerConfig {
   const port = Number(env.PORT ?? 3141)
   const host = env.HOST ?? '127.0.0.1'
-  const rootCwd = resolve(env.INIT_CWD ?? process.cwd())
+  const rootCwd = resolve(paths.rootCwd ?? env.INIT_CWD ?? process.cwd())
   const isLoopback = isLoopbackHost(host)
   const configuredToken = env.PIFLOW_TOKEN
   const sessionPoolSize = Number(env.PIFLOW_SESSION_POOL_SIZE ?? 16)
+
+  if (!Number.isInteger(port) || port < 0 || port > 65535)
+    throw new Error('PORT must be an integer between 0 and 65535')
 
   if (!isLoopback && !configuredToken)
     throw new Error('PIFLOW_TOKEN is required when HOST is not a loopback address')
@@ -41,7 +44,7 @@ export function loadConfig(env = process.env): ServerConfig {
     rootCwd,
     isLoopback,
     authToken,
-    webDist: DEFAULT_WEB_DIST,
+    webDist: paths.webDist ?? DEFAULT_WEB_DIST,
     dataDir: resolve(env.PIFLOW_DATA_DIR ?? resolve(homedir(), '.piflow')),
     sessionPoolSize,
   }

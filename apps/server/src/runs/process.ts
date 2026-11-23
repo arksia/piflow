@@ -49,6 +49,7 @@ export async function runSubagentProcess(
   options: {
     cliEntry?: string
     agentDir?: string
+    extensionPaths?: { delivery: string, review: string }
   } = {},
 ): Promise<{
   output: string
@@ -68,6 +69,7 @@ export async function runSubagentProcess(
       mode: 0o600,
     })
     const config = run.configurationSnapshot
+    const suffix = import.meta.url.endsWith('.ts') ? 'ts' : 'js'
     const cliEntry
       = options.cliEntry
         ?? join(
@@ -86,8 +88,8 @@ export async function runSubagentProcess(
       '--no-mcp',
       '--no-skills',
       '--no-prompt-templates',
-      ...(config.delivery ? ['-e', fileURLToPath(new URL('./code-delivery-extension.ts', import.meta.url))] : []),
-      ...(config.reviewAnalysis ? ['--no-context-files', '-e', fileURLToPath(new URL('../reviews/extension.ts', import.meta.url))] : []),
+      ...(config.delivery ? ['-e', options.extensionPaths?.delivery ?? fileURLToPath(new URL(`./code-delivery-extension.${suffix}`, import.meta.url))] : []),
+      ...(config.reviewAnalysis ? ['--no-context-files', '-e', options.extensionPaths?.review ?? fileURLToPath(new URL(`../reviews/extension.${suffix}`, import.meta.url))] : []),
       '--append-system-prompt',
       promptFile,
       '--model',

@@ -1,25 +1,30 @@
 {
   "name": "piflow",
   "type": "module",
+  "version": "0.1.0-dev.0",
   "private": true,
   "engines": {
     "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "pnpm --filter @piflow/protocol run build && pnpm --parallel --filter @piflow/protocol --filter piflow-web --filter piflow-server run dev",
-    "build": "pnpm --filter @piflow/protocol run build && pnpm --filter piflow-server run build && pnpm --filter piflow-web run build",
+    "build": "pnpm --filter @piflow/protocol run build && pnpm --filter piflow-server run build && pnpm --filter piflow-web run build && node scripts/build-app.mjs",
     "start": "pnpm --filter piflow-server run start",
     "lint": "eslint . --max-warnings 0 && stylelint 'apps/web/src/**/*.css' --max-warnings 0",
     "lint:fix": "eslint . --fix && stylelint 'apps/web/src/**/*.css' --fix",
     "typecheck": "pnpm --filter @piflow/protocol run build && pnpm --filter @piflow/protocol run typecheck && pnpm --filter piflow-web run typecheck && pnpm --filter piflow-server run typecheck",
     "test": "pnpm --filter piflow-server run test && pnpm --filter piflow-web run test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:build && pnpm build",
+    "pack:app": "node scripts/pack-app.mjs",
+    "test:dist": "node --test scripts/test/dist.test.mjs",
+    "test:build": "node --test scripts/test/build.test.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.2.0",
     "@eslint-react/eslint-plugin": "^5.6.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "esbuild": "0.28.1",
     "eslint": "^10.8.0",
     "eslint-plugin-react-refresh": "^0.5.0",
     "stylelint": "^17.14.1",

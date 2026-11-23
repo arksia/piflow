@@ -77,6 +77,7 @@ export async function createSubagentRuns(options: {
   publish?: (message: RunMessage) => void
   agentDir?: string
   cliEntry?: string
+  extensionPaths?: { delivery: string, review: string }
   execute?: typeof runSubagentProcess
 }) {
   const store = await openRunStore(options.dataDir, options.database)

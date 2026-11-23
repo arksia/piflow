@@ -1,8 +1,9 @@
 import type { Static } from 'typebox'
 import { Type } from 'typebox'
 import { Value } from 'typebox/value'
+import { WORKER_PROTOCOL } from './version.ts'
 
-export const WORKER_PROTOCOL = 2
+export { WORKER_PROTOCOL } from './version.ts'
 const commandErrorCode = Type.Union([
   Type.Literal('session-not-open'),
   Type.Literal('stale-target'),

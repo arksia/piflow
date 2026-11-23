@@ -1,8 +1,10 @@
+import { fileURLToPath } from 'node:url'
 import UnoCSS from 'unocss/vite'
 import { defineConfig } from 'vite'
+import { browserBuildPolicy } from '../../scripts/build-policy.mjs'
 
 export default defineConfig({
-  plugins: [UnoCSS()],
+  plugins: [UnoCSS(), browserBuildPolicy(fileURLToPath(new URL('../../', import.meta.url)))],
   css: {
     modules: { localsConvention: 'camelCaseOnly' },
   },

@@ -20,6 +20,7 @@ export async function bootstrap(config: ServerConfig, options: {
   signal?: AbortSignal
   logger?: boolean
   agentDir?: string
+  extensions?: { delivery: string, review: string }
   worker?: Pick<Parameters<typeof createProjectRuntime>[0], 'entry' | 'startTimeoutMs' | 'stopTimeoutMs'>
 } = {}) {
   const cleanup: Array<() => void | Promise<void>> = []
@@ -70,7 +71,7 @@ export async function bootstrap(config: ServerConfig, options: {
     const reviews = await createReviews({ dataDir: config.dataDir, publish: sse.broadcast })
     cleanup.push(() => reviews.close())
     check()
-    const runs = await createSubagentRuns({ database, dataDir: config.dataDir, publish: sse.broadcast, reviews })
+    const runs = await createSubagentRuns({ database, dataDir: config.dataDir, publish: sse.broadcast, reviews, extensionPaths: options.extensions })
     cleanup.push(() => runs.close())
     check()
     const reviewGeneration = createReviewGeneration(reviews, runs)

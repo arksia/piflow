@@ -33,6 +33,8 @@ apps/
 │   └── src/
 │       ├── app.ts      # Fastify app: plugins, then routes
 │       ├── bootstrap.ts # Host resource ownership and shutdown
+│       ├── cli.ts      # CLI arguments, readiness, browser and OS signals
+│       ├── distribution/ # Entry-relative resources and product integrity checks
 │       ├── facts/      # Host-owned SQLite connection, migrations and submission facts
 │       ├── runtime/    # Project worker IPC and lifecycle (core HTTP wired; UI migration pending)
 │       ├── plugins/    # Support plugins (auth)
@@ -42,7 +44,8 @@ apps/
 │       ├── flow/       # Flow canvas domain: store, tools
 │       ├── usage/      # Provider quota adapters
 │       ├── test/       # Mirrors the folders above
-│       └── index.ts    # Listen and signals
+│       ├── index.ts    # Workspace development/compiled entry
+│       └── main.ts     # Installed product bin
 ├── web/             # React 19 + Vite frontend
 │   └── src/
 │       ├── components/  # Flat component folders (index.tsx + styles.module.css)
@@ -52,6 +55,7 @@ apps/
 packages/
 └── protocol/        # @piflow/protocol — browser/HTTP wire contracts; built to dist
 
+scripts/             # Product build/pack, build-policy and installed-package acceptance
 docs/                # Public product requirements
 ```
 
@@ -63,7 +67,10 @@ pnpm dev            # run server + web in dev mode
 pnpm lint           # eslint + stylelint
 pnpm typecheck      # tsc --noEmit across workspaces
 pnpm test           # node:test across workspaces
-pnpm build          # production build (web dist + server tsc)
+pnpm build          # compile workspaces and stage standalone product in dist/app
+pnpm pack:app       # verify existing build and create an installable tarball
+pnpm test:build     # exercise bundler policy and artifact-integrity rejection
+pnpm test:dist      # install prior tarball and test HTTP + native pi workers
 ```
 
 ## Conventions
@@ -74,13 +81,16 @@ pnpm build          # production build (web dist + server tsc)
 - **Protocol changes**: edit `packages/protocol/src/index.ts`; server and web consume it via `@piflow/protocol`.
 - **Worker IPC**: private Host/worker messages live in `apps/server/src/runtime/messages.ts`, separate from browser wire contracts. Only explicit Session open may start a project worker; stale controls must never restart it or replay work.
 - **Execution HTTP**: `/api/execution/sessions` controls worker-owned Sessions by canonical project path, native Session ID and generation. Submission queries read facts directly. See `docs/design/execution-sessions.md` for the current migration scope.
+- **Distribution**: runtime resources resolve from explicit entry URLs, never caller cwd. Build and pack are separate; pack refuses changed source inputs or artifact bytes. Third-party production dependencies stay external and version-pinned in the generated manifest. Tests install tarballs into temporary directories; never publish or install globally as a test.
 - **Product scope**: [docs/PRD.md](docs/PRD.md) defines goals and explicit non-goals (piflow does not replace IDE, terminal, or Git hosting).
 
 ## Key entry points
 
 | Concern | File |
 |---|---|
-| Server bootstrap | `apps/server/src/index.ts` |
+| Installed CLI | `apps/server/src/main.ts` and `cli.ts` |
+| Product assembly | `scripts/build-app.mjs` and `pack-app.mjs` |
+| Workspace entry | `apps/server/src/index.ts` |
 | Host resource ownership | `apps/server/src/bootstrap.ts` |
 | Project execution lifecycle | `apps/server/src/runtime/index.ts` and `project-workers.ts` |
 | HTTP app | `apps/server/src/app.ts` registers `plugins/` then `routes/` |
